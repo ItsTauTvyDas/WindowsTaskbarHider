@@ -3,25 +3,36 @@
 
 IDI_APP_ICON ICON "icon.ico"
 
+#ifndef DEBUG
+#define VER_DEBUG                   0
+#else
+#define VER_DEBUG                   VS_FF_DEBUG
+#endif
+
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION 1,0,0,0
-    PRODUCTVERSION 1,0,0,0
+FILEVERSION     VER_FILEVERSION
+PRODUCTVERSION  VER_PRODUCTVERSION
+FILEOS          VOS__WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "StringFileInfo"
+        BLOCK "040904E4"
         BEGIN
-            BLOCK "040904B0"
-            BEGIN
-                VALUE "FileDescription", "Hide taskbar for a cleaner desktop"
-                VALUE "FileVersion", "1.0.0"
-                VALUE "ProductName", "Windows Taskbar Hider"
-                VALUE "ProductVersion", "1.0.0"
-                VALUE "OriginalFilename", "WindowsTaskbarHider.exe"
-                VALUE "CompanyName", "ItsTauTvyDas"
-                VALUE "LegalCopyright", "© 2025 ItsTauTvyDas. All rights reserved."
-            END
-        END
-        BLOCK "VarFileInfo"
-        BEGIN
-            VALUE "Translation", 0x0409, 1200
+            VALUE "CompanyName",      VER_COMPANYNAME_STR
+            VALUE "FileDescription",  VER_FILEDESCRIPTION_STR
+            VALUE "FileVersion",      VER_FILEVERSION_STR
+            VALUE "InternalName",     VER_INTERNALNAME_STR
+            VALUE "LegalCopyright",   VER_LEGALCOPYRIGHT_STR
+            VALUE "OriginalFilename", VER_ORIGINALFILENAME_STR
+            VALUE "ProductName",      VER_PRODUCTNAME_STR
+            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
         END
     END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END
