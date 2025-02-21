@@ -37,10 +37,8 @@ void config::save() {
 }
 
 void config::ensureConfigurationExists() {
-    struct stat buffer{};
-    if (stat(CONFIG_FILENAME, &buffer) == 0)
-        return;
-    save();
+    if (!utils::fileExists(CONFIG_FILENAME))
+        save();
 }
 
 void config::open() {
