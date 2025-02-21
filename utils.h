@@ -8,6 +8,7 @@
 class utils {
 public:
     static std::string getProcessName(HWND hwnd);
+    static void killProcessByName(const char *filename, DWORD currentPid);
     static std::string getProgramVersion();
     static bool processArguments(int argc, char* argv[]);
     static HICON loadExeIcon(LPCSTR pszExeFileName, UINT nIconIndex);
@@ -16,6 +17,7 @@ public:
     static void throwIfNoDLLIcons(const std::string &dllPath);
     static std::string joinString(const std::vector<std::string> &vec, const std::string &delimiter);
     static std::vector<std::string> splitString(const std::string &str, char delimiter);
+    static void attachConsoleWindow();
 };
 
 #endif //UTILS_H
