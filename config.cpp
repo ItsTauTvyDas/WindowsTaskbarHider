@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <sys/stat.h>
 #include "globals.h"
+#include "resources.h"
 #include "taskbar.h"
 #include "utils.h"
 
@@ -14,14 +15,12 @@
 bool config::debug = false;
 int config::taskbarUpdateInterval = 100;
 int config::opacity = 0;
-int config::systemTrayIconIndex = 5;
-std::string config::systemTrayIconSource = "shell32.dll";
 std::vector<std::string> config::ignoredWindows = {"title:", "process:ApplicationFrameHost.exe"};
 
 void config::save() {
     std::ofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
-        MessageBoxA(globals::hWnd, "Failed to load configuration", globals::app, MB_ICONERROR | MB_OK);
+        MessageBoxA(globals::hWnd, "Failed to load configuration", PROJECT_NAME, MB_ICONERROR | MB_OK);
         return;
     }
     file << "[General]" << std::endl;
@@ -33,10 +32,6 @@ void config::save() {
     file << "; Available tags: process, title" << std::endl;
     file << "; Ignore UWP container window and windows with empty titles" << std::endl;
     file << "IgnoreMaximizedWindows=" << utils::joinString(ignoredWindows, ";") << std::endl;
-    file << "[System Tray Icon]" << std::endl;
-    file << "; Changing settings below requires a restart" << std::endl;
-    file << "SourceExeFile=" << systemTrayIconSource << std::endl;
-    file << "IconIndex=" << systemTrayIconIndex << std::endl;
     file.flush();
     file.close();
 }
@@ -49,7 +44,7 @@ void config::ensureConfigurationExists() {
 }
 
 void config::open() {
-    system(("open " + std::string(CONFIG_FILENAME)).c_str());
+    system(("explorer " + std::string(CONFIG_FILENAME)).c_str());
 }
 
 bool config::processSingle(const std::string &key, const std::string &value) {
@@ -65,11 +60,6 @@ bool config::processSingle(const std::string &key, const std::string &value) {
     try {
         if (key == "Taskbar.UpdateInterval") {
             taskbarUpdateInterval = std::stoi(value);
-        } else if (key == "System_Tray_Icon.SourceExeFile") {
-            utils::throwIfNoDLLIcons(value);
-            systemTrayIconSource = value;
-        } else if (key == "System_Tray_Icon.IconIndex") {
-            systemTrayIconIndex = std::stoi(value);
         } else if (key == "General.Debug") {
             debug = value != "0";
         } else if (key == "Taskbar.IgnoreMaximizedWindows") {
