@@ -12,8 +12,9 @@ add_executable(WindowsTaskbarHider main.cpp
         globals.h
         assets/app.rc)
 target_link_libraries(WindowsTaskbarHider version)
-
-add_custom_command(
-        TARGET WindowsTaskbarHider POST_BUILD
-        COMMAND powershell -Command "Write-Host 'Executable size: ' (Get-Item '$<TARGET_FILE:WindowsTaskbarHider>').Length 'bytes'"
-)
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    add_custom_command(
+            TARGET WindowsTaskbarHider POST_BUILD
+            COMMAND powershell -Command "Write-Host 'Executable size: ' (Get-Item '$<TARGET_FILE:WindowsTaskbarHider>').Length 'bytes'"
+    )
+endif ()
