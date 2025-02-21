@@ -2,17 +2,11 @@
 #include "utils.h"
 #include "config.h"
 #include "globals.h"
+#include "resources.h"
 #include <dwmapi.h>
 #include <iostream>
 #include <sstream>
 #include <thread>
-
-#define WM_TRAY_ICON (WM_USER + 1)
-
-#define ID_TRAY_OPEN_CONFIG 1001
-#define ID_TRAY_RELOAD_CONFIG 1002
-#define ID_TRAY_PAUSE_HIDER 1003
-#define ID_TRAY_EXIT 1004
 
 NOTIFYICONDATAA nid;
 
@@ -55,36 +49,46 @@ BOOL WINAPI ConsoleHandler(const DWORD signal) {
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
-    if (uMsg == WM_TRAY_ICON && lParam == WM_RBUTTONUP) {
-        HMENU hMenu = CreatePopupMenu();
-        AppendMenuA(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, "Open config file");
-        AppendMenuA(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, "Reload config");
-        AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuA(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, running ? "Pause" : "Resume");
-        AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuA(hMenu, MF_STRING, ID_TRAY_EXIT, "Exit");
-        POINT p;
-        GetCursorPos(&p);
-        SetForegroundWindow(hwnd);
-        TrackPopupMenu(hMenu, TPM_RIGHTBUTTON, p.x, p.y, 0, hwnd, nullptr);
-        DestroyMenu(hMenu);
-    } else if (uMsg == WM_COMMAND) {
-        switch (LOWORD(wParam)) {
-            case ID_TRAY_EXIT:
-                quit();
+    switch (uMsg) {
+        case WM_TRAY_ICON:
+            if (lParam == WM_RBUTTONUP) {
+                HMENU hMenu = CreatePopupMenu();
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, "Open config file");
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, "Reload config");
+                AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, running ? "Pause" : "Resume");
+                AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_EXIT, "Exit");
+                POINT p;
+                GetCursorPos(&p);
+                SetForegroundWindow(hwnd);
+                TrackPopupMenu(hMenu, TPM_RIGHTBUTTON, p.x, p.y, 0, hwnd, nullptr);
+                DestroyMenu(hMenu);
+            }
+            break;
+        case WM_COMMAND:
+            switch (LOWORD(wParam)) {
+                case ID_TRAY_EXIT:
+                    quit();
                 break;
-            case ID_TRAY_OPEN_CONFIG:
-                config::open();
+                case ID_TRAY_OPEN_CONFIG:
+                    config::open();
                 break;
-            case ID_TRAY_RELOAD_CONFIG:
-                config::load();
+                case ID_TRAY_RELOAD_CONFIG:
+                    config::load();
                 break;
-            case ID_TRAY_PAUSE_HIDER:
-                running = !running;
+                case ID_TRAY_PAUSE_HIDER:
+                    running = !running;
                 break;
-            default:
-                break;
-        }
+                default:
+                    break;
+            }
+            break;
+        case WM_CLOSE:
+            quit();
+            break;
+        default:
+            break;
     }
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
@@ -105,6 +109,28 @@ int main(const int argc, char* argv[]) {
     try {
         if (!utils::processArguments(argc, argv))
             return 0;
+        HANDLE hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
+        if (!hMutex) {
+            std::cerr << "Internal error: Failed to create mutex" << std::endl;
+            utils::showExceptionMessageBox([](std::stringstream& crashInfo) {
+                crashInfo << "Failed to create mutex, but the application can still be running." << std::endl;
+                crashInfo << "Be aware that this will not prevent application process duplicates!";
+            });
+        }
+
+        if (hMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
+            std::cerr << "Fatal error: Application is already running" << std::endl;
+            if (!globals::noMessageBoxes) {
+                const int reply = MessageBoxA(globals::hWnd, "Application is already running! Forcefully shutdown it?", PROJECT_NAME, MB_ICONQUESTION | MB_YESNO);
+                if (reply == 6) {
+                    DWORD currentPid = GetCurrentProcessId();
+                    utils::killProcessByName((std::string(PROJECT_NAME) + ".exe").c_str(), currentPid);
+                    taskbar::resetTaskbar();
+                    return 0;
+                }
+            }
+            return 1;
+        }
         if (!globals::noConfigFile)
             config::load();
         SetConsoleCtrlHandler(ConsoleHandler, TRUE);
@@ -116,9 +142,9 @@ int main(const int argc, char* argv[]) {
         wc.lpszClassName = className;
         RegisterClassA(&wc);
 
-        globals::hWnd = CreateWindowA(className, globals::app, 0, 0, 0, 0, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+        globals::hWnd = CreateWindowA(className, PROJECT_NAME, 0, 0, 0, 0, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
 
-        HICON hIcon = utils::loadExeIcon(config::systemTrayIconSource.c_str(), config::systemTrayIconIndex);
+        HICON hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
         if (!hIcon) {
             std::cerr << "Fatal error: Failed to load icon" << std::endl;
             utils::showExceptionMessageBox([](std::stringstream& crashInfo) {
@@ -134,7 +160,7 @@ int main(const int argc, char* argv[]) {
         nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
         nid.uCallbackMessage = WM_TRAY_ICON;
         nid.hIcon = hIcon;
-        strcpy_s(nid.szTip, globals::app);
+        strcpy_s(nid.szTip, PROJECT_NAME);
 
         if (!Shell_NotifyIconA(NIM_ADD, &nid)) {
             std::cerr << "Fatal error: Failed to create system tray icon" << std::endl;
@@ -154,6 +180,7 @@ int main(const int argc, char* argv[]) {
 
         taskbarLoopThread.join();
         DestroyIcon(hIcon);
+        CloseHandle(hMutex);
         taskbar::resetTaskbar();
         return 0;
     } catch (const std::exception& e) {
