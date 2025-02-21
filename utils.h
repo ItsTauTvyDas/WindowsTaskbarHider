@@ -18,6 +18,13 @@ public:
     static std::string joinString(const std::vector<std::string> &vec, const std::string &delimiter);
     static std::vector<std::string> splitString(const std::string &str, char delimiter);
     static void attachConsoleWindow();
+    static bool fileExists(const char *path);
+    static bool doesAutoStart();
+    static void toggleStartup();
+    static void toggleConsoleWindow();
+    static void toUnicode(LPCCH string, LPWSTR str);
+private:
+    static std::string createShortcutLinkPath(char appPath[]);
 };
 
 #endif //UTILS_H

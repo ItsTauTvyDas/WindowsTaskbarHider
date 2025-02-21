@@ -1,5 +1,7 @@
 #include "utils.h"
 
+#include <shlobj.h>
+#include <fstream>
 #include <iostream>
 #include "windows.h"
 #include "resources.h"
@@ -8,6 +10,7 @@
 #include <sstream>
 #include <tlhelp32.h>
 #include "globals.h"
+#include <sys/stat.h>
 
 std::string utils::getProcessName(HWND hwnd) {
     DWORD processId;
@@ -56,21 +59,21 @@ void utils::killProcessByName(const char* processName, DWORD currentPid) {
 
 std::string utils::getProgramVersion() {
     char exePath[MAX_PATH];
-    if (GetModuleFileNameA(nullptr, exePath, MAX_PATH) == 0)
+    if (GetModuleFileName(nullptr, exePath, MAX_PATH) == 0)
         return "Failed to get executable path.";
 
     DWORD handle = 0;
-    const DWORD size = GetFileVersionInfoSizeA(exePath, &handle);
+    const DWORD size = GetFileVersionInfoSize(exePath, &handle);
     if (size == 0)
         return "Failed to get version info size.";
 
     std::vector<char> data(size);
-    if (!GetFileVersionInfoA(exePath, handle, size, data.data()))
+    if (!GetFileVersionInfo(exePath, handle, size, data.data()))
         return "Failed to get version info.";
 
     VS_FIXEDFILEINFO* versionInfo = nullptr;
     UINT len = 0;
-    if (!VerQueryValueA(data.data(), "\\", reinterpret_cast<LPVOID *>(&versionInfo), &len))
+    if (!VerQueryValue(data.data(), "\\", reinterpret_cast<LPVOID *>(&versionInfo), &len))
         return "Failed to query version info.";
 
     const DWORD major = HIWORD(versionInfo->dwFileVersionMS);
@@ -116,8 +119,6 @@ bool utils::processArguments(const int argc, char* argv[]) {
         arg = argv[i];
         if (arg == "--debug" || arg == "-d") {
             config::debug = true;
-        } else if (arg == "--no-msgbox" || arg == "-nmb") {
-            globals::noMessageBoxes = true;
         } else if (arg == "--no-config" || arg == "-nc") {
             globals::noConfigFile = true;
         } else if ((arg.rfind("-c:", 0) == 0 || arg.rfind("-config:", 0) == 0) && i + 1 < argc && arg.rfind(':', 0) + 1 < arg.size()) {
@@ -135,8 +136,6 @@ HICON utils::loadExeIcon(const LPCSTR pszExeFileName, const UINT nIconIndex) {
 }
 
 void utils::showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback) {
-    if (globals::noMessageBoxes)
-        return;
     std::stringstream crashInfo;
     crashInfo << "The application has crashed!" << std::endl;
     crashInfo << std::endl;
@@ -203,6 +202,84 @@ std::vector<std::string> utils::splitString(const std::string& str, const char d
 void utils::attachConsoleWindow() {
     if (!AttachConsole(ATTACH_PARENT_PROCESS))
         AllocConsole();
-    freopen("CONOUT$", "w", stdout);
-    freopen("CONOUT$", "w", stderr);
+    freopen("CONOUT$", "r", stdout);
+    freopen("CONOUT$", "r", stderr);
+}
+
+bool utils::fileExists(const char *path) {
+    struct stat buffer{};
+    return stat(path, &buffer) == 0;
+}
+
+void utils::toUnicode(const LPCCH string, const LPWSTR str) {
+    MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
+}
+
+std::string utils::createShortcutLinkPath(char appPath[]) {
+    char startupPath[MAX_PATH];
+    if (!SUCCEEDED(SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath))) {
+        MessageBoxA(globals::hWnd, "Failed to get startup folder location!", PROJECT_NAME, MB_ICONERROR | MB_OK);
+        return nullptr;
+    }
+    std::string name = strrchr(appPath, '\\') + 1;
+    name = name.substr(0, name.find_last_of('.'));
+    return std::string(std::string(startupPath) + "\\" + name + ".lnk");
+}
+
+bool utils::doesAutoStart() {
+    char appPath[MAX_PATH];
+    GetModuleFileName(nullptr, appPath, MAX_PATH);
+    return fileExists(createShortcutLinkPath(appPath).c_str());
+}
+
+void utils::toggleStartup() {
+    char appPath[MAX_PATH];
+    GetModuleFileName(nullptr, appPath, MAX_PATH);
+    const std::string shortcutPath = createShortcutLinkPath(appPath);
+
+    if (fileExists(shortcutPath.c_str())) {
+        remove(shortcutPath.c_str());
+        return;
+    }
+
+    if (std::ofstream shortcut(shortcutPath); shortcut.is_open()) {
+        CoInitialize(nullptr);
+
+        IShellLinkW* psl;
+        HRESULT result = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&psl));
+        if (SUCCEEDED(result))
+        {
+            IPersistFile* ppf;
+
+            WCHAR pszFile[MAX_PATH];
+            toUnicode(appPath, pszFile);
+
+            psl->SetPath(pszFile);
+            psl->SetArguments(L"");
+            psl->SetDescription(L"");
+
+            result = psl->QueryInterface(IID_PPV_ARGS(&ppf));
+            if (SUCCEEDED(result))
+            {
+                WCHAR pszFileName[MAX_PATH];
+                toUnicode(shortcutPath.c_str(), pszFileName);
+                result = ppf->Save(pszFileName, TRUE);
+                ppf->Release();
+            }
+            psl->Release();
+        }
+        CoUninitialize();
+
+        if (!SUCCEEDED(result)) {
+            MessageBoxA(globals::hWnd, "Failed to create a shortcut at startup directory!", PROJECT_NAME, MB_ICONERROR | MB_OK);
+            remove(shortcutPath.c_str());
+        }
+    }
+}
+
+void utils::toggleConsoleWindow() {
+    if (config::debug)
+        attachConsoleWindow();
+    else
+        FreeConsole();
 }
