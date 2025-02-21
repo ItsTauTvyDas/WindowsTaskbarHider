@@ -9,8 +9,6 @@ public:
     static bool debug;
     static int taskbarUpdateInterval;
     static int opacity;
-    static int systemTrayIconIndex;
-    static std::string systemTrayIconSource;
     static std::vector<std::string> ignoredWindows;
 
     static void load();
