@@ -4,7 +4,6 @@
 
 class globals {
 public:
-    static LPCSTR app;
     static LPCSTR exe;
     static HWND hWnd;
     static bool noMessageBoxes;
