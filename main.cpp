@@ -58,9 +58,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, running ? "Pause" : "Resume");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
-                bool startupExists = true;
-                utils::startup(startupExists);
-                AppendMenuA(hMenu, MF_STRING, ID_TRAY_ADD_REMOVE_STARTUP, startupExists ? "Remove from startup" : "Add to startup");
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_ADD_REMOVE_STARTUP, utils::doesAutoStart() ? "Remove from startup" : "Add to startup");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_EXIT, "Exit");
                 POINT p;
@@ -80,13 +78,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                     break;
                 case ID_TRAY_RELOAD_CONFIG:
                     config::load();
+                    utils::toggleConsoleWindow();
                     break;
                 case ID_TRAY_PAUSE_HIDER:
                     running = !running;
                     break;
                 case ID_TRAY_ADD_REMOVE_STARTUP:
-                    bool _;
-                    utils::startup(_);
+                    utils::toggleStartup();
                     break;
                 default:
                     break;
@@ -128,19 +126,21 @@ int main(const int argc, char* argv[]) {
 
         if (hMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
             std::cerr << "Fatal error: Application is already running" << std::endl;
-            if (!globals::noMessageBoxes) {
-                const int reply = MessageBoxA(globals::hWnd, "Application is already running! Forcefully shutdown it?", PROJECT_NAME, MB_ICONQUESTION | MB_YESNO);
-                if (reply == 6) {
-                    DWORD currentPid = GetCurrentProcessId();
-                    utils::killProcessByName((std::string(PROJECT_NAME) + ".exe").c_str(), currentPid);
-                    taskbar::resetTaskbar();
-                    return 0;
-                }
+            const int reply = MessageBoxA(globals::hWnd, "Application is already running! Forcefully shutdown it?", PROJECT_NAME, MB_ICONQUESTION | MB_YESNO);
+            if (reply == 6) {
+                DWORD currentPid = GetCurrentProcessId();
+                utils::killProcessByName((std::string(PROJECT_NAME) + ".exe").c_str(), currentPid);
+                taskbar::resetTaskbar();
+                return 0;
             }
             return 1;
         }
         if (!globals::noConfigFile)
             config::load();
+
+        if (config::debug)
+            utils::toggleConsoleWindow();
+
         SetConsoleCtrlHandler(ConsoleHandler, TRUE);
 
         const auto className = "WindowsTaskbarHider_TrayIcon";
