@@ -1,11 +1,21 @@
 cmake_minimum_required(VERSION 3.10)
 project(WindowsTaskbarHider)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_FLAGS "-static -static-libgcc -static-libstdc++ -pthread")
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--whole-archive -lwinpthread -Wl,--no-whole-archive")
+set(CMAKE_CXX_STANDARD       20)
+set(CMAKE_CXX_FLAGS          "-static -static-libgcc -static-libstdc++ -pthread")
+# Custom variables
+set(PRODUCT_COMPANY          "ItsTauTvyDas")
+set(PRODUCT_DESCRIPTION      "Hide your taskbar for a cleaner desktop!")
+set(VERSION_PRODUCT_NUMBER   1)
+set(VERSION_PRODUCT_VERSION  1)
+set(VERSION_PRODUCT_BUILD    0)
+set(VERSION_PRODUCT_REVISION 0)
 
-add_executable(${PROJECT_NAME} WIN32 main.cpp
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mwindows")
+endif ()
+
+add_executable(${PROJECT_NAME} main.cpp
         utils.cpp
         utils.h
         taskbar.cpp
