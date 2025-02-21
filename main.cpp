@@ -58,6 +58,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, running ? "Pause" : "Resume");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
+                bool startupExists = true;
+                utils::startup(startupExists);
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_ADD_REMOVE_STARTUP, startupExists ? "Remove from startup" : "Add to startup");
+                AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_EXIT, "Exit");
                 POINT p;
                 GetCursorPos(&p);
@@ -70,16 +74,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
             switch (LOWORD(wParam)) {
                 case ID_TRAY_EXIT:
                     quit();
-                break;
+                    break;
                 case ID_TRAY_OPEN_CONFIG:
                     config::open();
-                break;
+                    break;
                 case ID_TRAY_RELOAD_CONFIG:
                     config::load();
-                break;
+                    break;
                 case ID_TRAY_PAUSE_HIDER:
                     running = !running;
-                break;
+                    break;
+                case ID_TRAY_ADD_REMOVE_STARTUP:
+                    bool _;
+                    utils::startup(_);
+                    break;
                 default:
                     break;
             }
