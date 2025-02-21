@@ -6,7 +6,6 @@ class globals {
 public:
     static LPCSTR exe;
     static HWND hWnd;
-    static bool noMessageBoxes;
     static bool noConfigFile;
 };
 
