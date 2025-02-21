@@ -4,7 +4,6 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
-#include <sys/stat.h>
 #include "globals.h"
 #include "resources.h"
 #include "taskbar.h"
@@ -13,7 +12,7 @@
 #define CONFIG_FILENAME "config.ini"
 
 bool config::debug = false;
-int config::taskbarUpdateInterval = 100;
+int config::taskbarUpdateInterval = 10;
 int config::opacity = 0;
 std::vector<std::string> config::ignoredWindows = {"title:", "process:ApplicationFrameHost.exe"};
 
@@ -26,12 +25,16 @@ void config::save() {
     file << "[General]" << std::endl;
     file << "Debug=" << debug << std::endl;
     file << "[Taskbar]" << std::endl;
-    file << "; Taskbar update loop delay in milliseconds" << std::endl;
+    file << "; Taskbar update loop interval in milliseconds" << std::endl;
     file << "UpdateInterval=" << taskbarUpdateInterval << std::endl;
     file << "Opacity=" << opacity << std::endl;
-    file << "; Available tags: process, title" << std::endl;
+    file << "; Available tags: process, title, class" << std::endl;
     file << "; Ignore UWP container window and windows with empty titles" << std::endl;
-    file << "IgnoreMaximizedWindows=" << utils::joinString(ignoredWindows, ";") << std::endl;
+    file << "; ApplicationFrameHost.exe (UWP containers) is used by mostly by Windows applications" << std::endl;
+    file << "; Some of the processes seems to have maximized windows, even though they are not visible" << std::endl;
+    file << "; We don't have a way to distinguish between that invisible window," << std::endl;
+    file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
+    file << "IgnoreMaximizedWindows=" << utils::joinString(ignoredWindows, "|") << std::endl;
     file.flush();
     file.close();
 }
@@ -61,7 +64,7 @@ bool config::processSingle(const std::string &key, const std::string &value) {
         } else if (key == "General.Debug") {
             debug = value != "0";
         } else if (key == "Taskbar.IgnoreMaximizedWindows") {
-            ignoredWindows = utils::splitString(value, ';');
+            ignoredWindows = utils::splitString(value, '|');
         } else {
             return false;
         }
