@@ -1,0 +1,24 @@
+#include "windows.h"
+
+VS_VERSION_INFO VERSIONINFO
+    FILEVERSION 1,0,0,0
+    PRODUCTVERSION 1,0,0,0
+    BEGIN
+        BLOCK "StringFileInfo"
+        BEGIN
+            BLOCK "040904B0"
+            BEGIN
+                VALUE "FileDescription", "Hide taskbar for a cleaner desktop"
+                VALUE "FileVersion", "1.0.0"
+                VALUE "ProductName", "Windows Taskbar Hider"
+                VALUE "ProductVersion", "1.0.0"
+                VALUE "OriginalFilename", "WindowsTaskbarHider.exe"
+                VALUE "CompanyName", "ItsTauTvyDas"
+                VALUE "LegalCopyright", "© 2025 ItsTauTvyDas. All rights reserved."
+            END
+        END
+        BLOCK "VarFileInfo"
+        BEGIN
+            VALUE "Translation", 0x0409, 1200
+        END
+    END
