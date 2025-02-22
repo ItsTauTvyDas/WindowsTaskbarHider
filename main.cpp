@@ -33,7 +33,7 @@ void taskbarLoop() {
 
 std::thread taskbarLoopThread;
 
-void cleanup() {
+void cleanup(bool clearIconAndMutex) {
     globals::taskbarLoopRunState = false;
     Shell_NotifyIconA(NIM_DELETE, &nid);
     if (globals::hWnd != nullptr)
@@ -41,6 +41,10 @@ void cleanup() {
     globals::hWnd = nullptr;
     if (taskbarLoopThread.joinable())
         taskbarLoopThread.join();
+    if (clearIconAndMutex) {
+        DestroyIcon(hIcon);
+        CloseHandle(hMutex);
+    }
     taskbar::resetTaskbar();
 }
 
@@ -49,9 +53,9 @@ BOOL WINAPI ConsoleHandler(const DWORD signal) {
         if (config::debug && !config::keepConsoleWindowOpen)
             utils::toggleConsoleWindow(nullptr, false);
         bool wasNull = globals::hWnd == nullptr;
-        cleanup();
+        cleanup(false);
         if (config::keepConsoleWindowOpen)
-            std::cerr << std::endl << "CTRL + C again to exit." << std::endl;
+            std::cerr << std::endl << "> Do CTRL + C again to exit." << std::endl;
         if (signal != CTRL_C_EVENT || wasNull) {
             utils::toggleConsoleWindow(nullptr, false);
             DestroyIcon(hIcon);
@@ -89,9 +93,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
                 case ID_TRAY_EXIT:
-                    utils::toggleConsoleWindow(ConsoleHandler, false);
-                    PostMessage(globals::hWnd, WM_QUIT, 0, 0);
-                    break;
+                    if (config::debug)
+                        utils::toggleConsoleWindow(ConsoleHandler, false);
+                    exit(0);
                 case ID_TRAY_OPEN_CONFIG:
                     config::open();
                     break;
@@ -116,11 +120,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                     break;
             }
             break;
-        case WM_CLOSE:
-            if (config::debug)
-                MessageBoxA(globals::hWnd, "Called WM_CLOSE.", PROJECT_NAME, MB_ICONQUESTION | MB_OK);
-            cleanup();
-            break;
         default:
             break;
     }
@@ -138,8 +137,13 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
 }
 
 int main(const int argc, char* argv[]) {
+    atexit([] {
+        cleanup(true);
+        MessageBoxA(globals::hWnd, "Application was closed.", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
+    });
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
-    globals::exe = argv[0];
+    std::string exe = std::string(argv[0]);
+    globals::exe = exe.substr(exe.find_last_of("/\\") + 1);
     SetUnhandledExceptionFilter(reinterpret_cast<LPTOP_LEVEL_EXCEPTION_FILTER>(CrashHandler));
     try {
         if (!utils::processArguments(argc, argv))
@@ -214,12 +218,7 @@ int main(const int argc, char* argv[]) {
             DispatchMessageA(&msg);
         }
 
-        cleanup();
-
-        DestroyIcon(hIcon);
-        CloseHandle(hMutex);
-        if (config::debug)
-            MessageBoxA(globals::hWnd, "Application was closed", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
+        cleanup(true);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
