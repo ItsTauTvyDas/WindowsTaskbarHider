@@ -166,7 +166,7 @@ std::vector<std::string> utils::splitString(const std::string& str, const char d
     return result;
 }
 
-void utils::attachConsoleWindow(const bool silent) {
+void utils::attachConsoleWindow() {
     if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
         AllocConsole();
         const bool state = globals::taskbarLoopRunState;
@@ -193,8 +193,7 @@ void utils::attachConsoleWindow(const bool silent) {
         globals::taskbarLoopRunState = state;
         return;
     }
-    if (!silent)
-        MessageBoxA(globals::hWnd, "Console is already attached!", PROJECT_NAME, MB_ICONERROR | MB_OK);
+    MessageBoxA(globals::hWnd, "Console is already attached!", PROJECT_NAME, MB_ICONERROR | MB_OK);
 }
 
 bool utils::fileExists(const char *path) {
@@ -280,7 +279,7 @@ void utils::toggleStartup() {
 
 void utils::toggleConsoleWindow(const PHANDLER_ROUTINE handler, const bool status) {
     if (status) {
-        attachConsoleWindow(false);
+        attachConsoleWindow();
         SetConsoleCtrlHandler(handler, TRUE);
         return;
     }

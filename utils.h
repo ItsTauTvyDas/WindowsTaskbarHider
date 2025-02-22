@@ -21,7 +21,7 @@ public:
     static void toggleConsoleWindow(PHANDLER_ROUTINE handler, bool status);
     static void toUnicode(LPCCH string, LPWSTR str);
     static void clearConsole(COORD startCoord);
-    static void attachConsoleWindow(bool silent);
+    static void attachConsoleWindow();
 private:
     static std::string createShortcutLinkPath();
 };
