@@ -4,3 +4,4 @@
 LPCSTR globals::exe;
 HWND globals::hWnd = nullptr;
 bool globals::noConfigFile = false;
+bool globals::taskbarLoopRunState = true;
