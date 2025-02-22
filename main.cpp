@@ -10,6 +10,9 @@
 
 NOTIFYICONDATAA nid;
 
+HANDLE hMutex;
+HICON hIcon;
+
 void taskbarLoop() {
     bool called = false;
     while (true) {
@@ -24,28 +27,37 @@ void taskbarLoop() {
         }
         taskbar::updateTaskbarState();
         Sleep(config::taskbarUpdateInterval);
-        called  = false;
+        called = false;
     }
 }
 
-void quit() {
+std::thread taskbarLoopThread;
+
+void cleanup() {
     globals::taskbarLoopRunState = false;
     Shell_NotifyIconA(NIM_DELETE, &nid);
-    PostQuitMessage(0);
-    if (globals::hWnd)
+    if (globals::hWnd != nullptr)
         DestroyWindow(globals::hWnd);
     globals::hWnd = nullptr;
+    if (taskbarLoopThread.joinable())
+        taskbarLoopThread.join();
     taskbar::resetTaskbar();
 }
 
 BOOL WINAPI ConsoleHandler(const DWORD signal) {
     if (signal == CTRL_C_EVENT || signal == CTRL_CLOSE_EVENT || signal == CTRL_LOGOFF_EVENT || signal == CTRL_SHUTDOWN_EVENT) {
-        if (config::debug && !config::keepConsoleWindowOpen) {
-            utils::toggleConsoleWindow(ConsoleHandler, false);
-            quit();
-            exit(0);
+        if (config::debug && !config::keepConsoleWindowOpen)
+            utils::toggleConsoleWindow(nullptr, false);
+        bool wasNull = globals::hWnd == nullptr;
+        cleanup();
+        if (config::keepConsoleWindowOpen)
+            std::cerr << std::endl << "CTRL + C again to exit." << std::endl;
+        if (signal != CTRL_C_EVENT || wasNull) {
+            utils::toggleConsoleWindow(nullptr, false);
+            DestroyIcon(hIcon);
+            CloseHandle(hMutex);
+            exit(0); // Just making sure the application exists completely
         }
-        quit();
     }
     return TRUE;
 }
@@ -55,7 +67,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
         case WM_TRAY_ICON:
             if (lParam == WM_RBUTTONUP) {
                 HMENU hMenu = CreatePopupMenu();
-                AppendMenuA(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, (std::string(PROJECT_NAME) + " " + std::string(VER_FILEVERSION_STR)).c_str());
+                AppendMenuA(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, (std::string(VER_FILEDESCRIPTION_STR) + " " + std::string(VER_FILEVERSION_STR)).c_str());
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, "Open config file");
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, "Reload config");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
@@ -78,8 +90,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
             switch (LOWORD(wParam)) {
                 case ID_TRAY_EXIT:
                     utils::toggleConsoleWindow(ConsoleHandler, false);
-                    quit();
-                    exit(0);
+                    PostMessage(globals::hWnd, WM_QUIT, 0, 0);
+                    break;
                 case ID_TRAY_OPEN_CONFIG:
                     config::open();
                     break;
@@ -105,7 +117,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
             }
             break;
         case WM_CLOSE:
-            quit();
+            if (config::debug)
+                MessageBoxA(globals::hWnd, "Called WM_CLOSE.", PROJECT_NAME, MB_ICONQUESTION | MB_OK);
+            cleanup();
             break;
         default:
             break;
@@ -131,7 +145,7 @@ int main(const int argc, char* argv[]) {
         if (!utils::processArguments(argc, argv))
             return 0;
 
-        HANDLE hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
+        hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
         if (!hMutex) {
             std::cerr << "Internal error: Failed to create mutex" << std::endl;
             utils::showExceptionMessageBox([](std::stringstream& crashInfo) {
@@ -157,7 +171,7 @@ int main(const int argc, char* argv[]) {
         if (config::debug)
             utils::toggleConsoleWindow(ConsoleHandler, true);
 
-        const auto className = "WindowsTaskbarHider_TrayIcon";
+        const auto className = (std::string(PROJECT_NAME) + "_TrayIcon").c_str();
         WNDCLASSA wc = {};
         wc.lpfnWndProc = WindowProc;
         wc.hInstance = GetModuleHandle(nullptr);
@@ -166,7 +180,7 @@ int main(const int argc, char* argv[]) {
 
         globals::hWnd = CreateWindowA(className, PROJECT_NAME, 0, 0, 0, 0, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
 
-        HICON hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
+        hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
         if (!hIcon) {
             std::cerr << "Fatal error: Failed to load icon" << std::endl;
             utils::showExceptionMessageBox([](std::stringstream& crashInfo) {
@@ -182,7 +196,7 @@ int main(const int argc, char* argv[]) {
         nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
         nid.uCallbackMessage = WM_TRAY_ICON;
         nid.hIcon = hIcon;
-        strcpy_s(nid.szTip, PROJECT_NAME);
+        strcpy_s(nid.szTip, VER_FILEDESCRIPTION_STR);
 
         if (!Shell_NotifyIconA(NIM_ADD, &nid)) {
             std::cerr << "Fatal error: Failed to create system tray icon" << std::endl;
@@ -192,18 +206,20 @@ int main(const int argc, char* argv[]) {
             return 1;
         }
 
-        std::thread taskbarLoopThread(taskbarLoop);
+        taskbarLoopThread = std::thread(taskbarLoop);
 
         MSG msg;
-        while (GetMessageA(&msg, nullptr, 0, 0)) {
+        while (GetMessageA(&msg, globals::hWnd, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
 
-        taskbarLoopThread.join();
+        cleanup();
+
         DestroyIcon(hIcon);
         CloseHandle(hMutex);
-        taskbar::resetTaskbar();
+        if (config::debug)
+            MessageBoxA(globals::hWnd, "Application was closed", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
