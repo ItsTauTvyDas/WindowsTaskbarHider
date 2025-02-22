@@ -12,13 +12,16 @@ NOTIFYICONDATAA nid;
 
 HANDLE hMutex;
 HICON hIcon;
+bool quitting = false;
 
 void taskbarLoop() {
     bool called = false;
     while (true) {
-        if (globals::hWnd == nullptr)
-            break;
+        if (quitting)
+            return;
         if (!globals::taskbarLoopRunState) {
+            if (quitting)
+                return;
             if (!called) {
                 taskbar::resetTaskbar();
                 called = true;
@@ -34,6 +37,9 @@ void taskbarLoop() {
 std::thread taskbarLoopThread;
 
 void cleanup(bool clearIconAndMutex) {
+    if (quitting)
+        MessageBoxA(globals::hWnd, "Cleanup called twice.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
+    quitting = true;
     globals::taskbarLoopRunState = false;
     Shell_NotifyIconA(NIM_DELETE, &nid);
     if (globals::hWnd != nullptr)
@@ -52,15 +58,16 @@ BOOL WINAPI ConsoleHandler(const DWORD signal) {
     if (signal == CTRL_C_EVENT || signal == CTRL_CLOSE_EVENT || signal == CTRL_LOGOFF_EVENT || signal == CTRL_SHUTDOWN_EVENT) {
         if (config::debug && !config::keepConsoleWindowOpen)
             utils::toggleConsoleWindow(nullptr, false);
-        bool wasNull = globals::hWnd == nullptr;
-        cleanup(false);
+        const bool wasNull = globals::hWnd == nullptr;
+        if (!wasNull)
+            cleanup(false);
         if (config::keepConsoleWindowOpen)
             std::cerr << std::endl << "> Do CTRL + C again to exit." << std::endl;
         if (signal != CTRL_C_EVENT || wasNull) {
             utils::toggleConsoleWindow(nullptr, false);
             DestroyIcon(hIcon);
             CloseHandle(hMutex);
-            exit(0); // Just making sure the application exists completely
+            exit(0);
         }
     }
     return TRUE;
@@ -93,9 +100,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
                 case ID_TRAY_EXIT:
-                    if (config::debug)
-                        utils::toggleConsoleWindow(ConsoleHandler, false);
-                    exit(0);
+                    PostQuitMessage(0);
+                    break;
                 case ID_TRAY_OPEN_CONFIG:
                     config::open();
                     break;
@@ -138,7 +144,8 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
 
 int main(const int argc, char* argv[]) {
     atexit([] {
-        cleanup(true);
+        if (config::debug)
+            utils::toggleConsoleWindow(ConsoleHandler, false);
         MessageBoxA(globals::hWnd, "Application was closed.", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
     });
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
