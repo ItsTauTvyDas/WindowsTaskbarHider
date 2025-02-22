@@ -26,7 +26,6 @@ add_executable(${PROJECT_NAME} main.cpp
         globals.cpp
         globals.h
         assets/app.rc
-        resources.h.in
         resources.h
         stdcerr.h)
 
