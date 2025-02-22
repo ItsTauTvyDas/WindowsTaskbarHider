@@ -59,6 +59,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, running ? "Pause" : "Resume");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_ADD_REMOVE_STARTUP, utils::doesAutoStart() ? "Remove from startup" : "Add to startup");
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_ATTACH_CONSOLE, config::debug ? "Detach console (debug)" : "Attach console (debug)");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_EXIT, "Exit");
                 POINT p;
@@ -78,13 +79,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                     break;
                 case ID_TRAY_RELOAD_CONFIG:
                     config::load();
-                    utils::toggleConsoleWindow();
+                    utils::toggleConsoleWindow(ConsoleHandler, config::debug);
                     break;
                 case ID_TRAY_PAUSE_HIDER:
                     running = !running;
                     break;
                 case ID_TRAY_ADD_REMOVE_STARTUP:
                     utils::toggleStartup();
+                    break;
+                case ID_TRAY_ATTACH_CONSOLE:
+                    config::debug = !config::debug;
+                    utils::toggleConsoleWindow(ConsoleHandler, config::debug);
                     break;
                 default:
                     break;
@@ -110,11 +115,13 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
 }
 
 int main(const int argc, char* argv[]) {
+    SetConsoleCtrlHandler(ConsoleHandler, TRUE);
     globals::exe = argv[0];
     SetUnhandledExceptionFilter(reinterpret_cast<LPTOP_LEVEL_EXCEPTION_FILTER>(CrashHandler));
     try {
         if (!utils::processArguments(argc, argv))
             return 0;
+
         HANDLE hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
         if (!hMutex) {
             std::cerr << "Internal error: Failed to create mutex" << std::endl;
@@ -139,9 +146,7 @@ int main(const int argc, char* argv[]) {
             config::load();
 
         if (config::debug)
-            utils::toggleConsoleWindow();
-
-        SetConsoleCtrlHandler(ConsoleHandler, TRUE);
+            utils::toggleConsoleWindow(ConsoleHandler, true);
 
         const auto className = "WindowsTaskbarHider_TrayIcon";
         WNDCLASSA wc = {};
