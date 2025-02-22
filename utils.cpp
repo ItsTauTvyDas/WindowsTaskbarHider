@@ -58,35 +58,6 @@ void utils::killProcessByName(const char* processName, DWORD currentPid) {
     CloseHandle(hSnap);
 }
 
-std::string utils::getProgramVersion() {
-    char exePath[MAX_PATH];
-    if (GetModuleFileName(nullptr, exePath, MAX_PATH) == 0)
-        return "Failed to get executable path.";
-
-    DWORD handle = 0;
-    const DWORD size = GetFileVersionInfoSize(exePath, &handle);
-    if (size == 0)
-        return "Failed to get version info size.";
-
-    std::vector<char> data(size);
-    if (!GetFileVersionInfo(exePath, handle, size, data.data()))
-        return "Failed to get version info.";
-
-    VS_FIXEDFILEINFO* versionInfo = nullptr;
-    UINT len = 0;
-    if (!VerQueryValue(data.data(), "\\", reinterpret_cast<LPVOID *>(&versionInfo), &len))
-        return "Failed to query version info.";
-
-    const DWORD major = HIWORD(versionInfo->dwFileVersionMS);
-    const DWORD minor = LOWORD(versionInfo->dwFileVersionMS);
-    const DWORD build = HIWORD(versionInfo->dwFileVersionLS);
-    const DWORD revision = LOWORD(versionInfo->dwFileVersionLS);
-
-    char versionStr[50];
-    snprintf(versionStr, sizeof(versionStr), "%d.%d.%d.%d", major, minor, build, revision);
-    return versionStr;
-}
-
 bool utils::processArguments(const int argc, char* argv[]) {
     if (argc < 2) return true;
     std::string arg = argv[1];

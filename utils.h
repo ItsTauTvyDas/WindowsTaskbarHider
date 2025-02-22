@@ -9,7 +9,6 @@ class utils {
 public:
     static std::string getProcessName(HWND hwnd);
     static void killProcessByName(const char *filename, DWORD currentPid);
-    static std::string getProgramVersion();
     static bool processArguments(int argc, char* argv[]);
     static void showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback);
     static LPSTR NTStatusMessageToText(DWORD NTStatusMessage);
