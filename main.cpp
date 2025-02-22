@@ -10,15 +10,12 @@
 
 NOTIFYICONDATAA nid;
 
-bool running = true;
-bool quitting = false;
-
 void taskbarLoop() {
     bool called = false;
     while (true) {
-        if (quitting || globals::hWnd == nullptr)
+        if (globals::hWnd == nullptr)
             break;
-        if (!running) {
+        if (!globals::taskbarLoopRunState) {
             if (!called) {
                 taskbar::resetTaskbar();
                 called = true;
@@ -32,8 +29,7 @@ void taskbarLoop() {
 }
 
 void quit() {
-    quitting = true;
-    running = false;
+    globals::taskbarLoopRunState = false;
     Shell_NotifyIconA(NIM_DELETE, &nid);
     PostQuitMessage(0);
     if (globals::hWnd)
@@ -43,8 +39,14 @@ void quit() {
 }
 
 BOOL WINAPI ConsoleHandler(const DWORD signal) {
-    if (signal == CTRL_C_EVENT || signal == CTRL_CLOSE_EVENT || signal == CTRL_LOGOFF_EVENT || signal == CTRL_SHUTDOWN_EVENT)
+    if (signal == CTRL_C_EVENT || signal == CTRL_CLOSE_EVENT || signal == CTRL_LOGOFF_EVENT || signal == CTRL_SHUTDOWN_EVENT) {
+        if (config::debug && !config::keepConsoleWindowOpen) {
+            utils::toggleConsoleWindow(ConsoleHandler, false);
+            quit();
+            exit(0);
+        }
         quit();
+    }
     return TRUE;
 }
 
@@ -56,10 +58,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, "Open config file");
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, "Reload config");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
-                AppendMenuA(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, running ? "Pause" : "Resume");
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, globals::taskbarLoopRunState ? "Pause" : "Resume");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_ADD_REMOVE_STARTUP, utils::doesAutoStart() ? "Remove from startup" : "Add to startup");
-                AppendMenuA(hMenu, MF_STRING, ID_TRAY_ATTACH_CONSOLE, config::debug ? "Detach console (debug)" : "Attach console (debug)");
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_ATTACH_DEBUG_CONSOLE, config::debug ? "Detach console (debug)" : "Attach console (debug)");
+                AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
+                AppendMenuA(hMenu, MF_STRING, ID_TRAY_GITHUB, "Open GitHub page");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_EXIT, "Exit");
                 POINT p;
@@ -82,14 +86,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                     utils::toggleConsoleWindow(ConsoleHandler, config::debug);
                     break;
                 case ID_TRAY_PAUSE_HIDER:
-                    running = !running;
+                    globals::taskbarLoopRunState = !globals::taskbarLoopRunState;
                     break;
                 case ID_TRAY_ADD_REMOVE_STARTUP:
                     utils::toggleStartup();
                     break;
-                case ID_TRAY_ATTACH_CONSOLE:
+                case ID_TRAY_ATTACH_DEBUG_CONSOLE:
                     config::debug = !config::debug;
                     utils::toggleConsoleWindow(ConsoleHandler, config::debug);
+                    break;
+                case ID_TRAY_GITHUB:
+                    ShellExecute(nullptr, nullptr, reinterpret_cast<LPCSTR>(PRODUCT_URL), nullptr, nullptr,
+                        SW_SHOWNORMAL);
                     break;
                 default:
                     break;
