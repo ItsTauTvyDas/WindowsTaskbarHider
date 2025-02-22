@@ -111,11 +111,6 @@ LPSTR utils::NTStatusMessageToText(const DWORD NTStatusMessage)
     return message;
 }
 
-BOOL CALLBACK EnumIconsProc([[maybe_unused]] HMODULE hModule, [[maybe_unused]] LPCTSTR lpszType, [[maybe_unused]] LPTSTR lpszName, const LONG_PTR lParam) {
-    *reinterpret_cast<bool *>(lParam) = true;
-    return FALSE;
-}
-
 std::string utils::joinString(const std::vector<std::string>& vec, const std::string& delimiter) {
     std::ostringstream result;
     for (size_t i = 0; i < vec.size(); ++i) {
@@ -141,8 +136,15 @@ void utils::attachConsoleWindow() {
     if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
         AllocConsole();
         const bool state = globals::taskbarLoopRunState;
+        Sleep(200);
         globals::taskbarLoopRunState = false;
+
         HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+        HWND wConsole = GetConsoleWindow();
+        if (hConsole == INVALID_HANDLE_VALUE) {
+            MessageBoxA(globals::hWnd, "Failed to get console input handle, cannot proceed.", PROJECT_NAME, MB_ICONERROR | MB_OK);
+            return;
+        }
 
         const int hCrt = _open_osfhandle(reinterpret_cast<intptr_t>(hConsole), 0x4000);
         const FILE* fp = _fdopen(hCrt, "w");
@@ -157,14 +159,18 @@ void utils::attachConsoleWindow() {
 
         static stdcerr _;
 
-        SetConsoleTitleW(L"WindowsTaskbarHider (debugging)");
+        SetConsoleTitleA((std::string(VER_FILEDESCRIPTION_STR) + " (debugging)").c_str());
 
         std::cout << "Console successfully attached." << std::endl;
-        Sleep(100);
+
+        DWORD mode;
+        if (!GetConsoleMode(hConsole, &mode) || !SetConsoleMode(hConsole, mode & ~(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT)))
+            MessageBoxA(wConsole, "Failed to disable quick mode, so any selections in the console will freeze the program.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
+
         globals::taskbarLoopRunState = state;
         return;
     }
-    MessageBoxA(globals::hWnd, "Console is already attached!", PROJECT_NAME, MB_ICONERROR | MB_OK);
+    MessageBoxA(globals::hWnd, "Console is already attached.", PROJECT_NAME, MB_ICONERROR | MB_OK);
 }
 
 bool utils::fileExists(const char *path) {
@@ -191,7 +197,7 @@ void utils::clearConsole(const COORD startCoord) {
 std::string utils::createShortcutLinkPath() {
     char startupPath[MAX_PATH];
     if (!SUCCEEDED(SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath))) {
-        MessageBoxA(globals::hWnd, "Failed to get startup folder location!", PROJECT_NAME, MB_ICONERROR | MB_OK);
+        MessageBoxA(globals::hWnd, "Failed to get startup folder location.", PROJECT_NAME, MB_ICONERROR | MB_OK);
         return nullptr;
     }
     std::string name = globals::exe;
@@ -242,7 +248,7 @@ void utils::toggleStartup() {
         CoUninitialize();
 
         if (!SUCCEEDED(result)) {
-            MessageBoxA(globals::hWnd, "Failed to create a shortcut at startup directory!", PROJECT_NAME, MB_ICONERROR | MB_OK);
+            MessageBoxA(globals::hWnd, "Failed to create a shortcut at startup directory.", PROJECT_NAME, MB_ICONERROR | MB_OK);
             remove(shortcutPath.c_str());
         }
     }
@@ -251,13 +257,15 @@ void utils::toggleStartup() {
 void utils::toggleConsoleWindow(const PHANDLER_ROUTINE handler, const bool status) {
     if (status) {
         attachConsoleWindow();
-        SetConsoleCtrlHandler(handler, TRUE);
+        if (handler != nullptr)
+            SetConsoleCtrlHandler(handler, TRUE);
         return;
     }
-    SetConsoleCtrlHandler(handler, FALSE);
+    if (handler != nullptr)
+        SetConsoleCtrlHandler(handler, FALSE);
     HWND hwnd = GetConsoleWindow();
     if (!FreeConsole())
-        MessageBoxA(globals::hWnd, "Failed to free the console!", PROJECT_NAME, MB_ICONERROR | MB_OK);
+        MessageBoxA(globals::hWnd, "Failed to free the console.", PROJECT_NAME, MB_ICONERROR | MB_OK);
     DWORD process_id = 0;
     GetWindowThreadProcessId(hwnd, &process_id);
     if (const HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, process_id)) {
