@@ -23,8 +23,10 @@ bool taskbar::isCursorOverTaskbar() {
 
 bool taskbar::isAnyWindowMaximized() {
     bool maximized = false;
-    if (config::debug)
+    if (config::debug) {
+        utils::clearConsole({ 0, 2 });
         std::cout << "[DEBUG] Loop start" << std::endl;
+    }
     EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
         if (GetWindow(hwnd, GW_OWNER) != nullptr) return TRUE;
         if (!IsWindowVisible(hwnd)) return TRUE;
@@ -41,10 +43,14 @@ bool taskbar::isAnyWindowMaximized() {
         GetClassNameA(hwnd, wndclass, sizeof(wndclass));
 
         if (config::debug)
-            std::cout << "[DEBUG] Found maximized window: " << title << " | Process: " << processName << " | Class: " << wndclass << std::endl;
-        if (!config::ignoredWindows.empty())
+            std::cout << "[DEBUG] Found maximized window:" << std::endl
+                      << "[DEBUG]     Title    = " << processName << std::endl
+                      << "[DEBUG]     Process  = " << processName << std::endl
+                      << "[DEBUG]     Class    = " << processName << std::endl
+                      << "[DEBUG]     Skipped? = ";
+        if (!config::ignoredWindows.empty()) {
+            bool skipped = false;
             for (const auto& window: config::ignoredWindows) {
-                bool skipped = false;
                 if ("process:" + processName == window)
                     skipped = true;
                 if ("title:" + std::string(title) == window)
@@ -53,10 +59,13 @@ bool taskbar::isAnyWindowMaximized() {
                     skipped = true;
                 if (skipped) {
                     if (config::debug)
-                        std::cout << "[DEBUG] Skipping..." << std::endl;
+                        std::cout << "Yes" << std::endl;
                     return TRUE;
                 }
-             }
+            }
+        }
+        if (config::debug)
+            std::cout << "No" << std::endl;
         *reinterpret_cast<bool*>(lParam) = true;
         return FALSE;
     }, reinterpret_cast<LPARAM>(&maximized));
