@@ -136,8 +136,8 @@ void utils::attachConsoleWindow() {
     if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
         AllocConsole();
         const bool state = globals::taskbarLoopRunState;
-        Sleep(200);
         globals::taskbarLoopRunState = false;
+        Sleep(100);
 
         HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
         HWND wConsole = GetConsoleWindow();
@@ -160,13 +160,12 @@ void utils::attachConsoleWindow() {
         static stdcerr _;
 
         SetConsoleTitleA((std::string(VER_FILEDESCRIPTION_STR) + " (debugging)").c_str());
-
-        std::cout << "Console successfully attached." << std::endl;
-
         DWORD mode;
         if (!GetConsoleMode(hConsole, &mode) || !SetConsoleMode(hConsole, mode & ~(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT)))
             MessageBoxA(wConsole, "Failed to disable quick mode, so any selections in the console will freeze the program.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
 
+        std::cout << "Console successfully attached." << std::endl;
+        Sleep(100);
         globals::taskbarLoopRunState = state;
         return;
     }
@@ -200,8 +199,7 @@ std::string utils::createShortcutLinkPath() {
         MessageBoxA(globals::hWnd, "Failed to get startup folder location.", PROJECT_NAME, MB_ICONERROR | MB_OK);
         return nullptr;
     }
-    std::string name = globals::exe;
-    name = name.substr(0, name.find_last_of('.'));
+    const std::string name = globals::exe.substr(0, globals::exe.find_last_of('.'));
     return std::string(std::string(startupPath) + "\\" + name + ".lnk");
 }
 
@@ -231,9 +229,12 @@ void utils::toggleStartup() {
             WCHAR pszFile[MAX_PATH];
             toUnicode(appPath, pszFile);
 
+            WCHAR pszName[sizeof(VER_FILEDESCRIPTION_STR)];
+            toUnicode(VER_FILEDESCRIPTION_STR, pszName);
+
             psl->SetPath(pszFile);
             psl->SetArguments(L"");
-            psl->SetDescription(L"");
+            psl->SetDescription(pszName);
 
             result = psl->QueryInterface(IID_PPV_ARGS(&ppf));
             if (SUCCEEDED(result))
@@ -251,6 +252,8 @@ void utils::toggleStartup() {
             MessageBoxA(globals::hWnd, "Failed to create a shortcut at startup directory.", PROJECT_NAME, MB_ICONERROR | MB_OK);
             remove(shortcutPath.c_str());
         }
+    } else {
+        MessageBoxA(globals::hWnd, "Output stream failed.", PROJECT_NAME, MB_ICONERROR | MB_OK);
     }
 }
 
