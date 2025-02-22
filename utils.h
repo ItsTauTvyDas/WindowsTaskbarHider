@@ -11,7 +11,6 @@ public:
     static void killProcessByName(const char *filename, DWORD currentPid);
     static std::string getProgramVersion();
     static bool processArguments(int argc, char* argv[]);
-    static HICON loadExeIcon(LPCSTR pszExeFileName, UINT nIconIndex);
     static void showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback);
     static LPSTR NTStatusMessageToText(DWORD NTStatusMessage);
     static std::string joinString(const std::vector<std::string> &vec, const std::string &delimiter);
@@ -22,9 +21,9 @@ public:
     static void toggleConsoleWindow(PHANDLER_ROUTINE handler, bool status);
     static void toUnicode(LPCCH string, LPWSTR str);
     static void clearConsole(COORD startCoord);
+    static void attachConsoleWindow(bool silent);
 private:
     static std::string createShortcutLinkPath();
-    static void attachConsoleWindow();
 };
 
 #endif //UTILS_H
