@@ -98,8 +98,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                     utils::toggleConsoleWindow(ConsoleHandler, config::debug);
                     break;
                 case ID_TRAY_GITHUB:
-                    ShellExecute(nullptr, nullptr, reinterpret_cast<LPCSTR>(PRODUCT_URL), nullptr, nullptr,
-                        SW_SHOWNORMAL);
+                    ShellExecuteA(nullptr, nullptr, PRODUCT_URL, nullptr, nullptr, SW_SHOWDEFAULT);
                     break;
                 default:
                     break;

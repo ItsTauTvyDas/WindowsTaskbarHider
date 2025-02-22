@@ -52,7 +52,7 @@ void config::ensureConfigurationExists() {
 }
 
 void config::open() {
-    system(("explorer " + std::string(CONFIG_FILENAME)).c_str());
+    ShellExecuteA(nullptr, nullptr, CONFIG_FILENAME, nullptr, nullptr, SW_SHOWDEFAULT);
 }
 
 bool config::processSingle(const std::string &key, const std::string &value) {
