@@ -6,9 +6,9 @@ set(CMAKE_CXX_FLAGS          "-static -static-libgcc -static-libstdc++ -pthread"
 # Custom variables
 set(PRODUCT_COMPANY          "ItsTauTvyDas")
 set(PRODUCT_URL              "https://github.com/ItsTauTvyDas/WindowsTaskbarHider")
-set(PRODUCT_DESCRIPTION      "Hide your taskbar for a cleaner desktop!")
+set(PRODUCT_DESCRIPTION      "Windows Taskbar Hider")
 set(VERSION_PRODUCT_NUMBER   1)
-set(VERSION_PRODUCT_VERSION  1)
+set(VERSION_PRODUCT_VERSION  0)
 set(VERSION_PRODUCT_BUILD    0)
 set(VERSION_PRODUCT_REVISION 0)
 
