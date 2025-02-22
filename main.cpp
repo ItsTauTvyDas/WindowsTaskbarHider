@@ -55,6 +55,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
         case WM_TRAY_ICON:
             if (lParam == WM_RBUTTONUP) {
                 HMENU hMenu = CreatePopupMenu();
+                AppendMenuA(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, (std::string(PROJECT_NAME) + " " + std::string(VER_FILEVERSION_STR)).c_str());
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, "Open config file");
                 AppendMenuA(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, "Reload config");
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, nullptr);
@@ -76,8 +77,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
                 case ID_TRAY_EXIT:
+                    utils::toggleConsoleWindow(ConsoleHandler, false);
                     quit();
-                    break;
+                    exit(0);
                 case ID_TRAY_OPEN_CONFIG:
                     config::open();
                     break;
