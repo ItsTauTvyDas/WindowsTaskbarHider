@@ -1,7 +1,8 @@
 #include "globals.h"
+
 #include "taskbar.h"
 
-LPCSTR globals::exe;
+std::string globals::exe;
 HWND globals::hWnd = nullptr;
 bool globals::noConfigFile = false;
 bool globals::taskbarLoopRunState = true;
