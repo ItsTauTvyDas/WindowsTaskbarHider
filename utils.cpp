@@ -89,30 +89,11 @@ std::string utils::getProgramVersion() {
 
 bool utils::processArguments(const int argc, char* argv[]) {
     if (argc < 2) return true;
-    attachConsoleWindow();
     std::string arg = argv[1];
-    if (arg == "--help" || arg == "-h") {
-        std::cout << "Usage: " << globals::exe << " [OPTIONS]" << std::endl
-                  << "Options:" << std::endl
-                  << "  -h,       --help                 Show this help message" << std::endl
-                  << "  -nmb,     --no-msgbox            Disable message boxes" << std::endl
-                  << "  -d,       --debug                Enable debug output" << std::endl
-                  << "  -nc,      --no-config            Don't create/load config file" << std::endl
-                  << "  -rtb,     --reset-taskbar        Reset taskbar visibility and exit" << std::endl
-                  << "  -c:<key>, --config:<key> <value> Set values for configuration (doesn't save)" << std::endl
-                  << "  -i,       --info                 Show the information about this program and exit" << std::endl;
-        return false;
-    }
-
-    if (arg == "--info" || arg == "-i") {
-        std::cout << "Executable Version: " << getProgramVersion() << std::endl
-                  << "Author:             ItsTauTvyDas (https://itstatutvydas.me)" << std::endl
-                  << "Github Repository:  https://github.com/ItsTauTvyDas/WindowsTaskbarHider" << std::endl;
-        return false;
-    }
 
     if (arg == "--reset-taskbar" || arg == "-rtb") {
         taskbar::resetTaskbar();
+        MessageBoxA(globals::hWnd, "Taskbar visibility was fixed!", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
         return false;
     }
 
@@ -125,15 +106,11 @@ bool utils::processArguments(const int argc, char* argv[]) {
         } else if ((arg.rfind("-c:", 0) == 0 || arg.rfind("-config:", 0) == 0) && i + 1 < argc && arg.rfind(':', 0) + 1 < arg.size()) {
             config::processSingle(arg.substr(arg.rfind(':', 0)), argv[i + 1]);
         } else {
-            std::cerr << "Invalid argument: " + arg << std::endl;
+            MessageBoxA(globals::hWnd, std::string("Invalid argument specified: " + arg).c_str(), PROJECT_NAME, MB_ICONERROR | MB_OK);
             return false;
         }
     }
     return true;
-}
-
-HICON utils::loadExeIcon(const LPCSTR pszExeFileName, const UINT nIconIndex) {
-    return ExtractIconA(GetModuleHandle(nullptr), pszExeFileName, nIconIndex);
 }
 
 void utils::showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback) {
@@ -189,8 +166,11 @@ std::vector<std::string> utils::splitString(const std::string& str, const char d
     return result;
 }
 
-void utils::attachConsoleWindow() {
-    if (!AttachConsole(ATTACH_PARENT_PROCESS) && AllocConsole()) {
+void utils::attachConsoleWindow(const bool silent) {
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
+        AllocConsole();
+        const bool state = globals::taskbarLoopRunState;
+        globals::taskbarLoopRunState = false;
         HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
         const int hCrt = _open_osfhandle(reinterpret_cast<intptr_t>(hConsole), 0x4000);
@@ -210,9 +190,11 @@ void utils::attachConsoleWindow() {
 
         std::cout << "Console successfully attached." << std::endl;
         Sleep(100);
+        globals::taskbarLoopRunState = state;
         return;
     }
-    MessageBoxA(globals::hWnd, "Console is already attached!", PROJECT_NAME, MB_ICONERROR | MB_OK);
+    if (!silent)
+        MessageBoxA(globals::hWnd, "Console is already attached!", PROJECT_NAME, MB_ICONERROR | MB_OK);
 }
 
 bool utils::fileExists(const char *path) {
@@ -298,13 +280,14 @@ void utils::toggleStartup() {
 
 void utils::toggleConsoleWindow(const PHANDLER_ROUTINE handler, const bool status) {
     if (status) {
-        attachConsoleWindow();
+        attachConsoleWindow(false);
         SetConsoleCtrlHandler(handler, TRUE);
         return;
     }
     SetConsoleCtrlHandler(handler, FALSE);
     HWND hwnd = GetConsoleWindow();
-    FreeConsole();
+    if (!FreeConsole())
+        MessageBoxA(globals::hWnd, "Failed to free the console!", PROJECT_NAME, MB_ICONERROR | MB_OK);
     DWORD process_id = 0;
     GetWindowThreadProcessId(hwnd, &process_id);
     if (const HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, process_id)) {
