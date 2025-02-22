@@ -11,6 +11,7 @@
 #include <tlhelp32.h>
 #include "globals.h"
 #include <sys/stat.h>
+#include "stdcerr.h"
 
 std::string utils::getProcessName(HWND hwnd) {
     DWORD processId;
@@ -167,17 +168,6 @@ BOOL CALLBACK EnumIconsProc([[maybe_unused]] HMODULE hModule, [[maybe_unused]] L
     return FALSE;
 }
 
-void utils::throwIfNoDLLIcons(const std::string& dllPath) {
-    const HMODULE hModule = LoadLibraryEx(dllPath.c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES);
-    if (!hModule)
-        throw std::runtime_error("Failed to load " + dllPath);
-    bool hasIcons = false;
-    EnumResourceNames(hModule, RT_GROUP_ICON, EnumIconsProc, reinterpret_cast<LONG_PTR>(&hasIcons));
-    FreeLibrary(hModule);
-    if (!hasIcons)
-        throw std::runtime_error(dllPath + " file doesn't have any icons");
-}
-
 std::string utils::joinString(const std::vector<std::string>& vec, const std::string& delimiter) {
     std::ostringstream result;
     for (size_t i = 0; i < vec.size(); ++i) {
@@ -200,10 +190,29 @@ std::vector<std::string> utils::splitString(const std::string& str, const char d
 }
 
 void utils::attachConsoleWindow() {
-    if (!AttachConsole(ATTACH_PARENT_PROCESS))
-        AllocConsole();
-    freopen("CONOUT$", "r", stdout);
-    freopen("CONOUT$", "r", stderr);
+    if (!AttachConsole(ATTACH_PARENT_PROCESS) && AllocConsole()) {
+        HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+        const int hCrt = _open_osfhandle(reinterpret_cast<intptr_t>(hConsole), 0x4000);
+        const FILE* fp = _fdopen(hCrt, "w");
+        *stdout = *fp;
+        *stderr = *fp;
+
+        setvbuf(stdout, nullptr, _IONBF, 0);
+        setvbuf(stderr, nullptr, _IONBF, 0);
+
+        std::cout.clear();
+        std::cerr.clear();
+
+        static stdcerr _;
+
+        SetConsoleTitleW(L"WindowsTaskbarHider (debugging)");
+
+        std::cout << "Console successfully attached." << std::endl;
+        Sleep(100);
+        return;
+    }
+    MessageBoxA(globals::hWnd, "Console is already attached!", PROJECT_NAME, MB_ICONERROR | MB_OK);
 }
 
 bool utils::fileExists(const char *path) {
@@ -215,27 +224,37 @@ void utils::toUnicode(const LPCCH string, const LPWSTR str) {
     MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
 }
 
-std::string utils::createShortcutLinkPath(char appPath[]) {
+void utils::clearConsole(const COORD startCoord) {
+    HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO screen;
+    DWORD written;
+
+    GetConsoleScreenBufferInfo(console, &screen);
+    FillConsoleOutputCharacterA(
+        console, ' ', (screen.dwSize.X - startCoord.X) * (screen.dwSize.Y - startCoord.Y), startCoord, &written
+    );
+    SetConsoleCursorPosition(console, startCoord);
+}
+
+std::string utils::createShortcutLinkPath() {
     char startupPath[MAX_PATH];
     if (!SUCCEEDED(SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath))) {
         MessageBoxA(globals::hWnd, "Failed to get startup folder location!", PROJECT_NAME, MB_ICONERROR | MB_OK);
         return nullptr;
     }
-    std::string name = strrchr(appPath, '\\') + 1;
+    std::string name = globals::exe;
     name = name.substr(0, name.find_last_of('.'));
     return std::string(std::string(startupPath) + "\\" + name + ".lnk");
 }
 
 bool utils::doesAutoStart() {
-    char appPath[MAX_PATH];
-    GetModuleFileName(nullptr, appPath, MAX_PATH);
-    return fileExists(createShortcutLinkPath(appPath).c_str());
+    return fileExists(createShortcutLinkPath().c_str());
 }
 
 void utils::toggleStartup() {
     char appPath[MAX_PATH];
     GetModuleFileName(nullptr, appPath, MAX_PATH);
-    const std::string shortcutPath = createShortcutLinkPath(appPath);
+    const std::string shortcutPath = createShortcutLinkPath();
 
     if (fileExists(shortcutPath.c_str())) {
         remove(shortcutPath.c_str());
@@ -277,9 +296,20 @@ void utils::toggleStartup() {
     }
 }
 
-void utils::toggleConsoleWindow() {
-    if (config::debug)
+void utils::toggleConsoleWindow(const PHANDLER_ROUTINE handler, const bool status) {
+    if (status) {
         attachConsoleWindow();
-    else
-        FreeConsole();
+        SetConsoleCtrlHandler(handler, TRUE);
+        return;
+    }
+    SetConsoleCtrlHandler(handler, FALSE);
+    HWND hwnd = GetConsoleWindow();
+    FreeConsole();
+    DWORD process_id = 0;
+    GetWindowThreadProcessId(hwnd, &process_id);
+    if (const HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, process_id)) {
+        SendMessage(hwnd, WM_CLOSE, 0, 0L);
+        CloseHandle(hProcess);
+    }
+    CloseWindow(hwnd);
 }
