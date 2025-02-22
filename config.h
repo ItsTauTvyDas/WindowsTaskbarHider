@@ -7,6 +7,7 @@
 class config {
 public:
     static bool debug;
+    static bool keepConsoleWindowOpen;
     static int taskbarUpdateInterval;
     static int opacity;
     static std::vector<std::string> ignoredWindows;
