@@ -12,6 +12,7 @@
 #define ID_TRAY_ADD_REMOVE_STARTUP   1005
 #define ID_TRAY_ATTACH_DEBUG_CONSOLE 1006
 #define ID_TRAY_GITHUB               1007
+#define ID_TRAY_HEADER               1007
 
 #define PRODUCT_URL                  "@PRODUCT_URL@"
 
