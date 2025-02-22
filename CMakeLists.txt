@@ -30,7 +30,6 @@ add_executable(${PROJECT_NAME} main.cpp
         resources.h
         stdcerr.h)
 
-target_link_libraries(${PROJECT_NAME} version)
 configure_file(resources.h.in ${CMAKE_BINARY_DIR}/resources.h @ONLY)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR})
 
