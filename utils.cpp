@@ -36,12 +36,13 @@ std::string utils::getProcessName(HWND hwnd) {
     return processName;
 }
 
-void utils::killProcessByName(const char* processName, DWORD currentPid) {
+bool utils::killProcessByName(const char* processName, DWORD currentPid) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnap == INVALID_HANDLE_VALUE) return;
+    if (hSnap == INVALID_HANDLE_VALUE) return false;
 
     PROCESSENTRY32 pe;
     pe.dwSize = sizeof(PROCESSENTRY32);
+    bool success = false;
 
     if (Process32First(hSnap, &pe))
         do {
@@ -52,10 +53,12 @@ void utils::killProcessByName(const char* processName, DWORD currentPid) {
                 if (hProcess) {
                     TerminateProcess(hProcess, 0);
                     CloseHandle(hProcess);
+                    success = true;
                 }
             }
         } while (Process32Next(hSnap, &pe));
     CloseHandle(hSnap);
+    return success;
 }
 
 bool utils::processArguments(const int argc, char* argv[]) {
@@ -84,34 +87,110 @@ bool utils::processArguments(const int argc, char* argv[]) {
     return true;
 }
 
-void utils::showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback) {
+void utils::showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback, const bool allowRetry) {
     std::stringstream crashInfo;
     crashInfo << "The application has crashed!" << std::endl;
     crashInfo << std::endl;
     callback(crashInfo);
-    MessageBoxA(globals::hWnd, crashInfo.str().c_str(), PROJECT_NAME, MB_ICONERROR | MB_OK);
+    if (!allowRetry) {
+        MessageBoxA(globals::hWnd, crashInfo.str().c_str(), PROJECT_NAME, MB_ICONERROR | MB_OK);
+        return;
+    }
+    crashInfo << std::endl << "Do you want to try re-opening the application?";
+    if (MessageBoxA(globals::hWnd, crashInfo.str().c_str(), PROJECT_NAME, MB_ICONERROR | MB_RETRYCANCEL) == 4) {
+        char path[MAX_PATH];
+        if (GetModuleFileNameA(nullptr, path, MAX_PATH) == 0) {
+            MessageBoxA(globals::hWnd, "Failed to retrieve path of the running program: " + GetLastError(), PROJECT_NAME, MB_ICONERROR | MB_OK);
+            return;
+        }
+        ShellExecuteA(nullptr, "open", path, globals::args.c_str(), nullptr, SW_SHOWNORMAL);
+    }
+}
+
+LPSTR utils::replaceCharacterWithText(const LPSTR lpstr, const char target, const std::string &replacement, const int skip) {
+    const char* pos = lpstr;
+    for (size_t i = 0; i < skip; ++i) {
+        pos = strchr(pos, target);
+        if (!pos)
+            return lpstr;
+        pos++;
+    }
+    if ((pos = strchr(pos, target))) {
+        const size_t index = pos - lpstr;
+        std::string str(lpstr);
+        str.replace(index, 1, replacement.c_str());
+        strcpy(lpstr, str.c_str());
+    }
+    return lpstr;
+}
+
+std::string utils::exceptionName(const DWORD exceptionCode) {
+    switch (exceptionCode) {
+        case EXCEPTION_ACCESS_VIOLATION:
+            return STRINGIFY(EXCEPTION_ACCESS_VIOLATION);
+        case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+            return STRINGIFY(EXCEPTION_ARRAY_BOUNDS_EXCEEDED);
+        case EXCEPTION_BREAKPOINT:
+            return STRINGIFY(EXCEPTION_BREAKPOINT);
+        case EXCEPTION_DATATYPE_MISALIGNMENT:
+            return STRINGIFY(EXCEPTION_DATATYPE_MISALIGNMENT);
+        case EXCEPTION_FLT_DENORMAL_OPERAND:
+            return STRINGIFY(EXCEPTION_FLT_DENORMAL_OPERAND);
+        case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+            return STRINGIFY(EXCEPTION_FLT_DIVIDE_BY_ZERO);
+        case EXCEPTION_FLT_INEXACT_RESULT:
+            return STRINGIFY(EXCEPTION_FLT_INEXACT_RESULT);
+        case EXCEPTION_FLT_INVALID_OPERATION:
+            return STRINGIFY(EXCEPTION_FLT_INVALID_OPERATION);
+        case EXCEPTION_FLT_OVERFLOW:
+            return STRINGIFY(EXCEPTION_FLT_OVERFLOW);
+        case EXCEPTION_FLT_STACK_CHECK:
+            return STRINGIFY(EXCEPTION_FLT_STACK_CHECK);
+        case EXCEPTION_FLT_UNDERFLOW:
+            return STRINGIFY(EXCEPTION_FLT_UNDERFLOW);
+        case EXCEPTION_ILLEGAL_INSTRUCTION:
+            return STRINGIFY(EXCEPTION_ILLEGAL_INSTRUCTION);
+        case EXCEPTION_IN_PAGE_ERROR:
+            return STRINGIFY(EXCEPTION_IN_PAGE_ERROR);
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:
+            return STRINGIFY(EXCEPTION_INT_DIVIDE_BY_ZERO);
+        case EXCEPTION_INT_OVERFLOW:
+            return STRINGIFY(EXCEPTION_INT_OVERFLOW);
+        case EXCEPTION_INVALID_DISPOSITION:
+            return STRINGIFY(EXCEPTION_INVALID_DISPOSITION);
+        case EXCEPTION_NONCONTINUABLE_EXCEPTION:
+            return STRINGIFY(EXCEPTION_NONCONTINUABLE_EXCEPTION);
+        case EXCEPTION_PRIV_INSTRUCTION:
+            return STRINGIFY(EXCEPTION_PRIV_INSTRUCTION);
+        case EXCEPTION_SINGLE_STEP:
+            return STRINGIFY(EXCEPTION_SINGLE_STEP);
+        case EXCEPTION_STACK_OVERFLOW:
+            return STRINGIFY(EXCEPTION_STACK_OVERFLOW);
+        default:
+            return "EXCEPTION_UNKNOWN";
+    }
 }
 
 LPSTR utils::NTStatusMessageToText(const DWORD NTStatusMessage)
 {
     // https://web.archive.org/web/20150121053632/http://support.microsoft.com/kb/259693
-    LPSTR message;
+    LPSTR lpMessageBuffer = nullptr;
     const HMODULE Hand = LoadLibrary("NTDLL.DLL");
-    FormatMessage(
+    const DWORD length = FormatMessage(
         FORMAT_MESSAGE_ALLOCATE_BUFFER |
         FORMAT_MESSAGE_FROM_SYSTEM |
         FORMAT_MESSAGE_FROM_HMODULE,
         Hand,
         NTStatusMessage,
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        reinterpret_cast<LPSTR>(&message),
-        sizeof(message),
+        reinterpret_cast<LPTSTR>(&lpMessageBuffer),
+        0,
         nullptr);
     FreeLibrary(Hand);
-    return message;
+    return length > 0 ? lpMessageBuffer : nullptr;
 }
 
-std::string utils::joinString(const std::vector<std::string>& vec, const std::string& delimiter) {
+std::string utils::joinString(const std::vector<std::string> &vec, const std::string &delimiter) {
     std::ostringstream result;
     for (size_t i = 0; i < vec.size(); ++i) {
         result << vec[i];
@@ -121,7 +200,7 @@ std::string utils::joinString(const std::vector<std::string>& vec, const std::st
     return result.str();
 }
 
-std::vector<std::string> utils::splitString(const std::string& str, const char delimiter) {
+std::vector<std::string> utils::splitString(const std::string &str, const char delimiter) {
     std::vector<std::string> result;
     std::stringstream ss(str);
     std::string item;
@@ -132,21 +211,22 @@ std::vector<std::string> utils::splitString(const std::string& str, const char d
     return result;
 }
 
-void utils::attachConsoleWindow() {
+bool utils::attachConsoleWindow() {
     if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
         AllocConsole();
-        const bool state = globals::taskbarLoopRunState;
-        globals::taskbarLoopRunState = false;
-        Sleep(100);
 
-        HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-        HWND wConsole = GetConsoleWindow();
-        if (hConsole == INVALID_HANDLE_VALUE) {
-            MessageBoxA(globals::hWnd, "Failed to get console input handle, cannot proceed.", PROJECT_NAME, MB_ICONERROR | MB_OK);
-            return;
+        HANDLE hConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (hConsoleOutput == INVALID_HANDLE_VALUE) {
+            MessageBoxA(globals::hWnd, "Failed to get console output handle.", PROJECT_NAME, MB_ICONERROR | MB_OK);
+            return false;
+        }
+        HANDLE hConsoleInput = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (hConsoleInput == INVALID_HANDLE_VALUE) {
+            MessageBoxA(globals::hWnd, "Failed to get console input handle.", PROJECT_NAME, MB_ICONERROR | MB_OK);
+            return false;
         }
 
-        const int hCrt = _open_osfhandle(reinterpret_cast<intptr_t>(hConsole), 0x4000);
+        const int hCrt = _open_osfhandle(reinterpret_cast<intptr_t>(hConsoleOutput), 0x4000);
         const FILE* fp = _fdopen(hCrt, "w");
         *stdout = *fp;
         *stderr = *fp;
@@ -161,15 +241,17 @@ void utils::attachConsoleWindow() {
 
         SetConsoleTitleA((std::string(VER_FILEDESCRIPTION_STR) + " (debugging)").c_str());
         DWORD mode;
-        if (!GetConsoleMode(hConsole, &mode) || !SetConsoleMode(hConsole, mode & ~(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT)))
-            MessageBoxA(wConsole, "Failed to disable quick mode, so any selections in the console will freeze the program.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
+        if (!GetConsoleMode(hConsoleInput, &mode) || !SetConsoleMode(hConsoleInput, mode & ~(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT)))
+            MessageBoxA(GetConsoleWindow(), "Failed to disable quick mode, so any selections in the console will freeze the program.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
 
         std::cout << "Console successfully attached." << std::endl;
-        Sleep(100);
-        globals::taskbarLoopRunState = state;
-        return;
+        std::cout << std::endl;
+        std::cout << "Sleeping one second..." << std::endl;
+        Sleep(1000);
+        return true;
     }
     MessageBoxA(globals::hWnd, "Console is already attached.", PROJECT_NAME, MB_ICONERROR | MB_OK);
+    return false;
 }
 
 bool utils::fileExists(const char *path) {
@@ -177,7 +259,7 @@ bool utils::fileExists(const char *path) {
     return stat(path, &buffer) == 0;
 }
 
-void utils::toUnicode(const LPCCH string, const LPWSTR str) {
+void utils::toUnicode(const LPCCH string, LPWSTR str) {
     MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
 }
 
@@ -195,10 +277,7 @@ void utils::clearConsole(const COORD startCoord) {
 
 std::string utils::createShortcutLinkPath() {
     char startupPath[MAX_PATH];
-    if (!SUCCEEDED(SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath))) {
-        MessageBoxA(globals::hWnd, "Failed to get startup folder location.", PROJECT_NAME, MB_ICONERROR | MB_OK);
-        return nullptr;
-    }
+    SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath);
     const std::string name = globals::exe.substr(0, globals::exe.find_last_of('.'));
     return std::string(std::string(startupPath) + "\\" + name + ".lnk");
 }
@@ -211,9 +290,9 @@ void utils::toggleStartup() {
     char appPath[MAX_PATH];
     GetModuleFileName(nullptr, appPath, MAX_PATH);
     const std::string shortcutPath = createShortcutLinkPath();
-
-    if (fileExists(shortcutPath.c_str())) {
-        remove(shortcutPath.c_str());
+    const char *shortcutPathC = shortcutPath.c_str();
+    if (fileExists(shortcutPathC)) {
+        remove(shortcutPathC);
         return;
     }
 
@@ -240,7 +319,7 @@ void utils::toggleStartup() {
             if (SUCCEEDED(result))
             {
                 WCHAR pszFileName[MAX_PATH];
-                toUnicode(shortcutPath.c_str(), pszFileName);
+                toUnicode(shortcutPathC, pszFileName);
                 result = ppf->Save(pszFileName, TRUE);
                 ppf->Release();
             }
@@ -250,19 +329,19 @@ void utils::toggleStartup() {
 
         if (!SUCCEEDED(result)) {
             MessageBoxA(globals::hWnd, "Failed to create a shortcut at startup directory.", PROJECT_NAME, MB_ICONERROR | MB_OK);
-            remove(shortcutPath.c_str());
+            remove(shortcutPathC);
         }
     } else {
         MessageBoxA(globals::hWnd, "Output stream failed.", PROJECT_NAME, MB_ICONERROR | MB_OK);
     }
 }
 
-void utils::toggleConsoleWindow(const PHANDLER_ROUTINE handler, const bool status) {
+bool utils::toggleConsoleWindow(PHANDLER_ROUTINE handler, const bool status) {
     if (status) {
-        attachConsoleWindow();
-        if (handler != nullptr)
+        const bool success = attachConsoleWindow();
+        if (success && handler != nullptr)
             SetConsoleCtrlHandler(handler, TRUE);
-        return;
+        return success;
     }
     if (handler != nullptr)
         SetConsoleCtrlHandler(handler, FALSE);
@@ -271,9 +350,10 @@ void utils::toggleConsoleWindow(const PHANDLER_ROUTINE handler, const bool statu
         MessageBoxA(globals::hWnd, "Failed to free the console.", PROJECT_NAME, MB_ICONERROR | MB_OK);
     DWORD process_id = 0;
     GetWindowThreadProcessId(hwnd, &process_id);
-    if (const HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, process_id)) {
+    if (HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, process_id)) {
         SendMessage(hwnd, WM_CLOSE, 0, 0L);
         CloseHandle(hProcess);
     }
     CloseWindow(hwnd);
+    return true;
 }

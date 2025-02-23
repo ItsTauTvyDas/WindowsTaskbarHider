@@ -8,19 +8,21 @@
 class utils {
 public:
     static std::string getProcessName(HWND hwnd);
-    static void killProcessByName(const char *filename, DWORD currentPid);
+    static bool killProcessByName(const char *filename, DWORD currentPid);
     static bool processArguments(int argc, char* argv[]);
-    static void showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback);
+    static void showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback, bool allowRetry);
+    static LPSTR replaceCharacterWithText(LPSTR lpstr, char target, const std::string &replacement, int skip = 0);
+    static std::string exceptionName(DWORD exceptionCode);
     static LPSTR NTStatusMessageToText(DWORD NTStatusMessage);
     static std::string joinString(const std::vector<std::string> &vec, const std::string &delimiter);
     static std::vector<std::string> splitString(const std::string &str, char delimiter);
     static bool fileExists(const char *path);
     static bool doesAutoStart();
     static void toggleStartup();
-    static void toggleConsoleWindow(PHANDLER_ROUTINE handler, bool status);
+    static bool toggleConsoleWindow(PHANDLER_ROUTINE handler, bool status);
     static void toUnicode(LPCCH string, LPWSTR str);
     static void clearConsole(COORD startCoord);
-    static void attachConsoleWindow();
+    static bool attachConsoleWindow();
 private:
     static std::string createShortcutLinkPath();
 };
