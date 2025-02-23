@@ -1,6 +1,8 @@
 #ifndef RESOURCES_H
 #define RESOURCES_H
 
+#define STRINGIFY(x)                 #x
+
 #define PROJECT_NAME                 "@PROJECT_NAME@"
 #define IDI_APP_ICON                 727
 
