@@ -20,7 +20,7 @@ std::vector<std::string> config::ignoredWindows = {"title:", "process:Applicatio
 void config::save() {
     std::ofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
-        MessageBoxA(globals::hWnd, "Failed to load configuration", PROJECT_NAME, MB_ICONERROR | MB_OK);
+        MessageBoxA(globals::hWnd, "Failed to load configuration.", PROJECT_NAME, MB_ICONERROR | MB_OK);
         return;
     }
     file << "[General]" << std::endl;
@@ -52,7 +52,17 @@ void config::ensureConfigurationExists() {
 }
 
 void config::open() {
-    ShellExecuteA(nullptr, nullptr, CONFIG_FILENAME, nullptr, nullptr, SW_SHOWDEFAULT);
+    ShellExecuteA(nullptr, "open", CONFIG_FILENAME, nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+void invalidIntegerValue(const std::string &key, int &value, const int min, const int max) {
+    if (value > max) {
+        value = max;
+        MessageBoxA(globals::hWnd, ("Config value (" + key + ") number was above the limit, the value was reset to " + std::to_string(max) + ".").c_str(), PROJECT_NAME, MB_ICONWARNING | MB_OK);
+    } else if (value < min) {
+        value = min;
+        MessageBoxA(globals::hWnd, ("Config value (" + key + ") number was below the limit, the value was reset to " + std::to_string(min) + ".").c_str(), PROJECT_NAME, MB_ICONWARNING | MB_OK);
+    }
 }
 
 bool config::processSingle(const std::string &key, const std::string &value) {
@@ -68,16 +78,14 @@ bool config::processSingle(const std::string &key, const std::string &value) {
     try {
         if (key == "Taskbar.UpdateInterval") {
             taskbarUpdateInterval = std::stoi(value);
+            invalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000);
         } else if (key == "General.Debug") {
             debug = value != "0";
         } else if (key == "General.KeepConsoleWindowOpen") {
             keepConsoleWindowOpen = value != "0";
         } else if (key == "Taskbar.Opacity") {
             opacity = std::stoi(value);
-            if (opacity > 255)
-                opacity = 255;
-            else if (opacity < 0)
-                opacity = 0;
+            invalidIntegerValue(formattedKey, opacity, 0, 255);
         } else if (key == "Taskbar.IgnoreMaximizedWindows") {
             ignoredWindows = utils::splitString(value, '|');
         } else {
