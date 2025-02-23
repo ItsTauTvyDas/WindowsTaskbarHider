@@ -5,7 +5,8 @@
 
 class taskbar {
 public:
-    static bool debug;
+    static bool wasDebugFlushed;
+
     static HWND getTaskbarHandle();
     static void setTaskbarVisibility(bool visible);
     static void resetTaskbar();

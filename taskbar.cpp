@@ -4,6 +4,8 @@
 #include "config.h"
 #include "utils.h"
 
+bool taskbar::wasDebugFlushed = false;
+
 HWND taskbar::getTaskbarHandle() {
     return FindWindowW(L"Shell_TrayWnd", nullptr);
 }
@@ -23,6 +25,7 @@ bool taskbar::isCursorOverTaskbar() {
 
 bool taskbar::isAnyWindowMaximized() {
     bool maximized = false;
+    wasDebugFlushed = false;
     if (config::debug) {
         utils::clearConsole({ 0, 2 });
         std::cout << "[DEBUG] Loop start" << std::endl;
@@ -69,6 +72,7 @@ bool taskbar::isAnyWindowMaximized() {
         *reinterpret_cast<bool*>(lParam) = true;
         return FALSE;
     }, reinterpret_cast<LPARAM>(&maximized));
+    wasDebugFlushed = true;
     return maximized;
 }
 
