@@ -13,9 +13,11 @@
 
 bool config::debug = false;
 bool config::keepConsoleWindowOpen = false;
+bool config::alwaysIgnoreWhenNotMaximized = true;
 int config::taskbarUpdateInterval = 10;
 int config::opacity = 0;
 std::vector<std::string> config::ignoredWindows = {"title:", "process:ApplicationFrameHost.exe"};
+std::vector<std::string> config::exceptionalWindows = {};
 
 void config::save() {
     std::ofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
@@ -25,15 +27,18 @@ void config::save() {
     }
     file << "[General]" << std::endl;
     file << "; If enabled (1), application will open a console window" << std::endl;
-    file << "Debug=" << debug << std::endl;
+    file << "DebugEnabled = " << debug << std::endl;
     file << "; Keep console window open if user sends CTRL+C action to console window" << std::endl;
-    file << "KeepConsoleWindowOpen=" << keepConsoleWindowOpen << std::endl;
+    file << "KeepConsoleWindowOpen = " << keepConsoleWindowOpen << std::endl;
     file << "[Taskbar]" << std::endl;
     file << "; Taskbar update loop interval in milliseconds" << std::endl;
-    file << "UpdateInterval=" << taskbarUpdateInterval << std::endl;
+    file << "UpdateInterval = " << taskbarUpdateInterval << std::endl;
     file << "; Opacity from 0 to 255" << std::endl;
-    file << "Opacity=" << opacity << std::endl;
-    file << "; Available tags: process, title, class" << std::endl;
+    file << "Opacity = " << opacity << std::endl;
+    file << "[Ignored Windows]" << std::endl;
+    file << "; Setting this to false (0) could slow down the application with debug mode on" << std::endl;
+    file << "AlwaysIgnoreWhenNotMaximized = " << alwaysIgnoreWhenNotMaximized << std::endl;
+    file << "; Available tags: process/p (text), title/t (text), class/c (text), focus/f (0 or 1), maximized/m (0 or 1), left (int), top (int), right (int), bottom (int)" << std::endl;
     file << "; Separator: |" << std::endl;
     file << ";" << std::endl;
     file << "; Ignore UWP container window and windows with empty titles" << std::endl;
@@ -41,7 +46,8 @@ void config::save() {
     file << "; Some of the processes seems to have maximized windows, even though they are not visible" << std::endl;
     file << "; We don't have a way to distinguish between that invisible window," << std::endl;
     file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
-    file << "IgnoreMaximizedWindows=" << utils::joinString(ignoredWindows, "|") << std::endl;
+    file << "IgnoredWindows = " << utils::joinString(ignoredWindows, "|") << std::endl;
+    file << "ExceptionalWindows = " << std::endl;
     file.flush();
     file.close();
 }
@@ -79,16 +85,21 @@ bool config::processSingle(const std::string &key, const std::string &value) {
         if (key == "Taskbar.UpdateInterval") {
             taskbarUpdateInterval = std::stoi(value);
             invalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000);
-        } else if (key == "General.Debug") {
+        } else if (key == "General.DebugEnabled") {
             debug = value != "0";
         } else if (key == "General.KeepConsoleWindowOpen") {
             keepConsoleWindowOpen = value != "0";
         } else if (key == "Taskbar.Opacity") {
             opacity = std::stoi(value);
             invalidIntegerValue(formattedKey, opacity, 0, 255);
-        } else if (key == "Taskbar.IgnoreMaximizedWindows") {
+        } else if (key == "Ignored_Windows.IgnoredWindows") {
             ignoredWindows = utils::splitString(value, '|');
+        } else if (key == "Ignored_Windows.ExceptionalWindows") {
+            exceptionalWindows = utils::splitString(value, '|');
+        } else if (key == "Ignored_Windows.AlwaysIgnoreWhenNotMaximized") {
+            alwaysIgnoreWhenNotMaximized = value != "0";
         } else {
+            MessageBoxA(globals::hWnd, ("Invalid configuration key: " + key).c_str(), PROJECT_NAME, MB_ICONWARNING | MB_OK);
             return false;
         }
     } catch (const std::exception& e) {
@@ -123,8 +134,11 @@ void config::load() {
         if (pos == std::string::npos)
             continue;
 
-        const std::string key = prefix + line.substr(0, pos);
-        const std::string value = line.substr(pos + 1);
+        std::string key = line.substr(0, pos);
+        utils::trim(key);
+        key = prefix + key;
+        std::string value = line.substr(pos + 1);
+        utils::trim(value);
 
         processSingle(key, value);
     }
