@@ -12,10 +12,13 @@ NOTIFYICONDATAA nid;
 HANDLE hMutex;
 HICON hIcon;
 
+#define DEBUG_MESSAGES_UPDATE_INTERVAL 10
+
 bool quitting = false;
 
 void taskbarLoop() {
     bool called = false;
+    int debugCounter = 0;
     while (true) {
         if (quitting)
             return;
@@ -29,24 +32,35 @@ void taskbarLoop() {
             continue;
         }
         taskbar::updateTaskbarState();
-        Sleep(config::taskbarUpdateInterval);
+        for (auto i = 1; i <= config::taskbarUpdateInterval; i++) {
+            if (quitting)
+                return;
+            debugCounter++;
+            Sleep(1);
+        }
         called = false;
+        if (debugCounter >= DEBUG_MESSAGES_UPDATE_INTERVAL) {
+            taskbar::canUpdateDebugMessages = true;
+            debugCounter = 0;
+        }
     }
 }
 
 std::thread taskbarLoopThread;
 
 void cleanup(const bool clearIconAndMutex) {
-    if (quitting)
-        MessageBoxA(globals::hWnd, "Cleanup called twice.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
+    if (quitting) {
+        MessageBoxA(globals::hWnd, "Cleanup called again, ignoring.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
+        return;
+    }
     quitting = true;
     globals::taskbarLoopRunState = false;
+    if (taskbarLoopThread.joinable())
+        taskbarLoopThread.join();
     Shell_NotifyIconA(NIM_DELETE, &nid);
     if (globals::hWnd != nullptr)
         DestroyWindow(globals::hWnd);
     globals::hWnd = nullptr;
-    if (taskbarLoopThread.joinable())
-        taskbarLoopThread.join();
     if (clearIconAndMutex) {
         DestroyIcon(hIcon);
         CloseHandle(hMutex);
@@ -109,15 +123,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
                 case ID_TRAY_EXIT:
+                    if (quitting) {
+                        MessageBoxA(globals::hWnd, "Seemed like the application was frozen, terminating.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
+                        exit(0);
+                    }
                     PostQuitMessage(0);
                     break;
                 case ID_TRAY_OPEN_CONFIG:
                     config::open();
                     break;
                 case ID_TRAY_RELOAD_CONFIG:
-                    config::load();
                     debugStatus = config::debug;
-                    config::debug = utils::toggleConsoleWindow(ConsoleHandler, debugStatus);
+                    config::load();
+                    if (debugStatus == config::debug)
+                        break;
+                    debugStatus = config::debug;
+                    if (!utils::toggleConsoleWindow(ConsoleHandler, debugStatus))
+                        config::debug = false;
                     break;
                 case ID_TRAY_PAUSE_HIDER:
                     globals::taskbarLoopRunState = !globals::taskbarLoopRunState;
@@ -127,7 +149,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, con
                     break;
                 case ID_TRAY_ATTACH_DEBUG_CONSOLE:
                     debugStatus = !config::debug;
-                    config::debug = utils::toggleConsoleWindow(ConsoleHandler, debugStatus);
+                    if (!utils::toggleConsoleWindow(ConsoleHandler, debugStatus))
+                        config::debug = false;
+                    else
+                        config::debug = debugStatus;
                     break;
                 case ID_TRAY_GITHUB:
                     ShellExecuteA(nullptr, "open", PRODUCT_URL, nullptr, nullptr, SW_SHOWNORMAL);
@@ -146,7 +171,6 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
     utils::showExceptionMessageBox([pException](std::stringstream& crashInfo) {
         const EXCEPTION_RECORD* record = pException->ExceptionRecord;
         auto lpstr = utils::NTStatusMessageToText(record->ExceptionCode);
-        std::cout << utils::NTStatusMessageToText(EXCEPTION_IN_PAGE_ERROR) << std::endl;
         // A workaround, EXCEPTION_ACCESS_VIOLATION returns this message:
         // "The instruction at 0xp referenced memory at 0xp. The memory could not be s."
         // There are missing %, but p and s letters are not being used in any words, so we can just replace them
@@ -155,7 +179,7 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
             switch (record->ExceptionInformation[0]) {
                 case 0: operation = "read"; break;
                 case 1: operation = "written"; break;
-                case 8: operation = "execute (data execution prevention)"; break;
+                case 8: operation = "execute (DEP)"; break;
                 default:
                     operation = "unknown(" + std::to_string(record->ExceptionInformation[0]) + ")";
                     break;
@@ -190,22 +214,13 @@ int main(const int argc, char* argv[]) {
     const auto exe = std::string(argv[0]);
     globals::exe = exe.substr(exe.find_last_of("/\\") + 1);
 
-    atexit([] {
-        if (config::debug) {
-            config::debug = false;
-            utils::toggleConsoleWindow(ConsoleHandler, false);
-        }
-        MessageBoxA(globals::hWnd, "Application was closed.", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
-    });
-
     if (!utils::processArguments(argc, argv))
         return 0;
 
     hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
     if (!hMutex) {
         utils::showExceptionMessageBox([](std::stringstream& crashInfo) {
-            crashInfo << "Failed to create mutex, but the application can still be running." << std::endl;
-            crashInfo << "Be aware that this will not prevent application process duplicates!";
+            crashInfo << "Failed to create mutex, but the application can still continue.";
         }, false);
     }
 
@@ -230,14 +245,6 @@ int main(const int argc, char* argv[]) {
         }
     }
 
-    if (!globals::noConfigFile)
-        config::load();
-
-    if (config::debug) {
-        config::debug = false;
-        config::debug = utils::toggleConsoleWindow(ConsoleHandler, true);
-    }
-
     const auto className = (std::string(PROJECT_NAME) + "_TrayIcon").c_str();
     WNDCLASSA wc = {};
     wc.lpfnWndProc = WindowProc;
@@ -250,7 +257,7 @@ int main(const int argc, char* argv[]) {
     hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
     if (!hIcon) {
         utils::showExceptionMessageBox([](std::stringstream& crashInfo) {
-            crashInfo << "Failed to load icon: " << GetLastError();
+            crashInfo << "Failed to load icon: {}";
         }, true);
         return 1;
     }
@@ -266,9 +273,23 @@ int main(const int argc, char* argv[]) {
 
     if (!Shell_NotifyIconA(NIM_ADD, &nid)) {
         utils::showExceptionMessageBox([](std::stringstream& crashInfo) {
-            crashInfo << "Failed to create system tray icon: " << GetLastError();
+            crashInfo << "Failed to create system tray icon: {}";
         }, true);
         return 1;
+    }
+
+    atexit([] {
+        if (config::debug)
+            utils::toggleConsoleWindow(ConsoleHandler, false);
+        MessageBoxA(globals::hWnd, "Application was closed.", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
+    });
+
+    if (!globals::noConfigFile)
+        config::load();
+
+    if (config::debug) {
+        if (!utils::toggleConsoleWindow(ConsoleHandler, true))
+            config::debug = false;
     }
 
     taskbarLoopThread = std::thread(taskbarLoop);
