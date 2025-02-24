@@ -7,7 +7,7 @@
 
 class utils {
 public:
-    static std::string getProcessName(HWND hwnd);
+    static void getProcessInfo(HWND hwnd, std::string &processExeName);
     static bool killProcessByName(const char *filename, DWORD currentPid);
     static bool processArguments(int argc, char* argv[]);
     static void showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback, bool allowRetry);
@@ -16,6 +16,9 @@ public:
     static LPSTR NTStatusMessageToText(DWORD NTStatusMessage);
     static std::string joinString(const std::vector<std::string> &vec, const std::string &delimiter);
     static std::vector<std::string> splitString(const std::string &str, char delimiter);
+    static void ltrim(std::string &s);
+    static void rtrim(std::string &s);
+    static void trim(std::string &s);
     static bool fileExists(const char *path);
     static bool doesAutoStart();
     static void toggleStartup();

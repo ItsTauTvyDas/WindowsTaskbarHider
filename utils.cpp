@@ -1,5 +1,7 @@
 #include "utils.h"
 
+#include <cmath>
+#include <format>
 #include <shlobj.h>
 #include <fstream>
 #include <iostream>
@@ -12,29 +14,6 @@
 #include "globals.h"
 #include <sys/stat.h>
 #include "stdcerr.h"
-
-std::string utils::getProcessName(HWND hwnd) {
-    DWORD processId;
-    GetWindowThreadProcessId(hwnd, &processId);
-
-    HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hProcessSnap == INVALID_HANDLE_VALUE) return "Unknown";
-
-    PROCESSENTRY32 pe32;
-    pe32.dwSize = sizeof(PROCESSENTRY32);
-
-    std::string processName = "Unknown";
-    if (Process32First(hProcessSnap, &pe32))
-        do {
-            if (pe32.th32ProcessID == processId) {
-                processName = pe32.szExeFile;
-                break;
-            }
-        } while (Process32Next(hProcessSnap, &pe32));
-
-    CloseHandle(hProcessSnap);
-    return processName;
-}
 
 bool utils::killProcessByName(const char* processName, DWORD currentPid) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -61,6 +40,30 @@ bool utils::killProcessByName(const char* processName, DWORD currentPid) {
     return success;
 }
 
+void utils::getProcessInfo(HWND hwnd, std::string &processExeName) {
+    DWORD processId;
+    GetWindowThreadProcessId(hwnd, &processId);
+
+    processExeName = "_unknown";
+
+    HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hProcessSnap == INVALID_HANDLE_VALUE)
+        return;
+
+    PROCESSENTRY32 pe32;
+    pe32.dwSize = sizeof(PROCESSENTRY32);
+
+    if (Process32First(hProcessSnap, &pe32))
+        do {
+            if (pe32.th32ProcessID == processId) {
+                processExeName = pe32.szExeFile;
+                break;
+            }
+        } while (Process32Next(hProcessSnap, &pe32));
+
+    CloseHandle(hProcessSnap);
+}
+
 bool utils::processArguments(const int argc, char* argv[]) {
     if (argc < 2) return true;
     std::string arg = argv[1];
@@ -77,8 +80,12 @@ bool utils::processArguments(const int argc, char* argv[]) {
             config::debug = true;
         } else if (arg == "--no-config" || arg == "-nc") {
             globals::noConfigFile = true;
-        } else if ((arg.rfind("-c:", 0) == 0 || arg.rfind("-config:", 0) == 0) && i + 1 < argc && arg.rfind(':', 0) + 1 < arg.size()) {
-            config::processSingle(arg.substr(arg.rfind(':', 0)), argv[i + 1]);
+        } else if ((arg.compare(0, 3, "-c:") == 0 || arg.compare(0, 9, "--config:") == 0) && i + 1 < argc) {
+            const size_t colonPos = arg.find(':');
+            if (colonPos != std::string::npos && colonPos + 1 < arg.size()) {
+                config::processSingle(arg.substr(colonPos), argv[i + 1]);
+                i++;
+            }
         } else {
             MessageBoxA(globals::hWnd, std::string("Invalid argument specified: " + arg).c_str(), PROJECT_NAME, MB_ICONERROR | MB_OK);
             return false;
@@ -87,17 +94,21 @@ bool utils::processArguments(const int argc, char* argv[]) {
     return true;
 }
 
+std::string replaceLastErrorPlaceholder(const std::string& message) {
+    return std::vformat(message, std::format_args(std::make_format_args(utils::NTStatusMessageToText(GetLastError()))));
+}
+
 void utils::showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback, const bool allowRetry) {
     std::stringstream crashInfo;
     crashInfo << "The application has crashed!" << std::endl;
     crashInfo << std::endl;
     callback(crashInfo);
     if (!allowRetry) {
-        MessageBoxA(globals::hWnd, crashInfo.str().c_str(), PROJECT_NAME, MB_ICONERROR | MB_OK);
+        MessageBoxA(globals::hWnd, replaceLastErrorPlaceholder(crashInfo.str()).c_str(), PROJECT_NAME, MB_ICONERROR | MB_OK);
         return;
     }
     crashInfo << std::endl << "Do you want to try re-opening the application?";
-    if (MessageBoxA(globals::hWnd, crashInfo.str().c_str(), PROJECT_NAME, MB_ICONERROR | MB_RETRYCANCEL) == 4) {
+    if (MessageBoxA(globals::hWnd, replaceLastErrorPlaceholder(crashInfo.str()).c_str(), PROJECT_NAME, MB_ICONERROR | MB_RETRYCANCEL) == 4) {
         char path[MAX_PATH];
         if (GetModuleFileNameA(nullptr, path, MAX_PATH) == 0) {
             MessageBoxA(globals::hWnd, "Failed to retrieve path of the running program: " + GetLastError(), PROJECT_NAME, MB_ICONERROR | MB_OK);
@@ -204,11 +215,26 @@ std::vector<std::string> utils::splitString(const std::string &str, const char d
     std::vector<std::string> result;
     std::stringstream ss(str);
     std::string item;
-
     while (std::getline(ss, item, delimiter))
         result.push_back(item);
-
     return result;
+}
+
+void utils::ltrim(std::string &s) {
+    s.erase(s.begin(), std::ranges::find_if(s, [](const unsigned char ch) {
+        return !std::isspace(ch);
+    }));
+}
+
+void utils::rtrim(std::string &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](const unsigned char ch) {
+        return !std::isspace(ch);
+    }).base(), s.end());
+}
+
+void utils::trim(std::string &s) {
+    rtrim(s);
+    ltrim(s);
 }
 
 bool utils::attachConsoleWindow() {
@@ -244,10 +270,33 @@ bool utils::attachConsoleWindow() {
         if (!GetConsoleMode(hConsoleInput, &mode) || !SetConsoleMode(hConsoleInput, mode & ~(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT)))
             MessageBoxA(GetConsoleWindow(), "Failed to disable quick mode, so any selections in the console will freeze the program.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
 
+        int charactersPerRow = 300;
+        int charactersPerCol = 45;
+
+        const HWND activeWindow = GetActiveWindow();
+        const HMONITOR activeMonitor = MonitorFromWindow(activeWindow, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(MONITORINFO);
+        GetMonitorInfo(activeMonitor, &monitorInfo);
+
+        const int displayWidth = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
+        const int displayHeight = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
+
+        CONSOLE_FONT_INFOEX cfi {};
+        cfi.cbSize = sizeof(cfi);
+        cfi.nFont = 0;
+        cfi.dwFontSize.X = static_cast<short>(std::round((float)displayWidth / charactersPerRow));        // Width of each character in the font rounded
+        cfi.dwFontSize.Y = static_cast<short>(std::round((float)displayHeight / charactersPerCol));       // Height rounded
+        cfi.FontFamily = FF_DONTCARE;
+        cfi.FontWeight = FW_NORMAL;
+        std::wcscpy(cfi.FaceName, L"Consolas");                             // Choose your font
+        SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);
+
         std::cout << "Console successfully attached." << std::endl;
         std::cout << std::endl;
         std::cout << "Sleeping one second..." << std::endl;
         Sleep(1000);
+        taskbar::canUpdateDebugMessages = true;
         return true;
     }
     MessageBoxA(globals::hWnd, "Console is already attached.", PROJECT_NAME, MB_ICONERROR | MB_OK);
@@ -292,9 +341,17 @@ void utils::toggleStartup() {
     const std::string shortcutPath = createShortcutLinkPath();
     const char *shortcutPathC = shortcutPath.c_str();
     if (fileExists(shortcutPathC)) {
-        remove(shortcutPathC);
+        if (MessageBoxA(globals::hWnd,
+            "Are you sure you want to remove this application from startup?",
+            PROJECT_NAME, MB_ICONQUESTION | MB_YESNO) == 6)
+            remove(shortcutPathC);
         return;
     }
+
+    if (MessageBoxA(globals::hWnd,
+        "Are you sure you want to add this application to run on startup?",
+        PROJECT_NAME, MB_ICONQUESTION | MB_YESNO) == 7)
+        return;
 
     if (std::ofstream shortcut(shortcutPath); shortcut.is_open()) {
         CoInitialize(nullptr);
