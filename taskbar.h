@@ -6,6 +6,7 @@
 class taskbar {
 public:
     static bool wasDebugFlushed;
+    static bool canUpdateDebugMessages;
 
     static HWND getTaskbarHandle();
     static void setTaskbarVisibility(bool visible);
