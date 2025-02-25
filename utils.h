@@ -7,28 +7,34 @@
 
 class utils {
 public:
-    static void getProcessInfo(HWND hwnd, std::string &processExeName);
-    static bool killProcessByName(const char *filename, DWORD currentPid);
-    static bool processArguments(int argc, char* argv[]);
-    static void showExceptionMessageBox(const std::function<void(std::stringstream&)>& callback, bool allowRetry);
-    static LPSTR replaceCharacterWithText(LPSTR lpstr, char target, const std::string &replacement, int skip = 0);
-    static std::string exceptionName(DWORD exceptionCode);
-    static LPSTR NTStatusMessageToText(DWORD NTStatusMessage);
-    static std::string joinString(const std::vector<std::string> &vec, const std::string &delimiter);
-    static std::vector<std::string> splitString(const std::string &str, char delimiter);
-    static void ltrim(std::string &s);
-    static void rtrim(std::string &s);
-    static void trim(std::string &s);
-    static std::vector<std::string> splitToGroups(const std::string& s, unsigned int length);
-    static bool fileExists(const char *path);
+    static void getProcessInfo(HWND hwnd, std::wstring &processExeName);
+    static bool killProcessByName(const wchar_t *processName, DWORD currentPid);
+    static bool processArguments(int argc, wchar_t* argv[]);
+    static void showExceptionMessageBox(const std::function<void(std::wstringstream&)>& callback, bool allowRetry);
+    static LPWSTR replaceCharacterWithText(LPWSTR lpstr, char target, const std::wstring &replacement, int skip = 0);
+    static std::string exceptionNameA(DWORD exceptionCode);
+    static std::wstring exceptionName(DWORD exceptionCode);
+    static LPWSTR NTStatusMessageToText(DWORD NTStatusMessage);
+    static std::wstring joinString(const std::vector<std::wstring> &vec, const std::wstring &delimiter);
+    static std::vector<std::wstring> splitString(const std::wstring &str, wchar_t delimiter);
+    static void ltrim(std::wstring &s);
+    static void rtrim(std::wstring &s);
+    static void trim(std::wstring &s);
+    static std::vector<std::wstring> splitToGroups(const std::wstring& s, unsigned int length);
+    static bool fileExists(const wchar_t *path);
     static bool doesAutoStart();
     static void toggleStartup();
-    static bool toggleConsoleWindow(PHANDLER_ROUTINE handler, bool status);
+    static bool lrString(unsigned int mType, std::wstring &string);
+    static bool lcString(unsigned int mType, std::wstring &string);
+    static std::wstring fString(const std::wstring &rStr, const std::vector<std::wstring> &values);
+    static int messageBox(unsigned int mType, unsigned int uType, const std::vector<std::wstring> &values = {});
+    static int messageBox(const std::wstring &mText, unsigned int uType);
+    static std::wstring message(unsigned int mType, const std::vector<std::wstring> &values);
+    static std::wstring message(unsigned int mType);
     static void toUnicode(LPCCH string, LPWSTR str);
     static void clearConsole(COORD startCoord, bool setPosAfter);
-    static bool attachConsoleWindow();
 private:
-    static std::string createShortcutLinkPath();
+    static std::wstring createShortcutLinkPath();
 };
 
 #endif //UTILS_H
