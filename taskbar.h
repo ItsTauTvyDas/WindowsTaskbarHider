@@ -7,6 +7,7 @@ class taskbar {
 public:
     static bool wasDebugFlushed;
     static bool canUpdateDebugMessages;
+    static const int debug_columns_total_width;
 
     static HWND getTaskbarHandle();
     static void setTaskbarVisibility(bool visible);
