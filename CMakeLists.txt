@@ -14,11 +14,7 @@ set(VERSION_PRODUCT_VERSION  0)
 set(VERSION_PRODUCT_BUILD    0)
 set(VERSION_PRODUCT_REVISION 0)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mwindows")
-endif ()
-
-add_executable(${PROJECT_NAME} main.cpp
+add_executable(${PROJECT_NAME} WIN32 main.cpp
         utils.cpp
         utils.h
         taskbar.cpp
@@ -28,12 +24,21 @@ add_executable(${PROJECT_NAME} main.cpp
         globals.cpp
         globals.h
         assets/app.rc
+        language/language.en.rc
         resources.h
-        stdcerr.h)
+        stdcerr.h
+        language.h)
 
 file(REMOVE ${CMAKE_BINARY_DIR}/resources.h)
 configure_file(resources.h.in ${CMAKE_BINARY_DIR}/resources.h @ONLY)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR})
+
+if(MINGW)
+    target_compile_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
+    target_link_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
+endif()
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
 
 add_custom_command(
         TARGET ${PROJECT_NAME} POST_BUILD
