@@ -354,7 +354,6 @@ std::wstring utils::fString(const std::wstring& rStr, const std::vector<std::wst
     std::wstring result;
     size_t pos = 0;
     while (pos < rStr.size()) {
-        // Find next open brace
         const size_t openBrace = rStr.find(L'{', pos);
         if (openBrace == std::wstring::npos) {
             result.append(rStr, pos, std::wstring::npos);
@@ -363,11 +362,9 @@ std::wstring utils::fString(const std::wstring& rStr, const std::vector<std::wst
         result.append(rStr, pos, openBrace - pos);
         const size_t closeBrace = rStr.find(L'}', openBrace);
         if (closeBrace == std::wstring::npos) {
-            // No closing brace found; append the rest.
             result.append(rStr, openBrace, std::wstring::npos);
             break;
         }
-        // Extract the text between the braces.
         std::wstring indexStr = rStr.substr(openBrace + 1, closeBrace - openBrace - 1);
         bool isNumber = !indexStr.empty();
         for (const wchar_t ch : indexStr) {
@@ -377,15 +374,12 @@ std::wstring utils::fString(const std::wstring& rStr, const std::vector<std::wst
             }
         }
         if (isNumber) {
-            // Convert the number and substitute if within bounds.
             if (size_t index = std::stoul(indexStr); index < values.size()) {
                 result.append(values[index]);
             } else {
-                // Out of range: leave the placeholder unchanged.
                 result.append(rStr, openBrace, closeBrace - openBrace + 1);
             }
         } else {
-            // Not a valid placeholder; copy as-is.
             result.append(rStr, openBrace, closeBrace - openBrace + 1);
         }
         pos = closeBrace + 1;
