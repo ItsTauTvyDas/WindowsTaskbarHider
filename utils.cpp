@@ -388,11 +388,11 @@ std::wstring utils::fString(const std::wstring& rStr, const std::vector<std::wst
 }
 
 int utils::messageBox(const unsigned int mType, const unsigned int uType, const std::vector<std::wstring> &values) {
-    return MessageBox(globals::hWnd, message(mType, values).c_str(), L"", uType);
+    return MessageBox(globals::hWnd, message(mType, values).c_str(), message(MSG_APPLICATION_NAME).c_str(), uType);
 }
 
 int utils::messageBox(const std::wstring &mText, const unsigned int uType) {
-    return MessageBox(globals::hWnd, mText.c_str(), L"", uType);
+    return MessageBox(globals::hWnd, mText.c_str(), message(MSG_APPLICATION_NAME).c_str(), uType);
 }
 
 std::wstring utils::message(const unsigned int mType, const std::vector<std::wstring> &values) {
