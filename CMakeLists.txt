@@ -26,7 +26,6 @@ add_executable(${PROJECT_NAME} WIN32 main.cpp
         assets/app.rc
         language/language.en.rc
         resources.h
-        stdcerr.h
         language.h)
 
 file(REMOVE ${CMAKE_BINARY_DIR}/resources.h)
