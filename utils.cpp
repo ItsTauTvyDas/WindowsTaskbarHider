@@ -237,6 +237,21 @@ void utils::trim(std::string &s) {
     ltrim(s);
 }
 
+std::vector<std::string> utils::splitToGroups(std::string s, const unsigned int length) {
+    if (s.length() <= length)
+        return { s };
+    if (length == 0)
+        return {};
+    std::vector<std::string> result = {};
+    int splitCount = 0;
+    while (splitCount * length <= s.length()) {
+        std::string lastStr = s.substr(splitCount * length, length);
+        splitCount++;
+        result.push_back(lastStr);
+    }
+    return result;
+}
+
 bool utils::attachConsoleWindow() {
     if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
         AllocConsole();
@@ -265,32 +280,27 @@ bool utils::attachConsoleWindow() {
 
         static stdcerr _;
 
+        const HWND wConsole = GetConsoleWindow();
+
         SetConsoleTitleA((std::string(VER_FILEDESCRIPTION_STR) + " (debugging)").c_str());
         DWORD mode;
-        if (!GetConsoleMode(hConsoleInput, &mode) || !SetConsoleMode(hConsoleInput, mode & ~(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT)))
-            MessageBoxA(GetConsoleWindow(), "Failed to disable quick mode, so any selections in the console will freeze the program.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
+        if (!GetConsoleMode(hConsoleInput, &mode) || !SetConsoleMode(hConsoleInput, mode & ~ENABLE_QUICK_EDIT_MODE))
+            MessageBoxA(wConsole, "Failed to disable quick mode, so any selections in the console will freeze the program.", PROJECT_NAME, MB_ICONWARNING | MB_OK);
 
-        int charactersPerRow = 300;
-        int charactersPerCol = 45;
-
-        const HWND activeWindow = GetActiveWindow();
-        const HMONITOR activeMonitor = MonitorFromWindow(activeWindow, MONITOR_DEFAULTTONEAREST);
-        MONITORINFO monitorInfo{};
-        monitorInfo.cbSize = sizeof(MONITORINFO);
-        GetMonitorInfo(activeMonitor, &monitorInfo);
-
-        const int displayWidth = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
-        const int displayHeight = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
-
-        CONSOLE_FONT_INFOEX cfi {};
-        cfi.cbSize = sizeof(cfi);
+        CONSOLE_FONT_INFOEX cfi;
+        cfi.cbSize = sizeof(CONSOLE_FONT_INFOEX);
         cfi.nFont = 0;
-        cfi.dwFontSize.X = static_cast<short>(std::round((float)displayWidth / charactersPerRow));        // Width of each character in the font rounded
-        cfi.dwFontSize.Y = static_cast<short>(std::round((float)displayHeight / charactersPerCol));       // Height rounded
+        cfi.dwFontSize.X = 8;
+        cfi.dwFontSize.Y = 16;
         cfi.FontFamily = FF_DONTCARE;
         cfi.FontWeight = FW_NORMAL;
-        std::wcscpy(cfi.FaceName, L"Consolas");                             // Choose your font
-        SetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);
+        std::wcscpy(cfi.FaceName, L"Consolas");
+        SetCurrentConsoleFontEx(hConsoleOutput, FALSE, &cfi);
+        SetConsoleTextAttribute(hConsoleOutput, 15);
+
+        RECT r;
+        GetWindowRect(wConsole, &r);
+        MoveWindow(wConsole, r.left, r.top, taskbar::debug_columns_total_width * cfi.dwFontSize.X + 41, 500, TRUE);
 
         std::cout << "Console successfully attached." << std::endl;
         std::cout << std::endl;
@@ -312,7 +322,7 @@ void utils::toUnicode(const LPCCH string, LPWSTR str) {
     MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
 }
 
-void utils::clearConsole(const COORD startCoord) {
+void utils::clearConsole(const COORD startCoord, const bool setPosAfter) {
     HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO screen;
     DWORD written;
@@ -321,7 +331,8 @@ void utils::clearConsole(const COORD startCoord) {
     FillConsoleOutputCharacterA(
         console, ' ', (screen.dwSize.X - startCoord.X) * (screen.dwSize.Y - startCoord.Y), startCoord, &written
     );
-    SetConsoleCursorPosition(console, startCoord);
+    if (setPosAfter)
+        SetConsoleCursorPosition(console, startCoord);
 }
 
 std::string utils::createShortcutLinkPath() {
