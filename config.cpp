@@ -5,24 +5,26 @@
 #include <string>
 #include <algorithm>
 #include "globals.h"
-#include "resources.h"
+#include "language.h"
 #include "taskbar.h"
 #include "utils.h"
 
-#define CONFIG_FILENAME "config.ini"
+#define CONFIG_FILENAME L"config.ini"
 
 bool config::debug = false;
 bool config::keepConsoleWindowOpen = false;
 bool config::alwaysIgnoreWhenNotMaximized = true;
+
 int config::taskbarUpdateInterval = 10;
 int config::opacity = 0;
-std::vector<std::string> config::ignoredWindows = {"title:", "process:ApplicationFrameHost.exe"};
-std::vector<std::string> config::exceptionalWindows = {};
+
+std::vector<std::wstring> config::ignoredWindows = {L"title:", L"process:ApplicationFrameHost.exe"};
+std::vector<std::wstring> config::exceptionalWindows = {};
 
 void config::save() {
-    std::ofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
+    std::wofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
-        MessageBoxA(globals::hWnd, "Failed to load configuration.", PROJECT_NAME, MB_ICONERROR | MB_OK);
+        utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
         return;
     }
     file << "[General]" << std::endl;
@@ -46,7 +48,7 @@ void config::save() {
     file << "; Some of the processes seems to have maximized windows, even though they are not visible" << std::endl;
     file << "; We don't have a way to distinguish between that invisible window," << std::endl;
     file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
-    file << "IgnoredWindows = " << utils::joinString(ignoredWindows, "|") << std::endl;
+    file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
     file << "ExceptionalWindows = " << std::endl;
     file.flush();
     file.close();
@@ -58,56 +60,63 @@ void config::ensureConfigurationExists() {
 }
 
 void config::open() {
-    ShellExecuteA(nullptr, "open", CONFIG_FILENAME, nullptr, nullptr, SW_SHOWNORMAL);
+    ShellExecute(nullptr, L"open", CONFIG_FILENAME, nullptr, nullptr, SW_SHOWNORMAL);
 }
 
-void invalidIntegerValue(const std::string &key, int &value, const int min, const int max) {
+void invalidIntegerValue(const std::wstring &key, int &value, const int min, const int max) {
     if (value > max) {
         value = max;
-        MessageBoxA(globals::hWnd, ("Config value (" + key + ") number was above the limit, the value was reset to " + std::to_string(max) + ".").c_str(), PROJECT_NAME, MB_ICONWARNING | MB_OK);
+        utils::messageBox(MSG_CONFIG_ABOVE_MAX, MB_ICONWARNING | MB_OK, {key, std::to_wstring(max)});
     } else if (value < min) {
         value = min;
-        MessageBoxA(globals::hWnd, ("Config value (" + key + ") number was below the limit, the value was reset to " + std::to_string(min) + ".").c_str(), PROJECT_NAME, MB_ICONWARNING | MB_OK);
+        utils::messageBox(MSG_CONFIG_BELOW_MIN, MB_ICONWARNING | MB_OK, {key, std::to_wstring(min)});
     }
 }
 
-bool config::processSingle(const std::string &key, const std::string &value) {
-    if (key.empty())
-        throw std::invalid_argument("Empty key specified");
-
-    const size_t pos = key.find('.');
-    std::string category = key.substr(0, pos);
-    std::ranges::replace(category, '_', ' ');
-    const std::string readableKey = key.substr(pos + 1);
-    const std::string formattedKey = category + " > " + readableKey;
-
+bool config::processSingle(const std::wstring &key, const std::wstring &value) {
+    std::wstring formattedKey;
     try {
-        if (key == "Taskbar.UpdateInterval") {
+        if (key.empty()) {
+
+        }
+
+        const size_t pos = key.find('.');
+        std::wstring category = key.substr(0, pos);
+        std::ranges::replace(category, '_', ' ');
+        const std::wstring readableKey = key.substr(pos + 1);
+        formattedKey = category + L" > " + readableKey;
+
+        if (key == L"Taskbar.UpdateInterval") {
             taskbarUpdateInterval = std::stoi(value);
             invalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000);
-        } else if (key == "General.DebugEnabled") {
-            debug = value != "0";
-        } else if (key == "General.KeepConsoleWindowOpen") {
-            keepConsoleWindowOpen = value != "0";
-        } else if (key == "Taskbar.Opacity") {
+        } else if (key == L"General.DebugEnabled") {
+            debug = value != L"0";
+        } else if (key == L"General.KeepConsoleWindowOpen") {
+            keepConsoleWindowOpen = value != L"0";
+        } else if (key == L"Taskbar.Opacity") {
             opacity = std::stoi(value);
             invalidIntegerValue(formattedKey, opacity, 0, 255);
-        } else if (key == "Ignored_Windows.IgnoredWindows") {
+        } else if (key == L"Ignored_Windows.IgnoredWindows") {
             ignoredWindows = utils::splitString(value, '|');
-        } else if (key == "Ignored_Windows.ExceptionalWindows") {
+        } else if (key == L"Ignored_Windows.ExceptionalWindows") {
             exceptionalWindows = utils::splitString(value, '|');
-        } else if (key == "Ignored_Windows.AlwaysIgnoreWhenNotMaximized") {
-            alwaysIgnoreWhenNotMaximized = value != "0";
+        } else if (key == L"Ignored_Windows.AlwaysIgnoreWhenNotMaximized") {
+            alwaysIgnoreWhenNotMaximized = value != L"0";
         } else {
-            MessageBoxA(globals::hWnd, ("Invalid configuration key: " + key).c_str(), PROJECT_NAME, MB_ICONWARNING | MB_OK);
+            utils::messageBox(MSG_CONFIG_INVALID_KEY, MB_ICONWARNING | MB_OK, {key});
             return false;
         }
     } catch (const std::exception& e) {
         // Rethrow with formatted text
-        auto msg = e.what();
-        if (std::string(e.what()) == "stoi")
-            msg = "Value is not a number";
-        throw std::invalid_argument(formattedKey + ": " + msg);
+        std::wstring msg;
+        if (e.what() == "stoi")
+            msg = utils::message(MSG_CONFIG_NOT_NUMBER);
+        else {
+            wchar_t cMsg[256];
+            utils::toUnicode(e.what(), cMsg);
+            msg = cMsg;
+        }
+        utils::messageBox(formattedKey + L": " + msg, MB_ICONWARNING | MB_OK);
     }
     return true;
 }
@@ -115,9 +124,9 @@ bool config::processSingle(const std::string &key, const std::string &value) {
 void config::load() {
     ensureConfigurationExists();
 
-    std::ifstream file(CONFIG_FILENAME);
-    std::string line;
-    std::string prefix;
+    std::wifstream file(CONFIG_FILENAME);
+    std::wstring line;
+    std::wstring prefix;
 
     while (getline(file, line)) {
         if (line.rfind('[', 0) == 0) {
@@ -134,9 +143,9 @@ void config::load() {
         if (pos == std::string::npos)
             continue;
 
-        std::string key = line.substr(0, pos);
+        std::wstring key = line.substr(0, pos);
         utils::trim(key);
-        std::string value = line.substr(pos + 1);
+        std::wstring value = line.substr(pos + 1);
         utils::trim(value);
 
         processSingle(prefix + key, value);

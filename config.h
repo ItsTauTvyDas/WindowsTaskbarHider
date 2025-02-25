@@ -11,13 +11,13 @@ public:
     static bool alwaysIgnoreWhenNotMaximized;
     static int taskbarUpdateInterval;
     static int opacity;
-    static std::vector<std::string> ignoredWindows;
-    static std::vector<std::string> exceptionalWindows;
+    static std::vector<std::wstring> ignoredWindows;
+    static std::vector<std::wstring> exceptionalWindows;
 
     static void load();
     static void save();
     static void open();
-    static bool processSingle(const std::string &key, const std::string &value);
+    static bool processSingle(const std::wstring &key, const std::wstring &value);
 
 private:
     static void ensureConfigurationExists();

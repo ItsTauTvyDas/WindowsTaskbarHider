@@ -8,7 +8,7 @@
 #include <iomanip>
 #include <numeric>
 
-constexpr std::string debug_column_headers[] = { "i", "e", "ig. tag", "ex. tag", "f", "m", "left", "top", "righ", "bott", "process", "class", "title" };
+constexpr std::wstring debug_column_headers[] = { L"i", L"e", L"ig. tag", L"ex. tag", L"f", L"m", L"left", L"top", L"righ", L"bott", L"process", L"class", L"title" };
 constexpr int debug_column_sizes[] = { 1, 1, 10, 10, 1, 1, 4, 4, 4, 4, 20, 20, 20 };
 const int taskbar::debug_columns_total_width = std::accumulate(
         std::begin(debug_column_sizes),
@@ -23,7 +23,7 @@ bool taskbar::canUpdateDebugMessages = false;
 bool canCreateTable = false;
 
 HWND taskbar::getTaskbarHandle() {
-    return FindWindowW(L"Shell_TrayWnd", nullptr);
+    return FindWindow(L"Shell_TrayWnd", nullptr);
 }
 
 bool taskbar::isCursorOverTaskbar() {
@@ -39,35 +39,35 @@ bool taskbar::isCursorOverTaskbar() {
     return PtInRect(&taskbarRect, cursorPos);
 }
 
-bool loopThroughWindowTags(const std::vector<std::string>& vector, HWND hwnd, std::string &processName, std::string &title,
-    std::string &wndclass, DWORD &focusStatus, WINDOWINFO &wi, const WINDOWPLACEMENT &wp, RECT wRect, std::string &succeededTagGroup) {
+bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, std::wstring &processName, std::wstring &title,
+    std::wstring &wndclass, DWORD &focusStatus, WINDOWINFO &wi, const WINDOWPLACEMENT &wp, RECT wRect, std::wstring &succeededTagGroup) {
     for (const auto& tagGroup: vector) {
         if (tagGroup.empty())
             continue;
-        std::vector<std::string> tags = utils::splitString(tagGroup, '&');
+        std::vector<std::wstring> tags = utils::splitString(tagGroup, '&');
         if (tags.empty())
             continue;
         int succeededTags = 0;
         for (const auto& texpr : tags) {
-            const auto pos = texpr.find(":", 0);
-            if (pos == std::string::npos)
+            const auto pos = texpr.find(L":", 0);
+            if (pos == std::wstring::npos)
                 continue;
-            char _[256];
-            std::string key = texpr.substr(0, pos);
-            std::string value = texpr.substr(pos + 1);
-            if (key == "process" || key == "p") {
+            wchar_t _[256];
+            std::wstring key = texpr.substr(0, pos);
+            std::wstring value = texpr.substr(pos + 1);
+            if (key == L"process" || key == L"p") {
                 if (processName.empty())
                     utils::getProcessInfo(hwnd, processName);
                 if (processName == value)
                     succeededTags++;
-            } else if (key == "title" || key == "t") {
+            } else if (key == L"title" || key == L"t") {
                 if (title.empty()) {
-                    GetWindowTextA(hwnd, _, sizeof(_));
+                    GetWindowText(hwnd, _, sizeof(_));
                     title = _;
                 }
                 if (title == value)
                     succeededTags++;
-            } else if (key == "focus" || key == "f") {
+            } else if (key == L"focus" || key == L"f") {
                 if (focusStatus == -1) {
                     wi.cbSize = sizeof(WINDOWINFO);
                     GetWindowInfo(hwnd, &wi);
@@ -75,28 +75,28 @@ bool loopThroughWindowTags(const std::vector<std::string>& vector, HWND hwnd, st
                 }
                 if (focusStatus == stoi(value))
                     succeededTags++;
-            } else if (key == "class" || key == "c") {
+            } else if (key == L"class" || key == L"c") {
                 if (wndclass.empty()) {
-                    GetClassNameA(hwnd, _, sizeof(_));
+                    GetClassName(hwnd, _, sizeof(_));
                     wndclass = _;
                 }
-                if (std::string(wndclass) == value)
+                if (std::wstring(wndclass) == value)
                     succeededTags++;
-            } else if (key == "maximized" || key == "m") {
+            } else if (key == L"maximized" || key == L"m") {
                 if (wp.showCmd == SW_MAXIMIZE == stoi(value))
                     succeededTags++;
-            } else if (key == "left" || key == "right" || key == "top" || key == "bottom") {
+            } else if (key == L"left" || key == L"right" || key == L"top" || key == L"bottom") {
                 if (wRect.left == -1 && wRect.top == -1 && wRect.right == -1 && wRect.bottom == -1)
                     GetWindowRect(hwnd, &wRect);
                 const int iValue = std::stoi(value);
                 int rect;
-                if (key == "left")
+                if (key == L"left")
                     rect = wRect.left;
-                else if (key == "right")
+                else if (key == L"right")
                     rect = wRect.right;
-                else if (key == "top")
+                else if (key == L"top")
                     rect = wRect.top;
-                else if (key == "bottom")
+                else if (key == L"bottom")
                     rect = wRect.bottom;
                 else
                     continue;
@@ -132,41 +132,6 @@ void stdCOutRepeat(const char ch, const int len, const bool end) {
 
 bool taskbar::isAnyWindowMaximized() {
     bool maximized = false;
-    wasDebugFlushed = false;
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    if (config::debug && canUpdateDebugMessages) {
-        int consoleMaxLength = 0;
-        HANDLE hConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-        constexpr COORD startCoord = { 0, 2 };
-        if(GetConsoleScreenBufferInfo(hConsoleOutput, &csbi)) {
-            consoleMaxLength = csbi.srWindow.Right - csbi.srWindow.Left;
-            bool canCreateTable0 = consoleMaxLength >= debug_columns_total_width;
-            if (canCreateTable != canCreateTable0) {
-                utils::clearConsole(startCoord, true);
-                canCreateTable = canCreateTable0;
-            }
-        }
-        if (!canCreateTable)
-            utils::clearConsole(startCoord, true);
-        else
-            SetConsoleCursorPosition(hConsoleOutput, startCoord);
-        std::cout << "[DEBUG] Loop start" << std::endl;
-        if (!canCreateTable)
-            std::cout << "[DEBUG] Table couldn't be formatted, required min width " << debug_columns_total_width << ", got " << consoleMaxLength << std::endl;
-        else {
-            coloredLine(debug_columns_total_width, true);
-            coloredLine(1, false);
-            constexpr int dSize = std::size(debug_column_sizes);
-            for (auto i = 0; i < dSize; i++) {
-                const int size = debug_column_sizes[i];
-                std::cout << ' ';
-                std::cout << std::setw(size) << std::left << debug_column_headers[i];
-                std::cout << ' ';
-                coloredLine(1, i + 1 == dSize);
-            }
-            coloredLine(debug_columns_total_width, true);
-        }
-    }
 
     EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
         WINDOWPLACEMENT wp;
@@ -179,7 +144,7 @@ bool taskbar::isAnyWindowMaximized() {
             return TRUE;
 
         RECT wRect { -1, -1, -1, -1 };
-        std::string processName,
+        std::wstring processName,
                     title,
                     wndclass,
                     succeededIgnoreTagGroup,
@@ -195,11 +160,11 @@ bool taskbar::isAnyWindowMaximized() {
             // Process filename
             utils::getProcessInfo(hwnd, processName);
             // Title
-            char _[256];
-            GetWindowTextA(hwnd, _, sizeof(_));
+            wchar_t _[256];
+            GetWindowText(hwnd, _, sizeof(_));
             title = _;
             // Class
-            GetClassNameA(hwnd, _, sizeof(_));
+            GetClassName(hwnd, _, sizeof(_));
             wndclass = _;
             // Rect
             GetWindowRect(hwnd, &wRect);
@@ -215,96 +180,12 @@ bool taskbar::isAnyWindowMaximized() {
             exceptional = loopThroughWindowTags(config::exceptionalWindows, hwnd, processName, title, wndclass, focusStatus, wi, wp, wRect, succeededExceptionTagGroup);
         }
 
-        if (config::debug && canUpdateDebugMessages) {
-            if (!canCreateTable) {
-                std::cout << " ig=" << ignored
-                          << " ex=" << exceptional
-                          << " igT=" << (succeededIgnoreTagGroup.empty() ? "NUL" : succeededIgnoreTagGroup)
-                          << " exT=" << (succeededExceptionTagGroup.empty() ? "NUL" : succeededExceptionTagGroup)
-                          << " f=" << (focusStatus == -1 ? "N" : std::to_string(focusStatus))
-                          << " m=" << (wp.showCmd == SW_MAXIMIZE)
-                          << " sl=" << wRect.left
-                          << " st=" << wRect.top
-                          << " sr=" << wRect.right
-                          << " sb=" << wRect.bottom
-                          << " p=" << processName
-                          << " c=" << wndclass
-                          << " t=" << title << std::endl;
-            } else {
-                const std::vector values = {
-                    std::to_string(ignored),
-                    std::to_string(exceptional),
-                    succeededIgnoreTagGroup.empty() ? "NUL" : succeededIgnoreTagGroup,
-                    succeededExceptionTagGroup.empty() ? "NUL" : succeededExceptionTagGroup,
-                    focusStatus == -1 ? "N" : std::to_string(focusStatus),
-                    std::to_string(wp.showCmd == SW_MAXIMIZE),
-                    std::to_string(wRect.left),
-                    std::to_string(wRect.top),
-                    std::to_string(wRect.right),
-                    std::to_string(wRect.bottom),
-                    processName,
-                    wndclass,
-                    title
-                };
-                coloredLine(1, false);
-                std::vector<std::vector<std::string>> splits = {};
-                int maxSplits = 0;
-                constexpr int cSize = std::size(debug_column_sizes);
-                for (auto i = 0; i < cSize; i++) {
-                    const int size = debug_column_sizes[i];
-                    std::cout << ' ';
-                    if (const std::string& value = values[i]; size < value.length()) {
-                        std::vector<std::string> currentSplits = utils::splitToGroups(value, size);
-                        splits.push_back(currentSplits);
-                        std::cout << std::setw(size) << std::left << currentSplits[0];
-                        if (currentSplits.size() > maxSplits)
-                            maxSplits = static_cast<int>(currentSplits.size());
-                    } else {
-                        splits.emplace_back();
-                        std::cout << std::setw(size) << std::left << value;
-                    }
-                    std::cout << ' ';
-                    coloredLine(1, i + 1 == cSize);
-                }
-                if (maxSplits > 1) {
-                    for (auto i = 1; i < maxSplits; i++) {
-                        for (auto j = 0; j < cSize; j++) {
-                            const int size = debug_column_sizes[j];
-                            const std::vector<std::string>& currentSplits = splits[j];
-                            if (j == 0)
-                                coloredLine(1, false);
-                            std::cout << ' ';
-                            if (currentSplits.empty()) {
-                                stdCOutRepeat(' ', size, false);
-                            } else {
-                                std::cout << std::setw(size) << std::left << splits[j][i];
-                            }
-                            std::cout << ' ';
-                            coloredLine(1, j + 1 == cSize);
-                        }
-                    }
-                }
-            }
-        }
-
         if (exceptional || !ignored) {
             *reinterpret_cast<bool*>(lParam) = true;
             return FALSE;
         }
         return TRUE;
     }, reinterpret_cast<LPARAM>(&maximized));
-    if (config::debug && canUpdateDebugMessages) {
-        if (!maximized)
-            std::cout << "[DEBUG] No maximized windows found." << std::endl;
-        if (canCreateTable) {
-            coloredLine(debug_columns_total_width, true);
-            COORD pos = { 0, csbi.dwCursorPosition.Y};
-            pos.Y++;
-            if (!maximized)
-                pos.Y++;
-            utils::clearConsole(pos, false);
-        }
-    }
     wasDebugFlushed = true;
     canUpdateDebugMessages = false;
     return maximized;
