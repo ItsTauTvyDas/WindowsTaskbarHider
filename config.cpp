@@ -136,11 +136,10 @@ void config::load() {
 
         std::string key = line.substr(0, pos);
         utils::trim(key);
-        key = prefix + key;
         std::string value = line.substr(pos + 1);
         utils::trim(value);
 
-        processSingle(key, value);
+        processSingle(prefix + key, value);
     }
     file.close();
 }

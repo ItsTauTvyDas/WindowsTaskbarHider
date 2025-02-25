@@ -14,7 +14,7 @@ const int taskbar::debug_columns_total_width = std::accumulate(
         std::begin(debug_column_sizes),
         std::end(debug_column_sizes),
         0,
-        std::plus<int>()
+        std::plus()
     ) + 3 * std::size(debug_column_sizes) + 1;
 
 bool taskbar::wasDebugFlushed = false;
@@ -39,13 +39,13 @@ bool taskbar::isCursorOverTaskbar() {
     return PtInRect(&taskbarRect, cursorPos);
 }
 
-bool loopThroughWindowTags(std::vector<std::string> vector, const HWND hwnd, std::string &processName, std::string &title,
+bool loopThroughWindowTags(const std::vector<std::string>& vector, HWND hwnd, std::string &processName, std::string &title,
     std::string &wndclass, DWORD &focusStatus, WINDOWINFO &wi, const WINDOWPLACEMENT &wp, RECT wRect, std::string &succeededTagGroup) {
     for (const auto& tagGroup: vector) {
-        if (tagGroup.length() == 0)
+        if (tagGroup.empty())
             continue;
         std::vector<std::string> tags = utils::splitString(tagGroup, '&');
-        if (tags.size() == 0)
+        if (tags.empty())
             continue;
         int succeededTags = 0;
         for (const auto& texpr : tags) {
@@ -56,12 +56,12 @@ bool loopThroughWindowTags(std::vector<std::string> vector, const HWND hwnd, std
             std::string key = texpr.substr(0, pos);
             std::string value = texpr.substr(pos + 1);
             if (key == "process" || key == "p") {
-                if (processName.length() == 0)
+                if (processName.empty())
                     utils::getProcessInfo(hwnd, processName);
                 if (processName == value)
                     succeededTags++;
             } else if (key == "title" || key == "t") {
-                if (title.length() == 0) {
+                if (title.empty()) {
                     GetWindowTextA(hwnd, _, sizeof(_));
                     title = _;
                 }
@@ -76,7 +76,7 @@ bool loopThroughWindowTags(std::vector<std::string> vector, const HWND hwnd, std
                 if (focusStatus == stoi(value))
                     succeededTags++;
             } else if (key == "class" || key == "c") {
-                if (wndclass.length() == 0) {
+                if (wndclass.empty()) {
                     GetClassNameA(hwnd, _, sizeof(_));
                     wndclass = _;
                 }
@@ -113,7 +113,7 @@ bool loopThroughWindowTags(std::vector<std::string> vector, const HWND hwnd, std
 }
 
 void coloredLine(const int length, const bool endLAfter) {
-    const HANDLE hConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE hConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(hConsoleOutput, BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
     for (auto i = 0; i < length; i++)
         std::cout << ' ';
@@ -179,11 +179,11 @@ bool taskbar::isAnyWindowMaximized() {
             return TRUE;
 
         RECT wRect { -1, -1, -1, -1 };
-        std::string processName = "",
-                    title = "",
-                    wndclass = "",
-                    succeededIgnoreTagGroup = "",
-                    succeededExceptionTagGroup = "";
+        std::string processName,
+                    title,
+                    wndclass,
+                    succeededIgnoreTagGroup,
+                    succeededExceptionTagGroup;
         WINDOWINFO wi;
         DWORD focusStatus = -1;
 
@@ -219,8 +219,8 @@ bool taskbar::isAnyWindowMaximized() {
             if (!canCreateTable) {
                 std::cout << " ig=" << ignored
                           << " ex=" << exceptional
-                          << " igT=" << (succeededIgnoreTagGroup.length() == 0 ? "NUL" : succeededIgnoreTagGroup)
-                          << " exT=" << (succeededExceptionTagGroup.length() == 0 ? "NUL" : succeededExceptionTagGroup)
+                          << " igT=" << (succeededIgnoreTagGroup.empty() ? "NUL" : succeededIgnoreTagGroup)
+                          << " exT=" << (succeededExceptionTagGroup.empty() ? "NUL" : succeededExceptionTagGroup)
                           << " f=" << (focusStatus == -1 ? "N" : std::to_string(focusStatus))
                           << " m=" << (wp.showCmd == SW_MAXIMIZE)
                           << " sl=" << wRect.left
@@ -234,8 +234,8 @@ bool taskbar::isAnyWindowMaximized() {
                 const std::vector values = {
                     std::to_string(ignored),
                     std::to_string(exceptional),
-                    succeededIgnoreTagGroup.length() == 0 ? "NUL" : succeededIgnoreTagGroup,
-                    succeededExceptionTagGroup.length() == 0 ? "NUL" : succeededExceptionTagGroup,
+                    succeededIgnoreTagGroup.empty() ? "NUL" : succeededIgnoreTagGroup,
+                    succeededExceptionTagGroup.empty() ? "NUL" : succeededExceptionTagGroup,
                     focusStatus == -1 ? "N" : std::to_string(focusStatus),
                     std::to_string(wp.showCmd == SW_MAXIMIZE),
                     std::to_string(wRect.left),
@@ -253,14 +253,14 @@ bool taskbar::isAnyWindowMaximized() {
                 for (auto i = 0; i < cSize; i++) {
                     const int size = debug_column_sizes[i];
                     std::cout << ' ';
-                    if (const std::string value = values[i]; size < value.length()) {
+                    if (const std::string& value = values[i]; size < value.length()) {
                         std::vector<std::string> currentSplits = utils::splitToGroups(value, size);
                         splits.push_back(currentSplits);
                         std::cout << std::setw(size) << std::left << currentSplits[0];
                         if (currentSplits.size() > maxSplits)
-                            maxSplits = currentSplits.size();
+                            maxSplits = static_cast<int>(currentSplits.size());
                     } else {
-                        splits.push_back({});
+                        splits.emplace_back();
                         std::cout << std::setw(size) << std::left << value;
                     }
                     std::cout << ' ';
@@ -270,11 +270,11 @@ bool taskbar::isAnyWindowMaximized() {
                     for (auto i = 1; i < maxSplits; i++) {
                         for (auto j = 0; j < cSize; j++) {
                             const int size = debug_column_sizes[j];
-                            const std::vector<std::string> currentSplits = splits[j];
+                            const std::vector<std::string>& currentSplits = splits[j];
                             if (j == 0)
                                 coloredLine(1, false);
                             std::cout << ' ';
-                            if (currentSplits.size() == 0) {
+                            if (currentSplits.empty()) {
                                 stdCOutRepeat(' ', size, false);
                             } else {
                                 std::cout << std::setw(size) << std::left << splits[j][i];

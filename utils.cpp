@@ -118,7 +118,7 @@ void utils::showExceptionMessageBox(const std::function<void(std::stringstream&)
     }
 }
 
-LPSTR utils::replaceCharacterWithText(const LPSTR lpstr, const char target, const std::string &replacement, const int skip) {
+LPSTR utils::replaceCharacterWithText(LPSTR lpstr, const char target, const std::string &replacement, const int skip) {
     const char* pos = lpstr;
     for (size_t i = 0; i < skip; ++i) {
         pos = strchr(pos, target);
@@ -237,7 +237,7 @@ void utils::trim(std::string &s) {
     ltrim(s);
 }
 
-std::vector<std::string> utils::splitToGroups(std::string s, const unsigned int length) {
+std::vector<std::string> utils::splitToGroups(const std::string& s, const unsigned int length) {
     if (s.length() <= length)
         return { s };
     if (length == 0)
@@ -269,8 +269,8 @@ bool utils::attachConsoleWindow() {
 
         const int hCrt = _open_osfhandle(reinterpret_cast<intptr_t>(hConsoleOutput), 0x4000);
         const FILE* fp = _fdopen(hCrt, "w");
-        *stdout = *fp;
-        *stderr = *fp;
+
+        *stdout = *fp; *stderr = *fp; // NOLINT(*-non-copyable-objects)
 
         setvbuf(stdout, nullptr, _IONBF, 0);
         setvbuf(stderr, nullptr, _IONBF, 0);
@@ -280,7 +280,7 @@ bool utils::attachConsoleWindow() {
 
         static stdcerr _;
 
-        const HWND wConsole = GetConsoleWindow();
+        HWND wConsole = GetConsoleWindow();
 
         SetConsoleTitleA((std::string(VER_FILEDESCRIPTION_STR) + " (debugging)").c_str());
         DWORD mode;

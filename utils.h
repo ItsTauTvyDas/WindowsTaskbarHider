@@ -19,7 +19,7 @@ public:
     static void ltrim(std::string &s);
     static void rtrim(std::string &s);
     static void trim(std::string &s);
-    static std::vector<std::string> splitToGroups(std::string s, unsigned int length);
+    static std::vector<std::string> splitToGroups(const std::string& s, unsigned int length);
     static bool fileExists(const char *path);
     static bool doesAutoStart();
     static void toggleStartup();
