@@ -15,7 +15,6 @@
 #include <unordered_map>
 #include <mutex>
 #include "language.h"
-#include "stdcerr.h"
 
 bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
