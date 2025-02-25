@@ -1,7 +1,7 @@
 #include "windows.h"
 #include "resources.h"
 
-IDI_APP_ICON ICON "icon.ico"
+IDI_APP_ICON ICON                   "icon.ico"
 
 #ifndef DEBUG
 #define VER_DEBUG                   0
