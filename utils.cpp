@@ -29,8 +29,7 @@ bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
             if (currentPid == pe.th32ProcessID)
                 continue;
             if (wcschr(pe.szExeFile, *processName) == nullptr) {
-                HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                if (hProcess) {
+                if (HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID)) {
                     TerminateProcess(hProcess, 0);
                     CloseHandle(hProcess);
                     success = true;
