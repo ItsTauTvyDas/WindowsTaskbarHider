@@ -6,9 +6,10 @@
 
 class globals {
 public:
-    static std::string exe;
-    static std::string args;
+    static std::wstring exe;
+    static std::wstring args;
     static HWND hWnd;
+    static HINSTANCE hIns;
     static bool noConfigFile;
     static bool taskbarLoopRunState;
 };
