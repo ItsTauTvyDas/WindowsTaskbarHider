@@ -1,5 +1,7 @@
 #include "../language.h"
 
+#pragma code_page(65001)
+
 STRINGTABLE
 BEGIN
     MSG_APPLICATION_NAME, "Приховувач панелі задач Windows"
