@@ -12,15 +12,15 @@
 
 #define WM_TRAY_ICON           (WM_USER + 1)
 
-#define WCP_BASE               darkMode ? darkColorPalette[0] : lightColorPalette[0]
-#define WCP_FOREGROUND         darkMode ? darkColorPalette[1] : lightColorPalette[1]
-#define WCP_BACKGROUND         darkMode ? darkColorPalette[2] : lightColorPalette[2]
-#define WCP_BACKGROUND2        darkMode ? darkColorPalette[3] : lightColorPalette[3]
-#define WCP_BUTTON_BG          darkMode ? darkColorPalette[4] : lightColorPalette[4]
-#define WCP_BUTTON_BORDER      darkMode ? darkColorPalette[5] : lightColorPalette[5]
-#define WCP_BUTTON_CLICKED_BG  darkMode ? darkColorPalette[6] : lightColorPalette[6]
-#define WCP_SCROLLBAR_COLOR    darkMode ? darkColorPalette[7] : lightColorPalette[7]
-#define WCP_SCROLLBAR_BG       darkMode ? darkColorPalette[8] : lightColorPalette[8]
+#define WCP_BASE               config::darkMode ? darkColorPalette[0] : lightColorPalette[0]
+#define WCP_FOREGROUND         config::darkMode ? darkColorPalette[1] : lightColorPalette[1]
+#define WCP_BACKGROUND         config::darkMode ? darkColorPalette[2] : lightColorPalette[2]
+#define WCP_BACKGROUND2        config::darkMode ? darkColorPalette[3] : lightColorPalette[3]
+#define WCP_BUTTON_BG          config::darkMode ? darkColorPalette[4] : lightColorPalette[4]
+#define WCP_BUTTON_BORDER      config::darkMode ? darkColorPalette[5] : lightColorPalette[5]
+#define WCP_BUTTON_CLICKED_BG  config::darkMode ? darkColorPalette[6] : lightColorPalette[6]
+#define WCP_SCROLLBAR_COLOR    config::darkMode ? darkColorPalette[7] : lightColorPalette[7]
+#define WCP_SCROLLBAR_BG       config::darkMode ? darkColorPalette[8] : lightColorPalette[8]
 
 #define WSC_HEADER             70
 #define WSC_SCROLLBAR_WIDTH    20
@@ -54,7 +54,7 @@ constexpr COLORREF lightColorPalette[] = {
     RGB(150, 150, 150), // Scrollbar background color
 };
 
-bool quitting = false, darkMode = false, autoUpdate = false;
+bool quitting = false;
 HWND hScrollBar = nullptr;
 std::thread taskbarLoopThread;
 HFONT hFont = nullptr;
@@ -220,7 +220,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             SendMessage(hCheckBoxAutoUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
             SendMessage(hCheckBoxAutoUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
             SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
-            SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&autoUpdate));
+            SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::livePreview));
 
             const auto hCheckboxDarkMode = CreateWindow(
                 L"BUTTON", utils::message(MSG_APP_WIN_DARK_MODE).c_str(),
@@ -230,7 +230,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             SendMessage(hCheckboxDarkMode, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
             SendMessage(hCheckboxDarkMode, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
             SetClassLongPtr(hCheckboxDarkMode, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
-            SetWindowLongPtr(hCheckboxDarkMode, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&darkMode));
+            SetWindowLongPtr(hCheckboxDarkMode, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::darkMode));
 
             hScrollBar = CreateWindowEx(
                 WS_VSCROLL, L"SCROLLBAR", nullptr,
@@ -560,6 +560,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nCmdShow) 
     //
     // if (!utils::processArguments(argc, argv))
     //     return 0;
+
+    config::darkMode = utils::isUserUsingDarkTheme();
 
     if (!globals::noConfigFile)
         config::load();

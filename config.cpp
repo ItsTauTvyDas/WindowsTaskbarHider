@@ -11,9 +11,12 @@
 
 #define CONFIG_FILENAME L"config.ini"
 
-bool config::debug = false;
-bool config::keepConsoleWindowOpen = false;
 bool config::alwaysIgnoreWhenNotMaximized = true;
+bool config::darkMode;
+bool config::livePreview = true;
+bool config::openOnStart = false;
+bool config::closeToTray = false;
+bool config::closeConfirmMessage = false;
 
 int config::taskbarUpdateInterval = 10;
 int config::opacity = 0;
@@ -27,11 +30,15 @@ void config::save() {
         utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
         return;
     }
-    file << "[General]" << std::endl;
-    file << "; If enabled (1), application will open a console window" << std::endl;
-    file << "DebugEnabled = " << debug << std::endl;
-    file << "; Keep console window open if user sends CTRL+C action to console window" << std::endl;
-    file << "KeepConsoleWindowOpen = " << keepConsoleWindowOpen << std::endl;
+    file << "[Window]" << std::endl;
+    file << "; Default values for checkboxes in the window display" << std::endl;
+    file << "DarkMode = " << darkMode << std::endl;
+    file << "LivePreview = " << livePreview << std::endl;
+    file << "[Window Behaviour]" << std::endl;
+    file << "OpenOnStart = " << openOnStart << std::endl;
+    file << "CloseToTray = " << openOnStart << std::endl;
+    file << "; Only works if CloseToTray is disabled" << std::endl;
+    file << "CloseConfirmMessage = " << openOnStart << std::endl;
     file << "[Taskbar]" << std::endl;
     file << "; Taskbar update loop interval in milliseconds" << std::endl;
     file << "UpdateInterval = " << taskbarUpdateInterval << std::endl;
@@ -89,10 +96,14 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
         if (key == L"Taskbar.UpdateInterval") {
             taskbarUpdateInterval = std::stoi(value);
             invalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000);
-        } else if (key == L"General.DebugEnabled") {
-            debug = value != L"0";
-        } else if (key == L"General.KeepConsoleWindowOpen") {
-            keepConsoleWindowOpen = value != L"0";
+        } else if (key == L"Window.DarkMode") {
+            darkMode = value != L"0";
+        } else if (key == L"Window.LivePreview") {
+            livePreview = value != L"0";
+        } else if (key == L"Window.OpenOnStart") {
+            openOnStart = value != L"0";
+        } else if (key == L"Window.CloseConfirmMessage") {
+            closeConfirmMessage = value != L"0";
         } else if (key == L"Taskbar.Opacity") {
             opacity = std::stoi(value);
             invalidIntegerValue(formattedKey, opacity, 0, 255);

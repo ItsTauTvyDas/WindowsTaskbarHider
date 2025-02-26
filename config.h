@@ -6,8 +6,11 @@
 
 class config {
 public:
-    static bool debug;
-    static bool keepConsoleWindowOpen;
+    static bool darkMode;
+    static bool livePreview;
+    static bool openOnStart;
+    static bool closeToTray;
+    static bool closeConfirmMessage;
     static bool alwaysIgnoreWhenNotMaximized;
     static int taskbarUpdateInterval;
     static int opacity;
