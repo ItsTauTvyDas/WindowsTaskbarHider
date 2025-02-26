@@ -31,6 +31,7 @@ public:
     static int messageBox(const std::wstring &mText, unsigned int uType);
     static std::wstring message(unsigned int mType, const std::vector<std::wstring> &values);
     static std::wstring message(unsigned int mType);
+    static bool isUserUsingDarkTheme();
     static void toUnicode(LPCCH string, LPWSTR str);
     static void clearConsole(COORD startCoord, bool setPosAfter);
 private:

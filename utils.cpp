@@ -76,13 +76,10 @@ bool utils::processArguments(const int argc, wchar_t* argv[]) {
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
-        if (arg == L"--debug" || arg == L"-d") {
-            config::debug = true;
-        } else if (arg == L"--no-config" || arg == L"-nc") {
+        if (arg == L"--no-config" || arg == L"-nc") {
             globals::noConfigFile = true;
         } else if ((arg.compare(0, 3, L"-c:") == 0 || arg.compare(0, 9, L"--config:") == 0) && i + 1 < argc) {
-            const size_t colonPos = arg.find(':');
-            if (colonPos != std::string::npos && colonPos + 1 < arg.size()) {
+            if (const size_t colonPos = arg.find(':'); colonPos != std::string::npos && colonPos + 1 < arg.size()) {
                 config::processSingle(arg.substr(colonPos), argv[i + 1]);
                 i++;
             }
@@ -407,4 +404,22 @@ std::wstring utils::message(const unsigned int mType, const std::vector<std::wst
 
 std::wstring utils::message(const unsigned int mType) {
     return message(mType, {});
+}
+
+bool utils::isUserUsingDarkTheme() {
+    auto buffer = std::vector<char>(4);
+    auto cbData = static_cast<DWORD>(buffer.size() * sizeof(char));
+    const auto res = RegGetValueW(
+        HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        L"AppsUseLightTheme",
+        RRF_RT_REG_DWORD,
+        nullptr,
+        buffer.data(),
+        &cbData);
+
+    if (res != ERROR_SUCCESS)
+        return false; // Default to false
+
+    return (buffer[3] << 24 | buffer[2] << 16 | buffer[1] << 8 | buffer[0]) == 0;
 }
