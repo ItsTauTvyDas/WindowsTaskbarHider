@@ -2,23 +2,8 @@
 
 #include <iostream>
 #include <windows.h>
-#include <cmath>
 #include "config.h"
 #include "utils.h"
-#include <iomanip>
-#include <numeric>
-
-constexpr std::wstring debug_column_headers[] = { L"i", L"e", L"ig. tag", L"ex. tag", L"f", L"m", L"left", L"top", L"righ", L"bott", L"process", L"class", L"title" };
-constexpr int debug_column_sizes[] = { 1, 1, 10, 10, 1, 1, 4, 4, 4, 4, 20, 20, 20 };
-const int taskbar::debug_columns_total_width = std::accumulate(
-        std::begin(debug_column_sizes),
-        std::end(debug_column_sizes),
-        0,
-        std::plus()
-    ) + 3 * std::size(debug_column_sizes) + 1;
-
-bool taskbar::wasDebugFlushed = false;
-bool taskbar::canUpdateDebugMessages = false;
 
 bool canCreateTable = false;
 
@@ -48,13 +33,13 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, s
         if (tags.empty())
             continue;
         int succeededTags = 0;
-        for (const auto& texpr : tags) {
-            const auto pos = texpr.find(L":", 0);
+        for (const auto& tExpr : tags) {
+            const auto pos = tExpr.find(L":", 0);
             if (pos == std::wstring::npos)
                 continue;
             wchar_t _[256];
-            std::wstring key = texpr.substr(0, pos);
-            std::wstring value = texpr.substr(pos + 1);
+            std::wstring key = tExpr.substr(0, pos);
+            std::wstring value = tExpr.substr(pos + 1);
             if (key == L"process" || key == L"p") {
                 if (processName.empty())
                     utils::getProcessInfo(hwnd, processName);
@@ -112,24 +97,6 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, s
     return false;
 }
 
-void coloredLine(const int length, const bool endLAfter) {
-    HANDLE hConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-    SetConsoleTextAttribute(hConsoleOutput, BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
-    for (auto i = 0; i < length; i++)
-        std::cout << ' ';
-    SetConsoleTextAttribute(hConsoleOutput, 15);
-    if (endLAfter)
-        std::cout << std::endl;
-}
-
-void stdCOutRepeat(const char ch, const int len, const bool end) {
-    if (!len) return;
-    for (auto i = 0; i < len; i++)
-        std::cout << ch;
-    if (end)
-        std::cout << std::endl;
-}
-
 bool taskbar::isAnyWindowMaximized() {
     bool maximized = false;
 
@@ -152,24 +119,6 @@ bool taskbar::isAnyWindowMaximized() {
         WINDOWINFO wi;
         DWORD focusStatus = -1;
 
-        if (config::debug && canUpdateDebugMessages) {
-            // Focus status (0 or 1)
-            wi.cbSize = sizeof(WINDOWINFO);
-            GetWindowInfo(hwnd, &wi);
-            focusStatus = wi.dwWindowStatus;
-            // Process filename
-            utils::getProcessInfo(hwnd, processName);
-            // Title
-            wchar_t _[256];
-            GetWindowText(hwnd, _, sizeof(_));
-            title = _;
-            // Class
-            GetClassName(hwnd, _, sizeof(_));
-            wndclass = _;
-            // Rect
-            GetWindowRect(hwnd, &wRect);
-        }
-
         bool ignored = true, exceptional = false;
 
         if (!config::ignoredWindows.empty()) {
@@ -186,8 +135,6 @@ bool taskbar::isAnyWindowMaximized() {
         }
         return TRUE;
     }, reinterpret_cast<LPARAM>(&maximized));
-    wasDebugFlushed = true;
-    canUpdateDebugMessages = false;
     return maximized;
 }
 
