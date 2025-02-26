@@ -16,6 +16,11 @@
 #define WCP_FOREGROUND         darkMode ? darkColorPalette[1] : lightColorPalette[1]
 #define WCP_BACKGROUND         darkMode ? darkColorPalette[2] : lightColorPalette[2]
 #define WCP_BACKGROUND2        darkMode ? darkColorPalette[3] : lightColorPalette[3]
+#define WCP_BUTTON_BG          darkMode ? darkColorPalette[4] : lightColorPalette[4]
+#define WCP_BUTTON_BORDER      darkMode ? darkColorPalette[5] : lightColorPalette[5]
+#define WCP_BUTTON_CLICKED_BG  darkMode ? darkColorPalette[6] : lightColorPalette[6]
+#define WCP_SCROLLBAR_COLOR    darkMode ? darkColorPalette[7] : lightColorPalette[7]
+#define WCP_SCROLLBAR_BG       darkMode ? darkColorPalette[8] : lightColorPalette[8]
 
 #define WSC_HEADER             70
 #define WSC_SCROLLBAR_WIDTH    20
@@ -26,20 +31,30 @@
 #define WSC_VISIBLE_AREA       (windowClientHeight - WSC_HEADER)
 
 constexpr COLORREF darkColorPalette[] = {
-    RGB(0, 0, 0),       // Base color
+    RGB(  0,   0,   0), // Base color
     RGB(255, 255, 255), // Text color
-    RGB(30, 30, 30),    // Background color
-    RGB(20, 20, 20),    // Second background color
+    RGB( 30,  30,  30), // Background color
+    RGB( 20,  20,  20), // Second background color
+    RGB( 50,  50,  50), // Button background color
+    RGB( 55,  55,  55), // Button border color
+    RGB( 80,  80,  80), // Button clicked background color
+    RGB( 80,  80,  80), // Scrollbar color
+    RGB( 80,  80,  80), // Scrollbar background color
 };
 
 constexpr COLORREF lightColorPalette[] = {
     RGB(255, 255, 255), // Base color
-    RGB(0, 0, 0),       // Text color
+    RGB(  0,   0,   0), // Text color
     RGB(255, 255, 255), // Background color
     RGB(240, 240, 240), // Second background color
+    RGB(220, 220, 220), // Button background color
+    RGB(180, 180, 180), // Button border color
+    RGB(200, 200, 200), // Button clicked background color
+    RGB(150, 150, 150), // Scrollbar color
+    RGB(150, 150, 150), // Scrollbar background color
 };
 
-bool quitting = false, darkMode = false;
+bool quitting = false, darkMode = false, autoUpdate = false;
 HWND hScrollBar = nullptr;
 std::thread taskbarLoopThread;
 HFONT hFont = nullptr;
@@ -70,10 +85,10 @@ void taskbarLoop() {
     }
 }
 
-void drawTextW(HDC hdc, const std::wstring &text, const int x, const int y) {
+void drawText(HDC hdc, const std::wstring &text, const int x, const int y) {
     const auto oldFont = static_cast<HFONT>(SelectObject(hdc, hFont));
     SetBkMode(hdc, TRANSPARENT);
-    TextOutW(hdc, x, y, text.c_str(), static_cast<int>(text.length()));
+    TextOut(hdc, x, y, text.c_str(), static_cast<int>(text.length()));
     SelectObject(hdc, oldFont);
 }
 
@@ -82,7 +97,15 @@ void redrawLowerArea(HWND hwnd) {
     InvalidateRect(hwnd, &rect, TRUE);
 }
 
+void updateScrollbarColors() {
+    constexpr int sysColors[] = { COLOR_SCROLLBAR, COLOR_BACKGROUND };
+    const COLORREF newColors[] = { WCP_SCROLLBAR_COLOR, WCP_SCROLLBAR_BG };
+    SetSysColors(2, sysColors, newColors);
+}
+
 void redrawHeader(HWND hwnd) {
+    updateScrollbarColors();
+
     const int oldScrollPos = windowScrollPos;
     windowScrollPos = 0;
     RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
@@ -148,7 +171,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
     static NOTIFYICONDATA nid = {};
 
     switch (uMsg) {
-        case WM_CREATE: {
+        case WM_CREATE:
+        {
             // Get icon for system tray
             const auto pcs = reinterpret_cast<CREATESTRUCT *>(lParam);
             const auto hTrayIcon   = static_cast<HICON>(pcs->lpCreateParams);
@@ -181,21 +205,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
 
             const auto hButtonUpdate = CreateWindow(
                 L"BUTTON", L"Update",
-                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
                 10, 10, 120, 30,
                 hwnd, reinterpret_cast<HMENU>(ID_BUTTON_UPDATE), nullptr, nullptr);
             SendMessage(hButtonUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
             SendMessage(hButtonUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
             SetClassLongPtr(hButtonUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
 
-            const auto hButtonPreview = CreateWindow(
+            const auto hCheckBoxAutoUpdate = CreateWindowW(
                 L"BUTTON", L"Live Preview",
-                WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_PUSHBUTTON,
+                WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
                 140, 10, 120, 30,
-                hwnd, reinterpret_cast<HMENU>(ID_BUTTON_PREVIEW), nullptr, nullptr);
-            SendMessage(hButtonPreview, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
-            SendMessage(hButtonPreview, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetClassLongPtr(hButtonUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
+                hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_AUTO_UPDATE), nullptr, nullptr);
+            SendMessage(hCheckBoxAutoUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
+            SendMessage(hCheckBoxAutoUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+            SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
+            SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&autoUpdate));
 
             const auto hCheckboxDarkMode = CreateWindow(
                 L"BUTTON", utils::message(MSG_APP_WIN_DARK_MODE).c_str(),
@@ -205,6 +230,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             SendMessage(hCheckboxDarkMode, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
             SendMessage(hCheckboxDarkMode, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
             SetClassLongPtr(hCheckboxDarkMode, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
+            SetWindowLongPtr(hCheckboxDarkMode, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&darkMode));
 
             hScrollBar = CreateWindowEx(
                 WS_VSCROLL, L"SCROLLBAR", nullptr,
@@ -246,47 +272,83 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_DRAWITEM:
         {
             const auto draw = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
-            if (draw->CtlID == ID_CHECKBOX_DARK_MODE)
-            {
-
-                const auto background = CreateSolidBrush(WCP_BACKGROUND2);
-                const auto foreground = CreateSolidBrush(WCP_FOREGROUND);
-
-                // Background color
-                FillRect(draw->hDC, &draw->rcItem, background);
-
-                // Create checkbox rect
-                RECT boxRect = draw->rcItem;
-                boxRect.right = boxRect.left + 16;
-                boxRect.top += (boxRect.bottom - boxRect.top - 16 ) / 2;
-                boxRect.bottom = boxRect.top + 16;
-
-                // Draw checkbox rect
-                FillRect(draw->hDC, &boxRect, background);
-                FrameRect(draw->hDC, &boxRect, foreground);
-
-                if (darkMode)
+            wchar_t text[256];
+            GetWindowText(draw->hwndItem, text, 256);
+            switch (draw->CtlID) {
+                case ID_BUTTON_UPDATE:
                 {
-                    // Create a little rect inside checkbox rect
-                    boxRect.left += 3;
-                    boxRect.top += 3;
-                    boxRect.right -= 3;
-                    boxRect.bottom -= 3;
-                    FillRect(draw->hDC, &boxRect, foreground);
+                    COLORREF buttonBackgroundColor = WCP_BUTTON_BG;
+                    if (draw->itemState & ODS_HOTLIGHT)
+                        buttonBackgroundColor = RGB(0, 0, 0);
+                    if (draw->itemState & ODS_SELECTED)
+                        buttonBackgroundColor = WCP_BUTTON_CLICKED_BG;
+                    const auto buttonBackgroundBrush = CreateSolidBrush(buttonBackgroundColor);
+                    const auto buttonBaseBackgroundBrush = CreateSolidBrush(WCP_BACKGROUND2);
+                    const auto buttonBorderBrush = CreateSolidBrush(WCP_BUTTON_BORDER);
+
+                    RECT rect = draw->rcItem;
+                    FillRect(draw->hDC, &rect, buttonBaseBackgroundBrush);
+                    FrameRect(draw->hDC, &rect, draw->itemState & ODS_SELECTED ? buttonBackgroundBrush : buttonBorderBrush);
+                    rect.left += 3;
+                    rect.top += 3;
+                    rect.right -= 3;
+                    rect.bottom -= 3;
+                    FillRect(draw->hDC, &rect, buttonBackgroundBrush);
+
+                    SetBkColor(draw->hDC, buttonBackgroundColor);
+                    SetTextColor(draw->hDC, WCP_FOREGROUND);
+                    DrawTextW(draw->hDC, text, -1, &draw->rcItem, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
+
+                    DeleteObject(buttonBaseBackgroundBrush);
+                    DeleteObject(buttonBackgroundBrush);
+                    break;
                 }
+                case ID_CHECKBOX_DARK_MODE:
+                case ID_CHECKBOX_AUTO_UPDATE:
+                {
+                    const auto background = CreateSolidBrush(WCP_BACKGROUND2);
+                    const auto foreground = CreateSolidBrush(WCP_FOREGROUND);
 
-                RECT textRect = draw->rcItem;
-                textRect.left += 20;
-                SetBkColor(draw->hDC, WCP_BACKGROUND2);
-                SetTextColor(draw->hDC, WCP_FOREGROUND);
-                DrawTextW(draw->hDC, L"Dark Mode", -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+                    // Background color
+                    FillRect(draw->hDC, &draw->rcItem, background);
 
-                DeleteObject(background);
-                DeleteObject(foreground);
+                    // Create checkbox rect
+                    RECT boxRect = draw->rcItem;
+                    boxRect.right = boxRect.left + 16;
+                    boxRect.top += (boxRect.bottom - boxRect.top - 16 ) / 2;
+                    boxRect.bottom = boxRect.top + 16;
+
+                    // Draw checkbox rect
+                    FillRect(draw->hDC, &boxRect, background);
+                    FrameRect(draw->hDC, &boxRect, foreground);
+                    bool* pState = reinterpret_cast<bool*>(GetWindowLongPtr(draw->hwndItem, GWLP_USERDATA));
+                    if (pState ? *pState : false)
+                    {
+                        // Create a little rect inside checkbox rect
+                        boxRect.left += 3;
+                        boxRect.top += 3;
+                        boxRect.right -= 3;
+                        boxRect.bottom -= 3;
+                        FillRect(draw->hDC, &boxRect, foreground);
+                    }
+
+                    RECT textRect = draw->rcItem;
+                    textRect.left += 20;
+                    SetBkColor(draw->hDC, WCP_BACKGROUND2);
+                    SetTextColor(draw->hDC, WCP_FOREGROUND);
+                    DrawTextW(draw->hDC, text, -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+
+                    DeleteObject(background);
+                    DeleteObject(foreground);
+                    break;
+                }
+                default:
+                    break;
             }
             break;
         }
-        case WM_PAINT: {
+        case WM_PAINT:
+        {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
 
@@ -304,18 +366,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             FillRect(hdc, &wRect, createBrush(WCP_BACKGROUND2));
             deleteLastBrush();
 
-            drawTextW(hdc, L"Here you can see which window was ignored and which one was exceptional!", 10, 45);
+            drawText(hdc, L"Here you can see which window was ignored and which one was exceptional!", 10, 45);
 
-            drawTextW(hdc, L"Debug table:", 10, 80 - windowScrollPos);
+            drawText(hdc, L"Debug table:", 10, 80 - windowScrollPos);
             paintGrid(hdc, 10, WSC_GRID_Y - windowScrollPos);
 
             EndPaint(hwnd, &ps);
             break;
         }
-        case WM_TRAY_ICON: {
+        case WM_TRAY_ICON:
+        {
             if (lParam == WM_RBUTTONUP || lParam == WM_LBUTTONUP || lParam == WM_CONTEXTMENU) {
                 HMENU hMenu = CreatePopupMenu();
-                AppendMenu(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, utils::message(MSG_APPLICATION_NAME).c_str());
+                AppendMenu(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, TRAY_TITLE);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, utils::message(MSG_TRAY_CONFIG_OPEN).c_str());
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, utils::message(MSG_TRAY_CONFIG_RELOAD).c_str());
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
@@ -335,52 +398,61 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             }
             break;
         }
-        case WM_COMMAND: {
-            switch (LOWORD(wParam)) {
-                case ID_BUTTON_UPDATE: {
+        case WM_COMMAND:
+        {
+            switch (const auto lwParam = LOWORD(wParam)) {
+                case ID_BUTTON_UPDATE:
+                {
                     InvalidateRect(hwnd, nullptr, TRUE);
                     break;
                 }
-                case ID_BUTTON_PREVIEW: {
-                    //MessageBox(hwnd, "Live Preview button clicked.", "Action", MB_OK);
-                    break;
-                }
-                case ID_CHECKBOX_DARK_MODE: {
-                    darkMode = !darkMode;
-                    redrawHeader(hwnd);
+                case ID_CHECKBOX_AUTO_UPDATE:
+                case ID_CHECKBOX_DARK_MODE:
+                {
+                    HWND hCheckbox = GetDlgItem(hwnd, lwParam);
+                    if (const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(hCheckbox, GWLP_USERDATA))) {
+                        *pState = !*pState;
+                        redrawHeader(hwnd);
+                    }
                     break;
                 }
                 // Next ones are for system tray
-                case ID_TRAY_EXIT: {
+                case ID_TRAY_EXIT:
+                {
                     DestroyWindow(hwnd);
                     break;
                 }
-                case ID_TRAY_OPEN_CONFIG: {
+                case ID_TRAY_OPEN_CONFIG:
+                {
                     config::open();
                     break;
                 }
-                case ID_TRAY_RELOAD_CONFIG: {
+                case ID_TRAY_RELOAD_CONFIG:
+                {
                     config::load();
                     break;
                 }
-                case ID_TRAY_PAUSE_HIDER: {
+                case ID_TRAY_PAUSE_HIDER:
+                {
                     globals::taskbarLoopRunState = !globals::taskbarLoopRunState;
                     break;
                 }
-                case ID_TRAY_ADD_REMOVE_STARTUP: {
+                case ID_TRAY_ADD_REMOVE_STARTUP:
+                {
                     utils::toggleStartup();
                     break;
                 }
-                case ID_TRAY_ATTACH_DEBUG_CONSOLE: {
+                case ID_TRAY_ATTACH_DEBUG_CONSOLE:
+                {
                     break;
                 }
-                case ID_TRAY_GITHUB: {
+                case ID_TRAY_GITHUB:
+                {
                     ShellExecute(nullptr, L"open", PRODUCT_URL, nullptr, nullptr, SW_SHOWNORMAL);
                     break;
                 }
-                default: {
+                default:
                     break;
-                }
             }
             break;
         }
@@ -432,9 +504,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_ERASEBKGND: {
             return TRUE;
         }
-        default: {
+        default:
             return DefWindowProc(hwnd, uMsg, wParam, lParam);
-        }
     }
     return 0;
 }
@@ -442,7 +513,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
 LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
     utils::showExceptionMessageBox([pException](std::wstringstream& crashInfo) {
         const EXCEPTION_RECORD* record = pException->ExceptionRecord;
-        auto lpstr = utils::NTStatusMessageToText(record->ExceptionCode);
+        LPWSTR lpwstr = utils::NTStatusMessageToText(record->ExceptionCode);
         // A workaround, EXCEPTION_ACCESS_VIOLATION returns this message:
         // "The instruction at 0xp referenced memory at 0xp. The memory could not be s."
         // There are missing %, but p and s letters are not being used in any words, so we can just replace them
@@ -456,23 +527,24 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
                     operation = L"unknown(" + std::to_wstring(record->ExceptionInformation[0]) + L")";
                     break;
             }
-            lpstr = utils::replaceCharacterWithText(lpstr, 's', operation, 1);
-            lpstr = utils::replaceCharacterWithText(lpstr, 'p', std::to_wstring(record->ExceptionInformation[1]));
-            lpstr = utils::replaceCharacterWithText(lpstr, 'p', std::to_wstring(record->ExceptionInformation[2]));
+            lpwstr = utils::replaceCharacterWithText(lpwstr, 's', operation, 1);
+            lpwstr = utils::replaceCharacterWithText(lpwstr, 'p', std::to_wstring(record->ExceptionInformation[1]));
+            lpwstr = utils::replaceCharacterWithText(lpwstr, 'p', std::to_wstring(record->ExceptionInformation[2]));
         } else if (record->ExceptionCode == EXCEPTION_IN_PAGE_ERROR) {
             // I hope these are correct
             // Message: "The instruction at 0xp referenced memory at 0xp. The required data was not placed into memory because of an I/O error status of 0xx."
-            lpstr = utils::replaceCharacterWithText(lpstr, 'p', std::to_wstring(record->ExceptionInformation[0]));
-            lpstr = utils::replaceCharacterWithText(lpstr, 'p', std::to_wstring(record->ExceptionInformation[1]));
-            lpstr = utils::replaceCharacterWithText(lpstr, 'x', std::to_wstring(record->ExceptionInformation[2]), 3);
+            lpwstr = utils::replaceCharacterWithText(lpwstr, 'p', std::to_wstring(record->ExceptionInformation[0]));
+            lpwstr = utils::replaceCharacterWithText(lpwstr, 'p', std::to_wstring(record->ExceptionInformation[1]));
+            lpwstr = utils::replaceCharacterWithText(lpwstr, 'x', std::to_wstring(record->ExceptionInformation[2]), 3);
         }
         crashInfo << utils::message(MSG_UNCAUGHT_EXCEPTION_WILL_TERMINATE) << std::endl;
         crashInfo << utils::message(MSG_UNCAUGHT_EXCEPTION_TRANSLATED_MSG, {utils::exceptionName(record->ExceptionCode)}) << std::endl;
         crashInfo << std::endl;
-        crashInfo << lpstr << std::endl;
+        crashInfo << lpwstr << std::endl;
         crashInfo << utils::message(MSG_UNCAUGHT_EXCEPTION_INFO) << std::endl;
         crashInfo << L"  " << utils::message(MSG_UNCAUGHT_EXCEPTION_INFO_CODE) << L" 0x" << std::hex << record->ExceptionCode << std::endl;
         crashInfo << L"  " << utils::message(MSG_UNCAUGHT_EXCEPTION_INFO_ADDR) << L" " << record->ExceptionAddress << std::endl;
+        LocalFree(lpwstr);
     }, true);
     taskbar::resetTaskbar();
     return EXCEPTION_EXECUTE_HANDLER;
@@ -489,7 +561,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nCmdShow) 
     // if (!utils::processArguments(argc, argv))
     //     return 0;
 
-    HANDLE hMutex = CreateMutexW(nullptr, TRUE, PROJECT_NAME);
+    if (!globals::noConfigFile)
+        config::load();
+
+    HANDLE hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
     if (!hMutex)
         utils::messageBox(MSG_MUTEX_FAILED, MB_ICONWARNING | MB_OK, {utils::NTStatusMessageToText(GetLastError())});
 
@@ -547,7 +622,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nCmdShow) 
     globals::hWnd = CreateWindowEx(
         WS_EX_CLIENTEDGE,
         PROJECT_NAME,
-        PROJECT_NAME,
+        utils::message(MSG_APPLICATION_NAME).c_str(),
         WS_OVERLAPPEDWINDOW,
         static_cast<short>((screenWidth - windowWidth) / 2),
         static_cast<short>((screenHeight - windowHeight) / 2),
@@ -565,9 +640,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nCmdShow) 
     // atexit([] {
     //     MessageBoxA(globals::hWnd, "Application was closed.", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
     // });
-
-    if (!globals::noConfigFile)
-        config::load();
 
     taskbarLoopThread = std::thread(taskbarLoop);
 
