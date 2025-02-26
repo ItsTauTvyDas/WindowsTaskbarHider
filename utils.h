@@ -11,7 +11,7 @@ public:
     static bool killProcessByName(const wchar_t *processName, DWORD currentPid);
     static bool processArguments(int argc, wchar_t* argv[]);
     static void showExceptionMessageBox(const std::function<void(std::wstringstream&)>& callback, bool allowRetry);
-    static LPWSTR replaceCharacterWithText(LPWSTR lpstr, char target, const std::wstring &replacement, int skip = 0);
+    static LPWSTR replaceCharacterWithText(LPWSTR lpstr, wchar_t target, const std::wstring &replacement, int skip = 0);
     static std::string exceptionNameA(DWORD exceptionCode);
     static std::wstring exceptionName(DWORD exceptionCode);
     static LPWSTR NTStatusMessageToText(DWORD NTStatusMessage);
@@ -24,9 +24,9 @@ public:
     static bool fileExists(const wchar_t *path);
     static bool doesAutoStart();
     static void toggleStartup();
-    static bool lrString(unsigned int mType, std::wstring &string);
-    static bool lcString(unsigned int mType, std::wstring &string);
-    static std::wstring fString(const std::wstring &rStr, const std::vector<std::wstring> &values);
+    static bool loadRawLangString(unsigned int mType, std::wstring &string);
+    static bool tryLoadCachedLangString(unsigned int mType, std::wstring &string);
+    static std::wstring formatLangString(const std::wstring &rStr, const std::vector<std::wstring> &values);
     static int messageBox(unsigned int mType, unsigned int uType, const std::vector<std::wstring> &values = {});
     static int messageBox(const std::wstring &mText, unsigned int uType);
     static std::wstring message(unsigned int mType, const std::vector<std::wstring> &values);

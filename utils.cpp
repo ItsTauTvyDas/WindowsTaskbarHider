@@ -121,21 +121,29 @@ void utils::showExceptionMessageBox(const std::function<void(std::wstringstream&
     }
 }
 
-LPWSTR utils::replaceCharacterWithText(const LPWSTR lpstr, const char target, const std::wstring &replacement, const int skip) {
+LPWSTR utils::replaceCharacterWithText(const LPWSTR lpstr, const wchar_t target, const std::wstring &replacement, const int skip) {
+    if (!lpstr)
+        return nullptr;
     const wchar_t* pos = lpstr;
-    for (size_t i = 0; i < skip; ++i) {
+    for (int i = 0; i < skip; ++i) {
         pos = wcschr(pos, target);
         if (!pos)
             return lpstr;
         pos++;
     }
-    if ((pos = wcschr(pos, target))) {
-        const size_t index = pos - lpstr;
-        std::wstring str(lpstr);
-        str.replace(index, 1, replacement.c_str());
-        lstrcpy(lpstr, str.c_str());
-    }
-    return lpstr;
+    pos = wcschr(pos, target);
+    if (!pos)
+        return lpstr;
+    const auto index = pos - lpstr;
+    std::wstring str(lpstr);
+    str.replace(index, 1, replacement);
+    const auto size = (str.size() + 1) * sizeof(wchar_t);
+    const auto newStr = static_cast<LPWSTR>(LocalAlloc(LMEM_FIXED, size));
+    if (!newStr)
+        return lpstr;
+    wcscpy_s(newStr, str.size() + 1, str.c_str());
+    LocalFree(lpstr);
+    return newStr;
 }
 
 std::wstring utils::exceptionName(const DWORD exceptionCode) {
@@ -176,9 +184,7 @@ LPWSTR utils::NTStatusMessageToText(const DWORD NTStatusMessage)
     LPWSTR lpMessageBuffer = nullptr;
     const HMODULE Hand = LoadLibrary(L"NTDLL.DLL");
     const DWORD length = FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-        FORMAT_MESSAGE_FROM_SYSTEM |
-        FORMAT_MESSAGE_FROM_HMODULE,
+    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_FROM_HMODULE,
         Hand,
         NTStatusMessage,
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -275,7 +281,7 @@ bool utils::doesAutoStart() {
 
 void utils::toggleStartup() {
     WCHAR appPath[260];
-    GetModuleFileNameW(nullptr, appPath, MAX_PATH);
+    GetModuleFileName(nullptr, appPath, MAX_PATH);
     const std::wstring shortcutPath = createShortcutLinkPath();
     const wchar_t *shortcutPathC = shortcutPath.c_str();
     if (fileExists(shortcutPathC)) {
@@ -320,7 +326,7 @@ void utils::toggleStartup() {
 }
 
 // Load raw (unformatted) string
-bool utils::lrString(const unsigned int mType, std::wstring &string) {
+bool utils::loadRawLangString(const unsigned int mType, std::wstring &string) {
     wchar_t buffer[512] = {};
     if (const int len = LoadStringW(globals::hIns, mType, buffer, sizeof(buffer) / sizeof(wchar_t)); len > 0) {
         string = std::wstring(buffer, len);
@@ -331,7 +337,7 @@ bool utils::lrString(const unsigned int mType, std::wstring &string) {
 }
 
 // Load cached string, load if not cached and cache (unformatted)
-bool utils::lcString(const unsigned int mType, std::wstring &string) {
+bool utils::tryLoadCachedLangString(const unsigned int mType, std::wstring &string) {
     static std::unordered_map<unsigned int, std::wstring> cache;
     static std::mutex mutex;
     std::lock_guard lock(mutex);
@@ -339,14 +345,13 @@ bool utils::lcString(const unsigned int mType, std::wstring &string) {
         string = it->second;
         return true;
     }
-    std::string raw;
-    lrString(mType, string);
+    loadRawLangString(mType, string);
     cache[mType] = string;
     return false;
 }
 
 // Format raw string
-std::wstring utils::fString(const std::wstring& rStr, const std::vector<std::wstring>& values) {
+std::wstring utils::formatLangString(const std::wstring& rStr, const std::vector<std::wstring>& values) {
     if (values.empty())
         return rStr;
     std::wstring result;
@@ -395,8 +400,8 @@ int utils::messageBox(const std::wstring &mText, const unsigned int uType) {
 
 std::wstring utils::message(const unsigned int mType, const std::vector<std::wstring> &values) {
     std::wstring s;
-    lcString(mType, s);
-    s = fString(s, values);
+    tryLoadCachedLangString(mType, s);
+    s = formatLangString(s, values);
     return s;
 }
 
