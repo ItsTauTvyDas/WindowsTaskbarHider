@@ -54,13 +54,13 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, t
                 if (wInfo.title == value)
                     succeededTags++;
             } else if (key == L"focus" || key == L"f") {
-                if (wInfo.focus == -1) {
+                if (wInfo.focused == -1) {
                     WINDOWINFO wi;
                     wi.cbSize = sizeof(WINDOWINFO);
                     GetWindowInfo(hwnd, &wi);
-                    wInfo.focus = wi.dwWindowStatus;
+                    wInfo.focused = wi.dwWindowStatus;
                 }
-                if (wInfo.focus == stoi(value))
+                if (wInfo.focused == stoi(value))
                     succeededTags++;
             } else if (key == L"class" || key == L"c") {
                 if (wInfo.wndClass[0] == L'\0')
@@ -139,7 +139,7 @@ bool taskbar::isAnyWindowMaximized() {
             WINDOWINFO wi;
             wi.cbSize = sizeof(WINDOWINFO);
             GetWindowInfo(hwnd, &wi);
-            wInfo.focus = wi.dwWindowStatus;
+            wInfo.focused = wi.dwWindowStatus;
             // Process filename
             utils::getProcessInfo(hwnd, wInfo.procFilename);
             // Title

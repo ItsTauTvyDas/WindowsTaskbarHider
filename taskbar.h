@@ -13,7 +13,7 @@ public:
         bool detected = false;
         bool wasExceptional = false;
         bool wasRectModified = false;
-        int focus = -1;
+        DWORD focused = -1;
         wchar_t wndClass[256] = {};
         RECT rect;
         wchar_t title[256] = {};
@@ -25,7 +25,7 @@ public:
                    detected        == o.detected &&
                    wasExceptional  == o.wasExceptional &&
                    wasRectModified == o.wasRectModified &&
-                   focus           == o.focus &&
+                   focused           == o.focused &&
                    wndClass        == o.wndClass &&
                    rect.left       == o.rect.left &&
                    rect.top        == o.rect.top &&
