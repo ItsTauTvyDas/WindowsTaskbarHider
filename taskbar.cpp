@@ -114,11 +114,8 @@ bool taskbar::isAnyWindowMaximized() {
                 exceptional = loopThroughWindowTags(config::exceptionalWindows, lastDetectedWindow.hwnd, lastDetectedWindow, wp, s);
             if (!config::ignoredWindows.empty())
                 ignored = loopThroughWindowTags(config::ignoredWindows, lastDetectedWindow.hwnd, lastDetectedWindow, wp, s);
-            if (exceptional || !ignored) {
-                MessageBoxW(nullptr, L"Detected", L"", MB_ICONERROR | MB_OK);
-                exit(0);
+            if (exceptional || !ignored)
                 return true;
-            }
         }
         lastDetectedWindow = WindowInfo();
     }
