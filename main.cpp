@@ -22,6 +22,8 @@
 #define WCP_SCROLLBAR_COLOR    config::darkMode ? darkColorPalette[7] : lightColorPalette[7]
 #define WCP_SCROLLBAR_BG       config::darkMode ? darkColorPalette[8] : lightColorPalette[8]
 
+#define WSC_BUTTON_DEFAULT_W   120
+#define WSC_BUTTON_DEFAULT_H   30
 #define WSC_HEADER             70
 #define WSC_SCROLLBAR_WIDTH    20
 #define WSC_GRID_Y             100
@@ -30,11 +32,17 @@
 #define WSC_MAX_SCROLL         (contentHeight - (windowClientHeight - WSC_HEADER) - WSC_GRID_Y)
 #define WSC_VISIBLE_AREA       (windowClientHeight - WSC_HEADER)
 
+#define WMC_BUTTON             L"BUTTON"
+#define WMC_SCROLLBAR          L"SCROLLBAR"
+#define WMC_STATIC             L"STATIC"
+
+#define W_GRID_MAX_COLUMNS     6
+
 constexpr COLORREF darkColorPalette[] = {
     RGB(  0,   0,   0), // Base color
     RGB(255, 255, 255), // Text color
     RGB( 30,  30,  30), // Background color
-    RGB( 20,  20,  20), // Second background color
+    RGB( 25,  25,  25), // Second background color
     RGB( 50,  50,  50), // Button background color
     RGB( 55,  55,  55), // Button border color
     RGB( 80,  80,  80), // Button clicked background color
@@ -54,18 +62,36 @@ constexpr COLORREF lightColorPalette[] = {
     RGB(150, 150, 150), // Scrollbar background color
 };
 
-bool quitting = false;
-HWND hScrollBar = nullptr;
-std::thread taskbarLoopThread;
-HFONT hFont = nullptr;
-int windowWidth = 0, windowHeight = 0, windowClientHeight = 0, windowScrollPos = 0;
-HBRUSH lastCreatedBrush = nullptr;
+constexpr std::wstring g_tableHeaders[] = {
+    L"Status",
+    L"Process",
+    L"Class",
+    L"Rect",
+    L"State",
+    L"Title"
+};
 
-// for testing
-int colWidths[] = { 100, 150, 200 };
-int columns = std::size(colWidths);
-int rowHeight = 30;
-int totalRows = 30;
+std::thread taskbarLoopThread;
+
+bool quitting                = false,
+     focused                 = false,
+     g_tableSizesInitialized = false;
+
+HWND   g_hScrollBar        = nullptr,
+       g_hScrollBarOverlay = nullptr,
+       g_hSettingsButton     = nullptr;
+HFONT  g_hDefaultFont      = nullptr,
+       g_hTableFont        = nullptr;
+HBRUSH g_lastCreatedBrush  = nullptr;
+
+int windowWidth          = 0,
+    windowHeight         = 0,
+    windowClientHeight   = 0,
+    g_windowScrollYPos   = 0,
+    g_tableDefaultColumnWidths[W_GRID_MAX_COLUMNS],
+    g_tableColumnWidths[W_GRID_MAX_COLUMNS],
+    g_tableColumnXMargin = 10,
+    g_tableRowHeight     = 30;
 
 void taskbarLoop() {
     bool called = false;
@@ -85,67 +111,209 @@ void taskbarLoop() {
     }
 }
 
-void drawText(HDC hdc, const std::wstring &text, const int x, const int y) {
-    const auto oldFont = static_cast<HFONT>(SelectObject(hdc, hFont));
-    SetBkMode(hdc, TRANSPARENT);
-    TextOut(hdc, x, y, text.c_str(), static_cast<int>(text.length()));
-    SelectObject(hdc, oldFont);
+HBRUSH g_createBrush(const COLORREF color) {
+    g_lastCreatedBrush = CreateSolidBrush(color);
+    return g_lastCreatedBrush;
 }
 
-void redrawLowerArea(HWND hwnd) {
+void g_deleteLastBrush() {
+    DeleteObject(g_lastCreatedBrush);
+    g_lastCreatedBrush = nullptr;
+}
+
+HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, const HDC oHdc, const bool start) {
+    static HBITMAP memBitmap;
+    static HGDIOBJ oldBitmap;
+    static HDC mHdc, hdc;
+    static int width, height;
+    if (start) {
+        if (!oHdc)
+            hdc = BeginPaint(hwnd, &ps);
+        else
+            hdc = oHdc;
+        mHdc = CreateCompatibleDC(hdc);
+
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        width = rc.right - rc.left;
+        height = rc.bottom - rc.top;
+
+        memBitmap = CreateCompatibleBitmap(hdc, width, height);
+        oldBitmap = SelectObject(mHdc, memBitmap);
+        return mHdc;
+    }
+
+    BitBlt(hdc, 0, 0, width, height, mHdc, 0, 0, SRCCOPY);
+
+    SelectObject(mHdc, oldBitmap);
+    DeleteObject(memBitmap);
+    DeleteDC(mHdc);
+    if (!oHdc) {
+        EndPaint(hwnd, &ps);
+        hdc = nullptr;
+    }
+    memBitmap = nullptr;
+    oldBitmap = nullptr;
+    mHdc = nullptr;
+    width = 0;
+    height = 0;
+    return nullptr;
+}
+
+inline void g_drawText(HDC hdc, const std::wstring &text, const int x, const int y) {
+    TextOut(hdc, x, y, text.c_str(), static_cast<int>(text.length()));
+}
+
+void g_redrawLowerArea(HWND hwnd) {
     const RECT rect { 0, WSC_HEADER, windowWidth - 20, windowClientHeight };
     InvalidateRect(hwnd, &rect, TRUE);
 }
 
-void updateScrollbarColors() {
-    constexpr int sysColors[] = { COLOR_SCROLLBAR, COLOR_BACKGROUND };
-    const COLORREF newColors[] = { WCP_SCROLLBAR_COLOR, WCP_SCROLLBAR_BG };
-    SetSysColors(2, sysColors, newColors);
-}
-
-void redrawHeader(HWND hwnd) {
-    updateScrollbarColors();
-
-    const int oldScrollPos = windowScrollPos;
-    windowScrollPos = 0;
+void g_redrawWindow(HWND hwnd) {
+    const int oldScrollPos = g_windowScrollYPos;
+    g_windowScrollYPos = 0;
     RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-    windowScrollPos = oldScrollPos;
-
-    redrawLowerArea(hwnd);
+    g_windowScrollYPos = oldScrollPos;
 }
 
-void paintGrid(auto hdc, const int sx, const int sy) {
+int g_calculateTextWidth(HDC hdc, const std::wstring &text) {
+    const auto oldFont = static_cast<HFONT>(SelectObject(hdc, g_hTableFont));
+    SIZE sz;
+    GetTextExtentPoint32(hdc, text.c_str(), static_cast<int>(text.size()), &sz);
+    SelectObject(hdc, oldFont);
+    return sz.cx;
+}
+
+void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
     const auto hPen = CreatePen(PS_SOLID, 1, WCP_FOREGROUND);
     const auto hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
 
-    const int gridWidth = std::accumulate(std::begin(colWidths), std::end(colWidths), 0, std::plus());
-    const int gridHeight = totalRows * rowHeight;
+    const int gridWidth = std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), 0, std::plus());
+    const int gridHeight = rows * g_tableRowHeight;
 
-    for (int row = 0; row <= totalRows; row++) {
-        const int y = row * rowHeight + sy;
+    RECT rect = { sx, sy, gridWidth + sx, sy + g_tableRowHeight };
+    FillRect(hdc, &rect, g_createBrush(WCP_BACKGROUND2));
+    g_deleteLastBrush();
+
+    // Draw horizontal lines
+    for (int row = 0; row <= rows; row++) {
+        const int y = row * g_tableRowHeight + sy;
         MoveToEx(hdc, sx, y, nullptr);
         LineTo(hdc, gridWidth + sx, y);
     }
 
+    // Draw vertical lines
     int x = sx;
-    for (int col = 0; col <= columns; col++) {
+    for (int col = 0; col <= W_GRID_MAX_COLUMNS; col++) {
         MoveToEx(hdc, x, sy, nullptr);
         LineTo(hdc, x, gridHeight + sy);
-        if (col < columns)
-            x += colWidths[col];
+        if (col < W_GRID_MAX_COLUMNS)
+            x += g_tableColumnWidths[col];
     }
 
     SelectObject(hdc, hOldPen);
     DeleteObject(hPen);
 }
 
-void updateScrollbarInfo() {
-    const int contentHeight = totalRows * rowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET;
+inline void g_calculateDefaultWidths(HDC hdc) {
+    for (auto i = 0; i < std::size(g_tableHeaders); i++) {
+        std::wstring header = g_tableHeaders[i];
+        g_tableDefaultColumnWidths[i] = g_calculateTextWidth(hdc, header);
+    }
+}
 
-    if (windowScrollPos > WSC_MAX_SCROLL)
-        windowScrollPos = WSC_MAX_SCROLL;
-    if (windowScrollPos < 0)
-        windowScrollPos = 0;
+std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
+    std::wstring value;
+    switch (col) {
+        case 0: {
+            if (wInfo.wasExceptional)
+                value = L"Exceptional";
+            else if (wInfo.detected)
+                value = L"Detected";
+            else
+                value = L"Ignored";
+            break;
+        }
+        case 3: {
+            value = L"[" + std::to_wstring(wInfo.rect.left) + L","
+                    + std::to_wstring(wInfo.rect.top) + L","
+                    + std::to_wstring(wInfo.rect.right) + L","
+                    + std::to_wstring(wInfo.rect.bottom) + L"]";
+            break;
+        }
+        case 1: value = wInfo.procFilename; break;
+        case 2: value = wInfo.wndClass; break;
+        case 4: value = wInfo.maximized == 1 ? L"Maximized" : wInfo.maximized == 0 ? L"Minimized" : L"Unknown"; break;
+        case 5: value = wInfo.title; break;
+        default: value = L"???"; break;
+    }
+    return value;
+}
+
+inline void g_calculateCurrentWidths(HDC hdc, const int rows) {
+    int widths[6];
+    std::copy(std::begin(g_tableDefaultColumnWidths), std::end(g_tableDefaultColumnWidths), std::begin(widths));
+
+    for (auto row = 0; row < rows; row++) {
+        taskbar::WindowInfo wInfo;
+        if (row > 0)
+            wInfo = taskbar::windows[row - 1];
+        for (auto col = 0; col < W_GRID_MAX_COLUMNS; col++)
+            if (const std::wstring value = row == 0 ? g_tableHeaders[col] : getWindowValue(wInfo, col); !value.empty())
+                if (const int width = g_calculateTextWidth(hdc, value) + 2 * g_tableColumnXMargin; widths[col] < width)
+                    widths[col] = width;
+    }
+
+    std::copy(std::begin(widths), std::end(widths), std::begin(g_tableColumnWidths));
+}
+
+inline void g_printDataToGrid(HDC hdc, const int sx, const int sy, const int rows) {
+    for (auto row = 0; row < rows; row++) {
+        const int y = sy + 7 + row * g_tableRowHeight;
+        int x = sx;
+        taskbar::WindowInfo wInfo;
+        if (row > 0)
+            wInfo = taskbar::windows[row - 1];
+        for (auto col = 0; col < W_GRID_MAX_COLUMNS; col++) {
+            std::wstring value;
+            if (row == 0) { // Header
+                value = g_tableHeaders[col];
+                g_drawText(hdc, value, x + 10, y);
+            } else {
+                value = getWindowValue(wInfo, col);
+                if (!value.empty())
+                    g_drawText(hdc, value, x + 10, y);
+            }
+            x += g_tableColumnWidths[col];
+        }
+    }
+}
+
+void g_updateTable(HDC hdc) {
+    if (g_tableDefaultColumnWidths[0] == 0)
+        g_calculateDefaultWidths(hdc);
+    const int y = WSC_GRID_Y - g_windowScrollYPos;
+    const int rows = std::size(taskbar::windows) + 1; // +header
+
+    SelectObject(hdc, g_hTableFont);
+    SetBkMode(hdc, TRANSPARENT);
+    g_calculateCurrentWidths(hdc, rows);
+    g_paintGrid(hdc, 10, y, rows);
+    g_printDataToGrid(hdc, 10, y, rows);
+}
+
+void g_updateScrollBarStyle() {
+    SetLayeredWindowAttributes(g_hScrollBarOverlay, 0, config::darkMode ? 180 : 0, LWA_ALPHA);
+}
+
+void updateScrollBarInfo() {
+    // Add header row
+    const int contentHeight = (std::size(taskbar::windows) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET;
+
+    if (g_windowScrollYPos > WSC_MAX_SCROLL)
+        g_windowScrollYPos = WSC_MAX_SCROLL;
+    if (g_windowScrollYPos < 0)
+        g_windowScrollYPos = 0;
 
     SCROLLINFO si = {};
     si.cbSize = sizeof(si);
@@ -153,18 +321,8 @@ void updateScrollbarInfo() {
     si.nMin   = 0;
     si.nMax   = contentHeight - WSC_GRID_Y;
     si.nPage  = WSC_VISIBLE_AREA;
-    si.nPos   = windowScrollPos;
-    SetScrollInfo(hScrollBar, SB_CTL, &si, TRUE);
-}
-
-HBRUSH createBrush(const COLORREF color) {
-    lastCreatedBrush = CreateSolidBrush(color);
-    return lastCreatedBrush;
-}
-
-void deleteLastBrush() {
-    DeleteObject(lastCreatedBrush);
-    lastCreatedBrush = nullptr;
+    si.nPos   = g_windowScrollYPos;
+    SetScrollInfo(g_hScrollBar, SB_CTL, &si, TRUE);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
@@ -175,7 +333,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         {
             // Get icon for system tray
             const auto pcs = reinterpret_cast<CREATESTRUCT *>(lParam);
-            const auto hTrayIcon   = static_cast<HICON>(pcs->lpCreateParams);
+            const auto hTrayIcon = static_cast<HICON>(pcs->lpCreateParams);
             // Create system tray icon
             nid.cbSize = sizeof(nid);
             nid.hWnd = hwnd;
@@ -186,7 +344,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             // Set icon tip
             lstrcpy(nid.szTip, VER_FILEDESCRIPTION_STR);
 
-            hFont = CreateFont(
+            const auto create = reinterpret_cast<LPCREATESTRUCT>(lParam);
+
+            g_hDefaultFont = CreateFont(
+                16,
+                0,
+                0,
+                0,
+                FW_NORMAL,
+                FALSE,
+                FALSE,
+                FALSE,
+                ANSI_CHARSET,
+                OUT_DEFAULT_PRECIS,
+                CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY,
+                DEFAULT_PITCH | FF_DONTCARE,
+                L"Sonoran Sans Serif"
+            );
+
+            g_hTableFont = CreateFont(
                 16,
                 0,
                 0,
@@ -203,83 +380,113 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 L"Consolas"
             );
 
+            LONG_PTR lPtrHandCursor = reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND));
+
             const auto hButtonUpdate = CreateWindow(
-                L"BUTTON", L"Update",
+                WMC_BUTTON, L"Update",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-                10, 10, 120, 30,
-                hwnd, reinterpret_cast<HMENU>(ID_BUTTON_UPDATE), nullptr, nullptr);
-            SendMessage(hButtonUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
+                10, 10, WSC_BUTTON_DEFAULT_W, WSC_BUTTON_DEFAULT_H,
+                hwnd, reinterpret_cast<HMENU>(ID_BUTTON_UPDATE), create->hInstance, nullptr);
+            SendMessage(hButtonUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
             SendMessage(hButtonUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetClassLongPtr(hButtonUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
+            SetClassLongPtr(hButtonUpdate, GCLP_HCURSOR, lPtrHandCursor);
+
+            g_hSettingsButton = CreateWindow(
+                WMC_BUTTON, L"Actions",
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+                0, 0, WSC_BUTTON_DEFAULT_W, WSC_BUTTON_DEFAULT_H,
+                hwnd, reinterpret_cast<HMENU>(ID_BUTTON_ACTIONS), create->hInstance, nullptr);
+            SendMessage(g_hSettingsButton, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
+            SendMessage(g_hSettingsButton, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+            SetClassLongPtr(g_hSettingsButton, GCLP_HCURSOR, lPtrHandCursor);
 
             const auto hCheckBoxAutoUpdate = CreateWindowW(
-                L"BUTTON", L"Live Preview",
+                WMC_BUTTON, L"Auto Update",
                 WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
-                140, 10, 120, 30,
-                hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_AUTO_UPDATE), nullptr, nullptr);
-            SendMessage(hCheckBoxAutoUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
+                140, 10, 100, 30,
+                hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_AUTO_UPDATE), create->hInstance, nullptr);
+            SendMessage(hCheckBoxAutoUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
             SendMessage(hCheckBoxAutoUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
+            SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, lPtrHandCursor);
             SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::livePreview));
 
             const auto hCheckboxDarkMode = CreateWindow(
-                L"BUTTON", utils::message(MSG_APP_WIN_DARK_MODE).c_str(),
+                WMC_BUTTON, utils::message(MSG_APP_WIN_DARK_MODE).c_str(),
                 WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
-                270, 10, 100, 30,
-                hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_DARK_MODE), nullptr, nullptr);
-            SendMessage(hCheckboxDarkMode, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
+                250, 10, 100, 30,
+                hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_DARK_MODE), create->hInstance, nullptr);
+            SendMessage(hCheckboxDarkMode, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
             SendMessage(hCheckboxDarkMode, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetClassLongPtr(hCheckboxDarkMode, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND)));
+            SetClassLongPtr(hCheckboxDarkMode, GCLP_HCURSOR, lPtrHandCursor);
             SetWindowLongPtr(hCheckboxDarkMode, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::darkMode));
 
-            hScrollBar = CreateWindowEx(
-                WS_VSCROLL, L"SCROLLBAR", nullptr,
+            g_hScrollBar = CreateWindowEx(
+                WS_VSCROLL, WMC_SCROLLBAR, nullptr,
                 WS_CHILD | WS_VISIBLE | SBS_VERT,
-                -WSC_SCROLLBAR_WIDTH, // Hide scrollbar by making it go beyond visible area
-                WSC_HEADER,
-                WSC_SCROLLBAR_WIDTH, 0,
-                hwnd,
-                reinterpret_cast<HMENU>(ID_SCROLLBAR),
-                reinterpret_cast<LPCREATESTRUCT>(lParam)->hInstance,
-                nullptr
-            );
+                -WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, 0,
+                hwnd, reinterpret_cast<HMENU>(ID_SCROLLBAR), create->hInstance, nullptr);
+            SendMessage(g_hScrollBar, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
+            SendMessage(hCheckboxDarkMode, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+
+            g_hScrollBarOverlay = CreateWindowEx(
+                WS_EX_LAYERED | WS_EX_TRANSPARENT, WMC_BUTTON, nullptr, // STATIC doesn't work, using BUTTON as I still override its functionality
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+                0, 0, 200, 200,
+                hwnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_OVERLAY), create->hInstance, nullptr);
+            SetClassLongPtr(g_hScrollBarOverlay, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_ARROW)));
+            g_updateScrollBarStyle();
 
             // Add icon
             Shell_NotifyIcon(NIM_ADD, &nid);
 
-            updateScrollbarInfo();
+            //Trigger table update
+            taskbar::collectWindowsInfo = true;
+
+            updateScrollBarInfo();
             break;
         }
         case WM_SIZE:
         {
             const int newWindowWidth = LOWORD(lParam);
             const int newWindowHeight = HIWORD(lParam);
-            if (newWindowHeight != windowHeight) {
-                redrawHeader(hwnd);
-                redrawLowerArea(hwnd);
-            }
             windowHeight = newWindowHeight;
             windowWidth = newWindowWidth;
+            g_redrawWindow(hwnd);
+            g_redrawLowerArea(hwnd);
             // Reposition scrollbar
-            MoveWindow(hScrollBar, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, 20, windowHeight - WSC_HEADER, TRUE);
+            MoveWindow(g_hScrollBar, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, 20, windowHeight - WSC_HEADER, TRUE);
+            MoveWindow(g_hScrollBarOverlay, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, 20, windowHeight - WSC_HEADER, TRUE);
+            MoveWindow(g_hSettingsButton, windowWidth - WSC_BUTTON_DEFAULT_W - 10, 10, WSC_BUTTON_DEFAULT_W, WSC_BUTTON_DEFAULT_H, TRUE);
             RECT rect;
             GetClientRect(hwnd, &rect);
             windowClientHeight = rect.bottom - rect.top;
 
-            updateScrollbarInfo();
+            updateScrollBarInfo();
+            break;
+        }
+        case WM_ACTIVATE:
+        {
+            focused = LOWORD(wParam) != WA_INACTIVE;
             break;
         }
         case WM_DRAWITEM:
         {
             const auto draw = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
             wchar_t text[256];
-            GetWindowText(draw->hwndItem, text, 256);
+            GetWindowText(draw->hwndItem, text, sizeof(text));
+            PAINTSTRUCT ps;
             switch (draw->CtlID) {
+                case ID_SCROLLBAR_OVERLAY:
+                {
+                    FillRect(draw->hDC, &draw->rcItem, CreateSolidBrush(RGB(0, 0, 0)));
+                    g_deleteLastBrush();
+                    break;
+                }
+                case ID_BUTTON_ACTIONS:
                 case ID_BUTTON_UPDATE:
                 {
+                    HDC mHdc = g_doubleBuffering(hwnd, ps, draw->hDC, true);
                     COLORREF buttonBackgroundColor = WCP_BUTTON_BG;
-                    if (draw->itemState & ODS_HOTLIGHT)
-                        buttonBackgroundColor = RGB(0, 0, 0);
                     if (draw->itemState & ODS_SELECTED)
                         buttonBackgroundColor = WCP_BUTTON_CLICKED_BG;
                     const auto buttonBackgroundBrush = CreateSolidBrush(buttonBackgroundColor);
@@ -287,30 +494,34 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     const auto buttonBorderBrush = CreateSolidBrush(WCP_BUTTON_BORDER);
 
                     RECT rect = draw->rcItem;
-                    FillRect(draw->hDC, &rect, buttonBaseBackgroundBrush);
-                    FrameRect(draw->hDC, &rect, draw->itemState & ODS_SELECTED ? buttonBackgroundBrush : buttonBorderBrush);
+                    FillRect(mHdc, &rect, buttonBaseBackgroundBrush);
+                    FrameRect(mHdc, &rect, draw->itemState & ODS_SELECTED ? buttonBackgroundBrush : buttonBorderBrush);
                     rect.left += 3;
                     rect.top += 3;
                     rect.right -= 3;
                     rect.bottom -= 3;
-                    FillRect(draw->hDC, &rect, buttonBackgroundBrush);
+                    FillRect(mHdc, &rect, buttonBackgroundBrush);
 
-                    SetBkColor(draw->hDC, buttonBackgroundColor);
-                    SetTextColor(draw->hDC, WCP_FOREGROUND);
-                    DrawTextW(draw->hDC, text, -1, &draw->rcItem, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
+                    SetBkColor(mHdc, buttonBackgroundColor);
+                    SetTextColor(mHdc, WCP_FOREGROUND);
+                    SelectObject(mHdc, g_hDefaultFont);
+                    DrawTextW(mHdc, text, -1, &draw->rcItem, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
 
                     DeleteObject(buttonBaseBackgroundBrush);
                     DeleteObject(buttonBackgroundBrush);
+                    g_doubleBuffering(hwnd, ps, draw->hDC, false);
                     break;
                 }
                 case ID_CHECKBOX_DARK_MODE:
                 case ID_CHECKBOX_AUTO_UPDATE:
                 {
+                    HDC mHdc = g_doubleBuffering(hwnd, ps, draw->hDC, true);
+
                     const auto background = CreateSolidBrush(WCP_BACKGROUND2);
                     const auto foreground = CreateSolidBrush(WCP_FOREGROUND);
 
                     // Background color
-                    FillRect(draw->hDC, &draw->rcItem, background);
+                    FillRect(mHdc, &draw->rcItem, background);
 
                     // Create checkbox rect
                     RECT boxRect = draw->rcItem;
@@ -319,27 +530,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     boxRect.bottom = boxRect.top + 16;
 
                     // Draw checkbox rect
-                    FillRect(draw->hDC, &boxRect, background);
-                    FrameRect(draw->hDC, &boxRect, foreground);
-                    bool* pState = reinterpret_cast<bool*>(GetWindowLongPtr(draw->hwndItem, GWLP_USERDATA));
-                    if (pState ? *pState : false)
+                    FillRect(mHdc, &boxRect, background);
+                    FrameRect(mHdc, &boxRect, foreground);
+                    if (const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(draw->hwndItem, GWLP_USERDATA)); pState ? *pState : false)
                     {
                         // Create a little rect inside checkbox rect
                         boxRect.left += 3;
                         boxRect.top += 3;
                         boxRect.right -= 3;
                         boxRect.bottom -= 3;
-                        FillRect(draw->hDC, &boxRect, foreground);
+                        FillRect(mHdc, &boxRect, foreground);
                     }
 
                     RECT textRect = draw->rcItem;
                     textRect.left += 20;
-                    SetBkColor(draw->hDC, WCP_BACKGROUND2);
-                    SetTextColor(draw->hDC, WCP_FOREGROUND);
-                    DrawTextW(draw->hDC, text, -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+                    SetBkColor(mHdc, WCP_BACKGROUND2);
+                    SetTextColor(mHdc, WCP_FOREGROUND);
+                    SelectObject(mHdc, g_hDefaultFont);
+                    DrawTextW(mHdc, text, -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
 
                     DeleteObject(background);
                     DeleteObject(foreground);
+                    g_doubleBuffering(hwnd, ps, draw->hDC, false);
                     break;
                 }
                 default:
@@ -350,46 +562,51 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_PAINT:
         {
             PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
+            HDC mHdc = g_doubleBuffering(hwnd, ps, nullptr, true);
 
             // Update colors for window
-            SetBkColor(hdc, WCP_BACKGROUND);
-            SetTextColor(hdc, WCP_FOREGROUND);
-            FillRect(hdc, &ps.rcPaint, createBrush(WCP_BACKGROUND));
-            deleteLastBrush();
+            SetBkColor(mHdc, WCP_BACKGROUND);
+            SetTextColor(mHdc, WCP_FOREGROUND);
+            FillRect(mHdc, &ps.rcPaint, g_createBrush(WCP_BACKGROUND));
+            g_deleteLastBrush();
 
             RECT wRect;
             GetWindowRect(hwnd, &wRect);
             wRect.left = 0;
             wRect.top = 0;
             wRect.bottom = WSC_HEADER;
-            FillRect(hdc, &wRect, createBrush(WCP_BACKGROUND2));
-            deleteLastBrush();
+            FillRect(mHdc, &wRect, g_createBrush(WCP_BACKGROUND2));
+            g_deleteLastBrush();
 
-            drawText(hdc, L"Here you can see which window was ignored and which one was exceptional!", 10, 45);
+            SelectObject(mHdc, g_hDefaultFont);
+            SetBkColor(mHdc, WCP_BACKGROUND2);
+            g_drawText(mHdc, L"Here you can see which window was ignored and which one was exceptional!", 10, 45);
+            SetBkColor(mHdc, WCP_BACKGROUND);
+            g_drawText(mHdc, L"Debug table:", 10, 80 - g_windowScrollYPos);
 
-            drawText(hdc, L"Debug table:", 10, 80 - windowScrollPos);
-            paintGrid(hdc, 10, WSC_GRID_Y - windowScrollPos);
+            g_updateTable(mHdc);
 
-            EndPaint(hwnd, &ps);
+            g_doubleBuffering(hwnd, ps, nullptr, false);
             break;
         }
         case WM_TRAY_ICON:
         {
             if (lParam == WM_RBUTTONUP || lParam == WM_LBUTTONUP || lParam == WM_CONTEXTMENU) {
                 HMENU hMenu = CreatePopupMenu();
-                AppendMenu(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, TRAY_TITLE);
+                if (lParam != WM_CONTEXTMENU)
+                    AppendMenu(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, TRAY_TITLE);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, utils::message(MSG_TRAY_CONFIG_OPEN).c_str());
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, utils::message(MSG_TRAY_CONFIG_RELOAD).c_str());
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, (globals::taskbarLoopRunState ? utils::message(MSG_TRAY_TB_PAUSE) : utils::message(MSG_TRAY_TB_RESUME)).c_str());
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_ADD_REMOVE_STARTUP, (utils::doesAutoStart() ? utils::message(MSG_TRAY_REM_STARTUP) : utils::message(MSG_TRAY_ADD_STARTUP)).c_str());
-                //AppendMenu(hMenu, MF_STRING, ID_TRAY_ATTACH_DEBUG_CONSOLE, config::debug ? "Detach console (debug)" : "Attach console (debug)");
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_GITHUB, utils::message(MSG_TRAY_OPEN_GITHUB).c_str());
-                AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
-                AppendMenu(hMenu, MF_STRING, ID_TRAY_EXIT, utils::message(MSG_TRAY_EXIT).c_str());
+                if (lParam != WM_CONTEXTMENU) {
+                    AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+                    AppendMenu(hMenu, MF_STRING, ID_TRAY_EXIT, utils::message(MSG_TRAY_EXIT).c_str());
+                }
                 POINT p;
                 GetCursorPos(&p);
                 SetForegroundWindow(hwnd);
@@ -398,12 +615,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             }
             break;
         }
+        case WM_UPDATE_GRID_REQUEST:
+        {
+            updateScrollBarInfo();
+            g_redrawLowerArea(hwnd);
+        }
         case WM_COMMAND:
         {
             switch (const auto lwParam = LOWORD(wParam)) {
+                case ID_BUTTON_ACTIONS:
+                {
+                    SendMessage(hwnd, WM_TRAY_ICON, 0, WM_CONTEXTMENU);
+                    break;
+                }
                 case ID_BUTTON_UPDATE:
                 {
-                    InvalidateRect(hwnd, nullptr, TRUE);
+                    taskbar::collectWindowsInfo = true;
                     break;
                 }
                 case ID_CHECKBOX_AUTO_UPDATE:
@@ -412,7 +639,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     HWND hCheckbox = GetDlgItem(hwnd, lwParam);
                     if (const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(hCheckbox, GWLP_USERDATA))) {
                         *pState = !*pState;
-                        redrawHeader(hwnd);
+                        if (lwParam == ID_CHECKBOX_DARK_MODE)
+                            g_updateScrollBarStyle();
+                        g_redrawWindow(hwnd);
                     }
                     break;
                 }
@@ -460,30 +689,34 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         {
             switch (LOWORD(wParam))
             {
-                case SB_LINEUP:     windowScrollPos -= 10;  break; // Arrow up
-                case SB_LINEDOWN:   windowScrollPos += 10;  break; // Arrow down
-                case SB_PAGEUP:     windowScrollPos -= 100; break; // Click upper thumb
-                case SB_PAGEDOWN:   windowScrollPos += 100; break; // Click lower thumb
+                case SB_LINEUP:     g_windowScrollYPos -= 10;  break; // Arrow up
+                case SB_LINEDOWN:   g_windowScrollYPos += 10;  break; // Arrow down
+                case SB_PAGEUP:     g_windowScrollYPos -= 100; break; // Click upper thumb
+                case SB_PAGEDOWN:   g_windowScrollYPos += 100; break; // Click lower thumb
                 case SB_THUMBTRACK: {
                     SCROLLINFO si;
                     si.cbSize = sizeof(si);
                     si.fMask = SIF_TRACKPOS;
-                    GetScrollInfo(hScrollBar, SB_CTL, &si);
-                    windowScrollPos = si.nTrackPos;
+                    GetScrollInfo(g_hScrollBar, SB_CTL, &si);
+                    g_windowScrollYPos = si.nTrackPos;
                     break;
                 }
                 default: break;
             }
 
-            updateScrollbarInfo();
-            redrawLowerArea(hwnd);
+            updateScrollBarInfo();
+            g_redrawLowerArea(hwnd);
             break;
         }
         case WM_MOUSEWHEEL:
         {
-            windowScrollPos += -(GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA) * (WSC_SCROLL_ROWS * rowHeight);
-            updateScrollbarInfo();
-            redrawLowerArea(hwnd);
+            const int oldPos = g_windowScrollYPos;
+            g_windowScrollYPos += -(GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA * (WSC_SCROLL_ROWS * g_tableRowHeight));
+            updateScrollBarInfo();
+            if (oldPos == g_windowScrollYPos)
+                break;
+            updateScrollBarInfo();
+            g_redrawLowerArea(hwnd);
             break;
         }
         case WM_GETMINMAXINFO: {
@@ -493,10 +726,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             break;
         }
         case WM_DESTROY: {
-            if (hFont)
-                DeleteObject(hFont);
-            if (hScrollBar)
-                DeleteObject(hScrollBar);
+            if (g_hDefaultFont)
+                DeleteObject(g_hDefaultFont);
+            if (g_hScrollBar)
+                DeleteObject(g_hScrollBar);
             PostQuitMessage(0);
             Shell_NotifyIcon(NIM_DELETE, &nid);
             break;
@@ -540,10 +773,10 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
         crashInfo << utils::message(MSG_UNCAUGHT_EXCEPTION_WILL_TERMINATE) << std::endl;
         crashInfo << utils::message(MSG_UNCAUGHT_EXCEPTION_TRANSLATED_MSG, {utils::exceptionName(record->ExceptionCode)}) << std::endl;
         crashInfo << std::endl;
-        crashInfo << lpwstr << std::endl;
+        crashInfo << (lpwstr != nullptr ? lpwstr : L"<Failed to translate error message!>") << std::endl;
         crashInfo << utils::message(MSG_UNCAUGHT_EXCEPTION_INFO) << std::endl;
-        crashInfo << L"  " << utils::message(MSG_UNCAUGHT_EXCEPTION_INFO_CODE) << L" 0x" << std::hex << record->ExceptionCode << std::endl;
-        crashInfo << L"  " << utils::message(MSG_UNCAUGHT_EXCEPTION_INFO_ADDR) << L" " << record->ExceptionAddress << std::endl;
+        crashInfo << "  " << utils::message(MSG_UNCAUGHT_EXCEPTION_INFO_CODE) << " 0x" << std::hex << record->ExceptionCode << std::endl;
+        crashInfo << "  " << utils::message(MSG_UNCAUGHT_EXCEPTION_INFO_ADDR) << " " << record->ExceptionAddress << std::endl;
         LocalFree(lpwstr);
     }, true);
     taskbar::resetTaskbar();
@@ -603,7 +836,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nCmdShow) 
     wc.hInstance     = hInstance;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wc.hIcon         = hIcon;
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wc.lpszClassName = PROJECT_NAME;
 
     if (!RegisterClassEx(&wc)) {
