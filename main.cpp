@@ -121,7 +121,7 @@ void g_deleteLastBrush() {
     g_lastCreatedBrush = nullptr;
 }
 
-HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, const HDC oHdc, const bool start) {
+HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
     static HBITMAP memBitmap;
     static HGDIOBJ oldBitmap;
     static HDC mHdc, hdc;
@@ -293,7 +293,7 @@ void g_updateTable(HDC hdc) {
     if (g_tableDefaultColumnWidths[0] == 0)
         g_calculateDefaultWidths(hdc);
     const int y = WSC_GRID_Y - g_windowScrollYPos;
-    const int rows = std::size(taskbar::windows) + 1; // +header
+    const int rows = static_cast<int>(std::size(taskbar::windows)) + 1; // +header
 
     SelectObject(hdc, g_hTableFont);
     SetBkMode(hdc, TRANSPARENT);
@@ -308,7 +308,7 @@ void g_updateScrollBarStyle() {
 
 void updateScrollBarInfo() {
     // Add header row
-    const int contentHeight = (std::size(taskbar::windows) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET;
+    const int contentHeight = (static_cast<int>(std::size(taskbar::windows)) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET;
 
     if (g_windowScrollYPos > WSC_MAX_SCROLL)
         g_windowScrollYPos = WSC_MAX_SCROLL;
@@ -380,7 +380,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 L"Consolas"
             );
 
-            LONG_PTR lPtrHandCursor = reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND));
+            auto lPtrHandCursor = reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND));
 
             const auto hButtonUpdate = CreateWindow(
                 WMC_BUTTON, L"Update",
