@@ -3,9 +3,14 @@
 #include <iostream>
 #include <windows.h>
 #include "config.h"
+#include "globals.h"
+#include "resources.h"
 #include "utils.h"
 
-bool canCreateTable = false;
+std::vector<taskbar::WindowInfo> taskbar::windows;
+taskbar::WindowInfo lastDetectedWindow;
+bool taskbar::collectWindowsInfo = false;
+bool canCollect = false;
 
 HWND taskbar::getTaskbarHandle() {
     return FindWindow(L"Shell_TrayWnd", nullptr);
@@ -24,8 +29,7 @@ bool taskbar::isCursorOverTaskbar() {
     return PtInRect(&taskbarRect, cursorPos);
 }
 
-bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, std::wstring &processName, std::wstring &title,
-    std::wstring &wndclass, DWORD &focusStatus, WINDOWINFO &wi, const WINDOWPLACEMENT &wp, RECT wRect, std::wstring &succeededTagGroup) {
+bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, taskbar::WindowInfo &wInfo, WINDOWPLACEMENT wp, std::wstring &succeededTagGroup) {
     for (const auto& tagGroup: vector) {
         if (tagGroup.empty())
             continue;
@@ -37,52 +41,50 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, s
             const auto pos = tExpr.find(L":", 0);
             if (pos == std::wstring::npos)
                 continue;
-            wchar_t _[256];
             std::wstring key = tExpr.substr(0, pos);
             std::wstring value = tExpr.substr(pos + 1);
             if (key == L"process" || key == L"p") {
-                if (processName.empty())
-                    utils::getProcessInfo(hwnd, processName);
-                if (processName == value)
+                if (wInfo.procFilename.empty())
+                    utils::getProcessInfo(hwnd, wInfo.procFilename);
+                if (wInfo.procFilename == value)
                     succeededTags++;
             } else if (key == L"title" || key == L"t") {
-                if (title.empty()) {
-                    GetWindowText(hwnd, _, sizeof(_));
-                    title = _;
-                }
-                if (title == value)
+                if (wInfo.title[0] == L'\0')
+                    GetWindowText(hwnd, wInfo.title, sizeof(wInfo.title));
+                if (wInfo.title == value)
                     succeededTags++;
             } else if (key == L"focus" || key == L"f") {
-                if (focusStatus == -1) {
+                if (wInfo.focus == -1) {
+                    WINDOWINFO wi;
                     wi.cbSize = sizeof(WINDOWINFO);
                     GetWindowInfo(hwnd, &wi);
-                    focusStatus = wi.dwWindowStatus;
+                    wInfo.focus = wi.dwWindowStatus;
                 }
-                if (focusStatus == stoi(value))
+                if (wInfo.focus == stoi(value))
                     succeededTags++;
             } else if (key == L"class" || key == L"c") {
-                if (wndclass.empty()) {
-                    GetClassName(hwnd, _, sizeof(_));
-                    wndclass = _;
-                }
-                if (std::wstring(wndclass) == value)
+                if (wInfo.wndClass[0] == L'\0')
+                    GetClassName(hwnd, wInfo.wndClass, sizeof(wInfo.wndClass));
+                if (std::wstring(wInfo.wndClass) == value)
                     succeededTags++;
             } else if (key == L"maximized" || key == L"m") {
                 if (wp.showCmd == SW_MAXIMIZE == stoi(value))
                     succeededTags++;
             } else if (key == L"left" || key == L"right" || key == L"top" || key == L"bottom") {
-                if (wRect.left == -1 && wRect.top == -1 && wRect.right == -1 && wRect.bottom == -1)
-                    GetWindowRect(hwnd, &wRect);
+                if (!wInfo.wasRectModified) {
+                    GetWindowRect(hwnd, &wInfo.rect);
+                    wInfo.wasRectModified = true;
+                }
                 const int iValue = std::stoi(value);
                 int rect;
                 if (key == L"left")
-                    rect = wRect.left;
+                    rect = wInfo.rect.left;
                 else if (key == L"right")
-                    rect = wRect.right;
+                    rect = wInfo.rect.right;
                 else if (key == L"top")
-                    rect = wRect.top;
+                    rect = wInfo.rect.top;
                 else if (key == L"bottom")
-                    rect = wRect.bottom;
+                    rect = wInfo.rect.bottom;
                 else
                     continue;
                 if (rect == iValue)
@@ -98,8 +100,29 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, s
 }
 
 bool taskbar::isAnyWindowMaximized() {
+    if (collectWindowsInfo) {
+        // Since collectWindowsInfo can get updated inside EnumWindows (by main thread), let's ensure whenever it can start collecting
+        canCollect = true;
+        windows.clear();
+    } else if (lastDetectedWindow.hwnd) {
+        WINDOWPLACEMENT wp;
+        wp.length = sizeof(WINDOWPLACEMENT);
+        if (GetWindowPlacement(lastDetectedWindow.hwnd, &wp) && IsWindowVisible(lastDetectedWindow.hwnd) & !IsIconic(lastDetectedWindow.hwnd)) {
+            bool ignored = true, exceptional = false;
+            std::wstring s;
+            if (!config::exceptionalWindows.empty())
+                exceptional = loopThroughWindowTags(config::exceptionalWindows, lastDetectedWindow.hwnd, lastDetectedWindow, wp, s);
+            if (!config::ignoredWindows.empty())
+                ignored = loopThroughWindowTags(config::ignoredWindows, lastDetectedWindow.hwnd, lastDetectedWindow, wp, s);
+            if (exceptional || !ignored) {
+                MessageBoxW(nullptr, L"Detected", L"", MB_ICONERROR | MB_OK);
+                exit(0);
+                return true;
+            }
+        }
+        lastDetectedWindow = WindowInfo();
+    }
     bool maximized = false;
-
     EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
         WINDOWPLACEMENT wp;
         wp.length = sizeof(WINDOWPLACEMENT);
@@ -110,31 +133,57 @@ bool taskbar::isAnyWindowMaximized() {
         if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE)
             return TRUE;
 
-        RECT wRect { -1, -1, -1, -1 };
-        std::wstring processName,
-                    title,
-                    wndclass,
-                    succeededIgnoreTagGroup,
-                    succeededExceptionTagGroup;
-        WINDOWINFO wi;
-        DWORD focusStatus = -1;
+        WindowInfo wInfo;
+        std::wstring succeededIgnoreTagGroup,
+                     succeededExceptionTagGroup;
+
+        if (collectWindowsInfo && canCollect) {
+            // Focus status (0 or 1)
+            WINDOWINFO wi;
+            wi.cbSize = sizeof(WINDOWINFO);
+            GetWindowInfo(hwnd, &wi);
+            wInfo.focus = wi.dwWindowStatus;
+            // Process filename
+            utils::getProcessInfo(hwnd, wInfo.procFilename);
+            // Title
+            GetWindowText(hwnd, wInfo.title, sizeof(wInfo.title));
+            // Class
+            GetClassName(hwnd, wInfo.wndClass, sizeof(wInfo.wndClass));
+            // Rect
+            GetWindowRect(hwnd, &wInfo.rect);
+        }
 
         bool ignored = true, exceptional = false;
 
         if (!config::ignoredWindows.empty()) {
-            ignored = loopThroughWindowTags(config::ignoredWindows, hwnd, processName, title, wndclass, focusStatus, wi, wp, wRect, succeededIgnoreTagGroup);
+            ignored = loopThroughWindowTags(config::ignoredWindows, hwnd, wInfo, wp, succeededIgnoreTagGroup);
         }
 
         if (!config::exceptionalWindows.empty()) {
-            exceptional = loopThroughWindowTags(config::exceptionalWindows, hwnd, processName, title, wndclass, focusStatus, wi, wp, wRect, succeededExceptionTagGroup);
+            exceptional = loopThroughWindowTags(config::exceptionalWindows, hwnd, wInfo, wp, succeededExceptionTagGroup);
+        }
+
+        if (collectWindowsInfo && canCollect) {
+            wInfo.fault = exceptional ? succeededExceptionTagGroup : succeededIgnoreTagGroup;
+            wInfo.wasExceptional = exceptional;
+            wInfo.detected = exceptional || !ignored;
+            windows.push_back(wInfo);
         }
 
         if (exceptional || !ignored) {
             *reinterpret_cast<bool*>(lParam) = true;
+            wInfo.hwnd = hwnd;
+            lastDetectedWindow = wInfo;
             return FALSE;
         }
         return TRUE;
     }, reinterpret_cast<LPARAM>(&maximized));
+    // ReSharper disable once CppDFAConstantConditions
+    if (collectWindowsInfo && canCollect) {
+        SendMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
+        collectWindowsInfo = false;
+        canCollect = false;
+    }
     return maximized;
 }
 
