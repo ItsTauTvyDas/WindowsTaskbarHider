@@ -8,6 +8,7 @@ class config {
 public:
     static bool darkMode;
     static bool livePreview;
+    static bool showAllWindows;
     static bool openOnStart;
     static bool closeToTray;
     static bool closeConfirmMessage;

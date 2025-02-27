@@ -14,6 +14,7 @@
 bool config::alwaysIgnoreWhenNotMaximized = true;
 bool config::darkMode;
 bool config::livePreview = true;
+bool config::showAllWindows = true;
 bool config::openOnStart = false;
 bool config::closeToTray = false;
 bool config::closeConfirmMessage = false;
@@ -34,6 +35,7 @@ void config::save() {
     file << "; Default values for checkboxes in the window display" << std::endl;
     file << "DarkMode = " << darkMode << std::endl;
     file << "LivePreview = " << livePreview << std::endl;
+    file << "ShowAllWindows = " << showAllWindows << std::endl;
     file << "[Window Behaviour]" << std::endl;
     file << "OpenOnStart = " << openOnStart << std::endl;
     file << "CloseToTray = " << openOnStart << std::endl;
@@ -100,6 +102,8 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             darkMode = value != L"0";
         } else if (key == L"Window.LivePreview") {
             livePreview = value != L"0";
+        } else if (key == L"Window.ShowAllWindows") {
+            showAllWindows = value != L"0";
         } else if (key == L"Window_Behaviour.OpenOnStart") {
             openOnStart = value != L"0";
         } else if (key == L"Window_Behaviour.CloseToTray") {
