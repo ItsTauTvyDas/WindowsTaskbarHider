@@ -100,9 +100,11 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             darkMode = value != L"0";
         } else if (key == L"Window.LivePreview") {
             livePreview = value != L"0";
-        } else if (key == L"Window.OpenOnStart") {
+        } else if (key == L"Window_Behaviour.OpenOnStart") {
             openOnStart = value != L"0";
-        } else if (key == L"Window.CloseConfirmMessage") {
+        } else if (key == L"Window_Behaviour.CloseToTray") {
+            closeToTray = value != L"0";
+        } else if (key == L"Window_Behaviour.CloseConfirmMessage") {
             closeConfirmMessage = value != L"0";
         } else if (key == L"Taskbar.Opacity") {
             opacity = std::stoi(value);
