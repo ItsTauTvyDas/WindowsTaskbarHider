@@ -22,21 +22,24 @@
 #define WCP_SCROLLBAR_COLOR    config::darkMode ? darkColorPalette[7] : lightColorPalette[7]
 #define WCP_SCROLLBAR_BG       config::darkMode ? darkColorPalette[8] : lightColorPalette[8]
 
-#define WSC_BUTTON_DEFAULT_W   120
-#define WSC_BUTTON_DEFAULT_H   30
-#define WSC_HEADER             70
-#define WSC_SCROLLBAR_WIDTH    20
-#define WSC_GRID_Y             100
-#define WSC_GRID_TOP_OFFSET    40
-#define WSC_SCROLL_ROWS        1
-#define WSC_MAX_SCROLL         (contentHeight - (windowClientHeight - WSC_HEADER) - WSC_GRID_Y)
-#define WSC_VISIBLE_AREA       (windowClientHeight - WSC_HEADER)
+#define WSC_BUTTON_DEFAULT_W      120
+#define WSC_BUTTON_DEFAULT_H      30
+#define WSC_HEADER                70
+#define WSC_SCROLLBAR_WIDTH       20
+#define WSC_GRID_Y                100
+#define WSC_GRID_TOP_OFFSET       40
+#define WSC_SCROLL_ROWS           1
+#define WSC_CHECKBOX_TEXT_OFFSET  20
+#define WSC_BUTTON_X_MARGIN       15
+#define WSC_CHECKBOX_SPACING      10
+#define WSC_MAX_SCROLL            (contentHeight - (windowClientHeight - WSC_HEADER) - WSC_GRID_Y)
+#define WSC_VISIBLE_AREA          (windowClientHeight - WSC_HEADER)
 
-#define WMC_BUTTON             L"BUTTON"
-#define WMC_SCROLLBAR          L"SCROLLBAR"
-#define WMC_STATIC             L"STATIC"
+#define WMC_BUTTON                L"BUTTON"
+#define WMC_SCROLLBAR             L"SCROLLBAR"
+#define WMC_STATIC                L"STATIC"
 
-#define W_GRID_MAX_COLUMNS     6
+#define W_GRID_MAX_COLUMNS     8
 
 constexpr COLORREF darkColorPalette[] = {
     RGB(  0,   0,   0), // Base color
@@ -62,12 +65,14 @@ constexpr COLORREF lightColorPalette[] = {
     RGB(150, 150, 150), // Scrollbar background color
 };
 
-constexpr std::wstring g_tableHeaders[] = {
+const std::wstring g_tableHeaders[] = {
     L"Status",
+    L"Triggered by",
     L"Process",
     L"Class",
     L"Rect",
     L"State",
+    L"Focus",
     L"Title"
 };
 
@@ -79,13 +84,13 @@ bool quitting                = false,
 
 HWND   g_hScrollBar        = nullptr,
        g_hScrollBarOverlay = nullptr,
-       g_hSettingsButton     = nullptr;
+       g_hSettingsButton   = nullptr;
 HFONT  g_hDefaultFont      = nullptr,
        g_hTableFont        = nullptr;
 HBRUSH g_lastCreatedBrush  = nullptr;
 
-int windowWidth          = 0,
-    windowHeight         = 0,
+int windowWidth          = 700,
+    windowHeight         = 500,
     windowClientHeight   = 0,
     g_windowScrollYPos   = 0,
     g_tableDefaultColumnWidths[W_GRID_MAX_COLUMNS],
@@ -176,8 +181,8 @@ void g_redrawWindow(HWND hwnd) {
     g_windowScrollYPos = oldScrollPos;
 }
 
-int g_calculateTextWidth(HDC hdc, const std::wstring &text) {
-    const auto oldFont = static_cast<HFONT>(SelectObject(hdc, g_hTableFont));
+int g_calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font) {
+    const auto oldFont = static_cast<HFONT>(SelectObject(hdc, font));
     SIZE sz;
     GetTextExtentPoint32(hdc, text.c_str(), static_cast<int>(text.size()), &sz);
     SelectObject(hdc, oldFont);
@@ -185,9 +190,6 @@ int g_calculateTextWidth(HDC hdc, const std::wstring &text) {
 }
 
 void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
-    const auto hPen = CreatePen(PS_SOLID, 1, WCP_FOREGROUND);
-    const auto hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
-
     const int gridWidth = std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), 0, std::plus());
     const int gridHeight = rows * g_tableRowHeight;
 
@@ -195,12 +197,8 @@ void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
     FillRect(hdc, &rect, g_createBrush(WCP_BACKGROUND2));
     g_deleteLastBrush();
 
-    // Draw horizontal lines
-    for (int row = 0; row <= rows; row++) {
-        const int y = row * g_tableRowHeight + sy;
-        MoveToEx(hdc, sx, y, nullptr);
-        LineTo(hdc, gridWidth + sx, y);
-    }
+    auto hPen = CreatePen(PS_SOLID, 1, WCP_FOREGROUND);
+    auto hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
 
     // Draw vertical lines
     int x = sx;
@@ -213,19 +211,48 @@ void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
 
     SelectObject(hdc, hOldPen);
     DeleteObject(hPen);
+
+    // Draw horizontal lines
+    bool wasDetected = false;
+    for (int row = 0; row <= rows; row++) {
+        const bool detected = !wasDetected && config::showAllWindows && row > 0 ? taskbar::windows[row - 1].finalDetection : false;
+        hPen = CreatePen(PS_SOLID, 1, detected ? RGB(255, 0, 0) : WCP_FOREGROUND);
+        hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
+        int y = row * g_tableRowHeight + sy;
+
+        MoveToEx(hdc, sx, y, nullptr);
+        LineTo(hdc, gridWidth + sx, y);
+        if (detected) {
+            wasDetected = true;
+            row++;
+            x = sx;
+            for (int col = 0; col <= W_GRID_MAX_COLUMNS; col++) {
+                MoveToEx(hdc, x, y, nullptr);
+                LineTo(hdc, x, g_tableRowHeight + y);
+                if (col < W_GRID_MAX_COLUMNS)
+                    x += g_tableColumnWidths[col];
+            }
+            y += g_tableRowHeight;
+            MoveToEx(hdc, sx, y, nullptr);
+            LineTo(hdc, gridWidth + sx, y);
+        }
+
+        SelectObject(hdc, hOldPen);
+        DeleteObject(hPen);
+    }
 }
 
 inline void g_calculateDefaultWidths(HDC hdc) {
     for (auto i = 0; i < std::size(g_tableHeaders); i++) {
         std::wstring header = g_tableHeaders[i];
-        g_tableDefaultColumnWidths[i] = g_calculateTextWidth(hdc, header);
+        g_tableDefaultColumnWidths[i] = g_calculateTextWidth(hdc, header, g_hTableFont);
     }
 }
 
 std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
     std::wstring value;
     switch (col) {
-        case 0: {
+        case 0: { // Status
             if (wInfo.wasExceptional)
                 value = L"Exceptional";
             else if (wInfo.detected)
@@ -234,24 +261,26 @@ std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
                 value = L"Ignored";
             break;
         }
-        case 3: {
+        case 1: value = wInfo.fault; break;
+        case 2: value = wInfo.procFilename; break; // Process filename
+        case 3: value = wInfo.wndClass; break; // Class
+        case 4: { // Rect
             value = L"[" + std::to_wstring(wInfo.rect.left) + L","
                     + std::to_wstring(wInfo.rect.top) + L","
                     + std::to_wstring(wInfo.rect.right) + L","
                     + std::to_wstring(wInfo.rect.bottom) + L"]";
             break;
         }
-        case 1: value = wInfo.procFilename; break;
-        case 2: value = wInfo.wndClass; break;
-        case 4: value = wInfo.maximized == 1 ? L"Maximized" : wInfo.maximized == 0 ? L"Minimized" : L"Unknown"; break;
-        case 5: value = wInfo.title; break;
+        case 5: value = wInfo.maximized == 1 ? L"Maximized" : wInfo.maximized == 0 ? L"Minimized" : L"Unknown"; break; // State
+        case 6: value = wInfo.focused == 1 ? L"Yes" : wInfo.focused == 0 ? L"No" : std::to_wstring(wInfo.focused); break; // Title
+        case 7: value = wInfo.title; break; // Title
         default: value = L"???"; break;
     }
     return value;
 }
 
 inline void g_calculateCurrentWidths(HDC hdc, const int rows) {
-    int widths[6];
+    int widths[W_GRID_MAX_COLUMNS];
     std::copy(std::begin(g_tableDefaultColumnWidths), std::end(g_tableDefaultColumnWidths), std::begin(widths));
 
     for (auto row = 0; row < rows; row++) {
@@ -260,7 +289,7 @@ inline void g_calculateCurrentWidths(HDC hdc, const int rows) {
             wInfo = taskbar::windows[row - 1];
         for (auto col = 0; col < W_GRID_MAX_COLUMNS; col++)
             if (const std::wstring value = row == 0 ? g_tableHeaders[col] : getWindowValue(wInfo, col); !value.empty())
-                if (const int width = g_calculateTextWidth(hdc, value) + 2 * g_tableColumnXMargin; widths[col] < width)
+                if (const int width = g_calculateTextWidth(hdc, value, g_hTableFont) + 2 * g_tableColumnXMargin; widths[col] < width)
                     widths[col] = width;
     }
 
@@ -380,45 +409,69 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 L"Consolas"
             );
 
-            auto lPtrHandCursor = reinterpret_cast<LONG_PTR>(LoadCursor(nullptr, IDC_HAND));
+            HCURSOR lPtrHandCursor = LoadCursor(nullptr, IDC_HAND);
+            auto hdc = GetDC(hwnd);
 
+            std::wstring text = L"Update Table";
+            int lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2;
             const auto hButtonUpdate = CreateWindow(
-                WMC_BUTTON, L"Update",
+                WMC_BUTTON, text.c_str(),
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-                10, 10, WSC_BUTTON_DEFAULT_W, WSC_BUTTON_DEFAULT_H,
+                10, 10, lastWidth, WSC_BUTTON_DEFAULT_H,
                 hwnd, reinterpret_cast<HMENU>(ID_BUTTON_UPDATE), create->hInstance, nullptr);
             SendMessage(hButtonUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
             SendMessage(hButtonUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetClassLongPtr(hButtonUpdate, GCLP_HCURSOR, lPtrHandCursor);
+            SetClassLongPtr(hButtonUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
 
+            text = L"Actions";
             g_hSettingsButton = CreateWindow(
-                WMC_BUTTON, L"Actions",
+                WMC_BUTTON, text.c_str(),
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-                0, 0, WSC_BUTTON_DEFAULT_W, WSC_BUTTON_DEFAULT_H,
+                0, 0, g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2, WSC_BUTTON_DEFAULT_H,
                 hwnd, reinterpret_cast<HMENU>(ID_BUTTON_ACTIONS), create->hInstance, nullptr);
             SendMessage(g_hSettingsButton, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
             SendMessage(g_hSettingsButton, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetClassLongPtr(g_hSettingsButton, GCLP_HCURSOR, lPtrHandCursor);
+            SetClassLongPtr(g_hSettingsButton, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
 
+            int lastX = 10 + lastWidth + WSC_CHECKBOX_SPACING;
+
+            text = L"Auto Update";
+            lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
             const auto hCheckBoxAutoUpdate = CreateWindowW(
-                WMC_BUTTON, L"Auto Update",
+                WMC_BUTTON, text.c_str(),
                 WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
-                140, 10, 100, 30,
+                lastX, 10, lastWidth, 30,
                 hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_AUTO_UPDATE), create->hInstance, nullptr);
             SendMessage(hCheckBoxAutoUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
             SendMessage(hCheckBoxAutoUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, lPtrHandCursor);
+            SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
             SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::livePreview));
+            lastX += lastWidth + WSC_CHECKBOX_SPACING;
 
+            text = utils::message(MSG_APP_WIN_DARK_MODE);
+            lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
             const auto hCheckboxDarkMode = CreateWindow(
-                WMC_BUTTON, utils::message(MSG_APP_WIN_DARK_MODE).c_str(),
+                WMC_BUTTON, text.c_str(),
                 WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
-                250, 10, 100, 30,
+                lastX, 10, lastWidth, 30,
                 hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_DARK_MODE), create->hInstance, nullptr);
             SendMessage(hCheckboxDarkMode, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
             SendMessage(hCheckboxDarkMode, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetClassLongPtr(hCheckboxDarkMode, GCLP_HCURSOR, lPtrHandCursor);
+            SetClassLongPtr(hCheckboxDarkMode, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
             SetWindowLongPtr(hCheckboxDarkMode, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::darkMode));
+            lastX += lastWidth + WSC_CHECKBOX_SPACING;
+
+            text = L"Show All Windows";
+            lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
+            const auto hCheckBoxShowAllWindows = CreateWindowW(
+                WMC_BUTTON, text.c_str(),
+                WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
+                lastX, 10, lastWidth, 30,
+                hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_SHOW_ALL_WINDOWS), create->hInstance, nullptr);
+            SendMessage(hCheckBoxShowAllWindows, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
+            SendMessage(hCheckBoxShowAllWindows, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+            SetClassLongPtr(hCheckBoxShowAllWindows, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
+            SetWindowLongPtr(hCheckBoxShowAllWindows, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::showAllWindows));
 
             g_hScrollBar = CreateWindowEx(
                 WS_VSCROLL, WMC_SCROLLBAR, nullptr,
@@ -456,8 +509,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             // Reposition scrollbar
             MoveWindow(g_hScrollBar, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, 20, windowHeight - WSC_HEADER, TRUE);
             MoveWindow(g_hScrollBarOverlay, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, 20, windowHeight - WSC_HEADER, TRUE);
-            MoveWindow(g_hSettingsButton, windowWidth - WSC_BUTTON_DEFAULT_W - 10, 10, WSC_BUTTON_DEFAULT_W, WSC_BUTTON_DEFAULT_H, TRUE);
             RECT rect;
+            GetWindowRect(g_hSettingsButton, &rect);
+            MoveWindow(g_hSettingsButton, windowWidth - (rect.right - rect.left) - 10, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
             GetClientRect(hwnd, &rect);
             windowClientHeight = rect.bottom - rect.top;
 
@@ -512,6 +566,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     g_doubleBuffering(hwnd, ps, draw->hDC, false);
                     break;
                 }
+                case ID_CHECKBOX_SHOW_ALL_WINDOWS:
                 case ID_CHECKBOX_DARK_MODE:
                 case ID_CHECKBOX_AUTO_UPDATE:
                 {
@@ -622,7 +677,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_COMMAND:
         {
-            switch (const auto lwParam = LOWORD(wParam)) {
+            const auto lwParam = LOWORD(wParam);
+            if (lwParam >= IDS_CHECKBOX_MIN && lwParam <= IDS_CHECKBOX_MAX) {
+                HWND hCheckbox = GetDlgItem(hwnd, lwParam);
+                if (const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(hCheckbox, GWLP_USERDATA))) {
+                    // Inverse checkbox state
+                    *pState = !*pState;
+                    if (lwParam == ID_CHECKBOX_DARK_MODE)
+                        g_updateScrollBarStyle();
+                    g_redrawWindow(hwnd);
+                }
+            }
+            switch (lwParam) {
                 case ID_BUTTON_ACTIONS:
                 {
                     SendMessage(hwnd, WM_TRAY_ICON, 0, WM_CONTEXTMENU);
@@ -633,16 +699,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     taskbar::collectWindowsInfo = true;
                     break;
                 }
+                case ID_CHECKBOX_SHOW_ALL_WINDOWS:
+                {
+                    g_redrawWindow(hwnd);
+                    taskbar::collectWindowsInfo = true;
+                    break;
+                }
                 case ID_CHECKBOX_AUTO_UPDATE:
+                {
+                    break;
+                }
                 case ID_CHECKBOX_DARK_MODE:
                 {
-                    HWND hCheckbox = GetDlgItem(hwnd, lwParam);
-                    if (const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(hCheckbox, GWLP_USERDATA))) {
-                        *pState = !*pState;
-                        if (lwParam == ID_CHECKBOX_DARK_MODE)
-                            g_updateScrollBarStyle();
-                        g_redrawWindow(hwnd);
-                    }
+                    g_updateScrollBarStyle();
                     break;
                 }
                 // Next ones are for system tray
@@ -721,7 +790,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_GETMINMAXINFO: {
             const auto lpMinMaxInfo = reinterpret_cast<LPMINMAXINFO>(lParam);
-            lpMinMaxInfo->ptMinTrackSize.x = 620;
+            lpMinMaxInfo->ptMinTrackSize.x = 700;
             lpMinMaxInfo->ptMinTrackSize.y = 400;
             break;
         }
@@ -844,9 +913,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nCmdShow) 
         }, true);
         return 1;
     }
-
-    // Set initial window size
-    windowWidth = 620, windowHeight = 500;
 
     // Get monitor size
     const int screenWidth = GetSystemMetrics(SM_CXSCREEN);
