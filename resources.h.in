@@ -7,6 +7,8 @@
 #define TRAY_TITLE                   PROJECT_NAME L" " VER_FILEVERSION_STR
 #define IDI_APP_ICON                 727
 
+#define WM_UPDATE_GRID_REQUEST       (WM_APP + 1)
+
 #define ID_TRAY_OPEN_CONFIG          1001
 #define ID_TRAY_RELOAD_CONFIG        1002
 #define ID_TRAY_PAUSE_HIDER          1003
@@ -17,9 +19,11 @@
 #define ID_TRAY_HEADER               1007
 
 #define ID_BUTTON_UPDATE             2001
-#define ID_CHECKBOX_AUTO_UPDATE      2002
-#define ID_CHECKBOX_DARK_MODE        2003
-#define ID_SCROLLBAR                 2004
+#define ID_BUTTON_ACTIONS            2002
+#define ID_CHECKBOX_AUTO_UPDATE      2003
+#define ID_CHECKBOX_DARK_MODE        2004
+#define ID_SCROLLBAR                 2005
+#define ID_SCROLLBAR_OVERLAY         2006
 
 #define PRODUCT_URL                  L"@PRODUCT_URL@"
 
