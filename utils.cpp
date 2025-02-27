@@ -252,19 +252,6 @@ void utils::toUnicode(const LPCCH string, const LPWSTR str) {
     MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
 }
 
-void utils::clearConsole(const COORD startCoord, const bool setPosAfter) {
-    HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_SCREEN_BUFFER_INFO screen;
-    DWORD written;
-
-    GetConsoleScreenBufferInfo(console, &screen);
-    FillConsoleOutputCharacterA(
-        console, ' ', (screen.dwSize.X - startCoord.X) * (screen.dwSize.Y - startCoord.Y), startCoord, &written
-    );
-    if (setPosAfter)
-        SetConsoleCursorPosition(console, startCoord);
-}
-
 std::wstring utils::createShortcutLinkPath() {
     WCHAR startupPath[260];
     SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath);

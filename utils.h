@@ -33,7 +33,6 @@ public:
     static std::wstring message(unsigned int mType);
     static bool isUserUsingDarkTheme();
     static void toUnicode(LPCCH string, LPWSTR str);
-    static void clearConsole(COORD startCoord, bool setPosAfter);
 private:
     static std::wstring createShortcutLinkPath();
 };
