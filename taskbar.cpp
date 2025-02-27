@@ -8,7 +8,6 @@
 #include "utils.h"
 
 std::vector<taskbar::WindowInfo> taskbar::windows;
-taskbar::WindowInfo lastDetectedWindow;
 bool taskbar::collectWindowsInfo = false;
 bool canCollect = false;
 
@@ -29,7 +28,7 @@ bool taskbar::isCursorOverTaskbar() {
     return PtInRect(&taskbarRect, cursorPos);
 }
 
-bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, taskbar::WindowInfo &wInfo, WINDOWPLACEMENT wp, std::wstring &succeededTagGroup) {
+bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::WindowInfo &wInfo, const WINDOWPLACEMENT &wp, std::wstring *succeededTagGroup) {
     for (const auto& tagGroup: vector) {
         if (tagGroup.empty())
             continue;
@@ -45,26 +44,26 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, t
             std::wstring value = tExpr.substr(pos + 1);
             if (key == L"process" || key == L"p") {
                 if (wInfo.procFilename.empty())
-                    utils::getProcessInfo(hwnd, wInfo.procFilename);
+                    utils::getProcessInfo(wInfo.hwnd, wInfo.procFilename);
                 if (wInfo.procFilename == value)
                     succeededTags++;
             } else if (key == L"title" || key == L"t") {
                 if (wInfo.title[0] == L'\0')
-                    GetWindowText(hwnd, wInfo.title, sizeof(wInfo.title));
+                    GetWindowText(wInfo.hwnd, wInfo.title, sizeof(wInfo.title));
                 if (wInfo.title == value)
                     succeededTags++;
             } else if (key == L"focus" || key == L"f") {
                 if (wInfo.focused == -1) {
                     WINDOWINFO wi;
                     wi.cbSize = sizeof(WINDOWINFO);
-                    GetWindowInfo(hwnd, &wi);
+                    GetWindowInfo(wInfo.hwnd, &wi);
                     wInfo.focused = wi.dwWindowStatus;
                 }
-                if (wInfo.focused == stoi(value))
+                if (static_cast<int>(wInfo.focused) == stoi(value))
                     succeededTags++;
             } else if (key == L"class" || key == L"c") {
                 if (wInfo.wndClass[0] == L'\0')
-                    GetClassName(hwnd, wInfo.wndClass, sizeof(wInfo.wndClass));
+                    GetClassName(wInfo.hwnd, wInfo.wndClass, sizeof(wInfo.wndClass));
                 if (std::wstring(wInfo.wndClass) == value)
                     succeededTags++;
             } else if (key == L"maximized" || key == L"m") {
@@ -72,7 +71,7 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, t
                     succeededTags++;
             } else if (key == L"left" || key == L"right" || key == L"top" || key == L"bottom") {
                 if (!wInfo.wasRectModified) {
-                    GetWindowRect(hwnd, &wInfo.rect);
+                    GetWindowRect(wInfo.hwnd, &wInfo.rect);
                     wInfo.wasRectModified = true;
                 }
                 const int iValue = std::stoi(value);
@@ -92,7 +91,8 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, t
             }
         }
         if (succeededTags == tags.size()) {
-            succeededTagGroup = tagGroup;
+            if (succeededTagGroup)
+                *succeededTagGroup = tagGroup;
             return true;
         }
     }
@@ -100,25 +100,29 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, HWND hwnd, t
 }
 
 bool taskbar::isAnyWindowMaximized() {
+    static WindowInfo lastDetectedWindow;
+    static bool wasFound = false;
+
     if (collectWindowsInfo) {
         // Since collectWindowsInfo can get updated inside EnumWindows (by main thread), let's ensure whenever it can start collecting
         canCollect = true;
         windows.clear();
+        lastDetectedWindow = {};
     } else if (lastDetectedWindow.hwnd) {
         WINDOWPLACEMENT wp;
         wp.length = sizeof(WINDOWPLACEMENT);
         if (GetWindowPlacement(lastDetectedWindow.hwnd, &wp) && IsWindowVisible(lastDetectedWindow.hwnd) & !IsIconic(lastDetectedWindow.hwnd)) {
-            bool ignored = true, exceptional = false;
-            std::wstring s;
-            if (!config::exceptionalWindows.empty())
-                exceptional = loopThroughWindowTags(config::exceptionalWindows, lastDetectedWindow.hwnd, lastDetectedWindow, wp, s);
+            lastDetectedWindow = { lastDetectedWindow.hwnd };
             if (!config::ignoredWindows.empty())
-                ignored = loopThroughWindowTags(config::ignoredWindows, lastDetectedWindow.hwnd, lastDetectedWindow, wp, s);
-            if (exceptional || !ignored)
+                lastDetectedWindow.detected = loopThroughWindowTags(config::ignoredWindows, lastDetectedWindow, wp, nullptr);
+            if (!config::exceptionalWindows.empty())
+                lastDetectedWindow.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, lastDetectedWindow, wp, nullptr);
+            if (lastDetectedWindow.wasExceptional || !lastDetectedWindow.detected)
                 return true;
         }
-        lastDetectedWindow = WindowInfo();
+        lastDetectedWindow = {};
     }
+
     bool maximized = false;
     EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
         WINDOWPLACEMENT wp;
@@ -130,9 +134,8 @@ bool taskbar::isAnyWindowMaximized() {
         if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE)
             return TRUE;
 
-        WindowInfo wInfo;
-        std::wstring succeededIgnoreTagGroup,
-                     succeededExceptionTagGroup;
+        WindowInfo wInfo = { hwnd };
+        std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
 
         if (collectWindowsInfo && canCollect) {
             // Focus status (0 or 1)
@@ -150,28 +153,28 @@ bool taskbar::isAnyWindowMaximized() {
             GetWindowRect(hwnd, &wInfo.rect);
         }
 
-        bool ignored = true, exceptional = false;
+        if (!config::ignoredWindows.empty())
+            wInfo.detected = loopThroughWindowTags(config::ignoredWindows, wInfo, wp, &succeededIgnoreTagGroup);
 
-        if (!config::ignoredWindows.empty()) {
-            ignored = loopThroughWindowTags(config::ignoredWindows, hwnd, wInfo, wp, succeededIgnoreTagGroup);
-        }
+        if (!config::exceptionalWindows.empty())
+            wInfo.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, wInfo, wp, &succeededExceptionTagGroup);
 
-        if (!config::exceptionalWindows.empty()) {
-            exceptional = loopThroughWindowTags(config::exceptionalWindows, hwnd, wInfo, wp, succeededExceptionTagGroup);
-        }
+        wInfo.detected = wInfo.wasExceptional || !wInfo.detected;
 
         if (collectWindowsInfo && canCollect) {
-            wInfo.fault = exceptional ? succeededExceptionTagGroup : succeededIgnoreTagGroup;
-            wInfo.wasExceptional = exceptional;
-            wInfo.detected = exceptional || !ignored;
+            wInfo.fault = wInfo.wasExceptional ? succeededExceptionTagGroup : succeededIgnoreTagGroup;
+            if (wInfo.detected && !wasFound) {
+                wasFound = true;
+                wInfo.finalDetection = true;
+            }
             windows.push_back(wInfo);
         }
 
-        if (exceptional || !ignored) {
+        if (wInfo.detected) {
             *reinterpret_cast<bool*>(lParam) = true;
-            wInfo.hwnd = hwnd;
-            lastDetectedWindow = wInfo;
-            return FALSE;
+            if (!(collectWindowsInfo && canCollect))
+                lastDetectedWindow = { hwnd };
+            return config::showAllWindows;
         }
         return TRUE;
     }, reinterpret_cast<LPARAM>(&maximized));
@@ -181,6 +184,7 @@ bool taskbar::isAnyWindowMaximized() {
         collectWindowsInfo = false;
         canCollect = false;
     }
+    wasFound = false;
     return maximized;
 }
 
