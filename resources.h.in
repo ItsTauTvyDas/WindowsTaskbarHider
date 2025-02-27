@@ -16,14 +16,18 @@
 #define ID_TRAY_ADD_REMOVE_STARTUP   1005
 #define ID_TRAY_ATTACH_DEBUG_CONSOLE 1006
 #define ID_TRAY_GITHUB               1007
-#define ID_TRAY_HEADER               1007
+#define ID_TRAY_HEADER               1008
 
 #define ID_BUTTON_UPDATE             2001
 #define ID_BUTTON_ACTIONS            2002
-#define ID_CHECKBOX_AUTO_UPDATE      2003
-#define ID_CHECKBOX_DARK_MODE        2004
-#define ID_SCROLLBAR                 2005
-#define ID_SCROLLBAR_OVERLAY         2006
+#define ID_SCROLLBAR                 2003
+#define ID_SCROLLBAR_OVERLAY         2004
+
+#define IDS_CHECKBOX_MIN             2100
+#define ID_CHECKBOX_AUTO_UPDATE      2100
+#define ID_CHECKBOX_DARK_MODE        2101
+#define ID_CHECKBOX_SHOW_ALL_WINDOWS 2102
+#define IDS_CHECKBOX_MAX             2200
 
 #define PRODUCT_URL                  L"@PRODUCT_URL@"
 
