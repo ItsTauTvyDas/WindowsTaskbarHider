@@ -3,6 +3,9 @@
 
 IDI_APP_ICON ICON                   "icon.ico"
 
+IDR_INI_LANG_EN                     INI "language/language.en.ini"
+IDR_INI_LANG_UK                     INI "language/language.uk.ini"
+
 #ifndef DEBUG
 #define VER_DEBUG                   0
 #else
