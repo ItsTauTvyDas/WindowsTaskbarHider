@@ -310,7 +310,14 @@ void utils::toggleStartup() {
     }
 }
 
+RECT utils::rect(const int x, const int y, const int width, const int height) {
+    return { x, y, x + width, y + height };
+}
+
 bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, std::wstring &key, std::wstring &value) {
+    if (line.empty())
+        return false;
+
     if (line.rfind('[', 0) == 0) {
         if (!prefix)
             return false;
@@ -358,7 +365,6 @@ void utils::logcLangString(const unsigned int mType, std::wstring &string) {
                 if (mId != language::messageTypeMap.end())
                     messages[mId->first] = value;
             }
-            language::messageTypeMap.clear();
         }
     }
     string = messages[mType];

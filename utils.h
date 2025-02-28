@@ -24,6 +24,7 @@ public:
     static bool fileExists(const wchar_t *path);
     static bool doesAutoStart();
     static void toggleStartup();
+    static RECT rect(int x, int y, int width, int height);
     static bool processIniFileLine(const std::wstring& line, std::wstring *prefix, std::wstring &key, std::wstring &value);
     static void logcLangString(unsigned int mType, std::wstring &string);
     static std::wstring formatLangString(const std::wstring &rStr, const std::vector<std::wstring> &values);
