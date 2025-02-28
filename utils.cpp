@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <unordered_map>
 #include <mutex>
+#include <bits/ranges_algo.h>
 #include "language.h"
 
 bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
@@ -92,7 +93,7 @@ bool utils::processArguments(const int argc, wchar_t* argv[]) {
 }
 
 std::wstring replaceLastErrorPlaceholder(const std::wstring& message) {
-    const LPWSTR errorText = utils::NTStatusMessageToText(GetLastError());
+    LPWSTR errorText = utils::NTStatusMessageToText(GetLastError());
     std::wstring_view errorTextView(errorText ? errorText : L"");
     // Use the wide vformat + wide args
     return std::vformat(message, std::wformat_args(std::make_wformat_args(errorTextView)));
@@ -118,7 +119,7 @@ void utils::showExceptionMessageBox(const std::function<void(std::wstringstream&
     }
 }
 
-LPWSTR utils::replaceCharacterWithText(const LPWSTR lpstr, const wchar_t target, const std::wstring &replacement, const int skip) {
+LPWSTR utils::replaceCharacterWithText(LPWSTR lpstr, const wchar_t target, const std::wstring &replacement, const int skip) {
     if (!lpstr)
         return nullptr;
     const wchar_t* pos = lpstr;
@@ -248,7 +249,7 @@ bool utils::fileExists(const wchar_t *path) {
     return _wstat(path, &buffer) == 0;
 }
 
-void utils::toUnicode(const LPCCH string, const LPWSTR str) {
+void utils::toUnicode(const LPCCH string, LPWSTR str) {
     MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
 }
 
@@ -256,7 +257,7 @@ std::wstring utils::createShortcutLinkPath() {
     WCHAR startupPath[260];
     SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath);
     const std::wstring name = globals::exe.substr(0, globals::exe.find_last_of('.'));
-    return std::wstring(std::wstring(startupPath) + L"\\" + name.c_str() + L".lnk");
+    return std::wstring(std::wstring(startupPath) + L"\\" + name + L".lnk");
 }
 
 bool utils::doesAutoStart() {
@@ -309,29 +310,60 @@ void utils::toggleStartup() {
     }
 }
 
-// Load raw (unformatted) string
-bool utils::loadRawLangString(const unsigned int mType, std::wstring &string) {
-    wchar_t buffer[512] = {};
-    if (const int len = LoadStringW(globals::hIns, mType, buffer, sizeof(buffer) / sizeof(wchar_t)); len > 0) {
-        string = std::wstring(buffer, len);
-        return true;
+bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, std::wstring &key, std::wstring &value) {
+    if (line.rfind('[', 0) == 0) {
+        if (!prefix)
+            return false;
+        *prefix = line.substr(1, line.size() - 2);
+        std::ranges::replace(*prefix, ' ', '_');
+        *prefix += '.';
+        return false;
     }
-    string = L"<null>";
-    return false;
+
+    if (line.rfind(';', 0) == 0)
+        return false;
+
+    const size_t pos = line.find('=');
+    if (pos == std::string::npos)
+        return false;
+
+    key = line.substr(0, pos);
+    trim(key);
+    value = line.substr(pos + 1);
+    trim(value);
+    return true;
 }
 
-// Load cached string, load if not cached and cache (unformatted)
-bool utils::tryLoadCachedLangString(const unsigned int mType, std::wstring &string) {
-    static std::unordered_map<unsigned int, std::wstring> cache;
+void utils::logcLangString(const unsigned int mType, std::wstring &string) {
+    static std::unordered_map<unsigned int, std::wstring> messages;
     static std::mutex mutex;
     std::lock_guard lock(mutex);
-    if (const auto it = cache.find(mType); it != cache.end()) {
-        string = it->second;
-        return true;
+    if (messages.empty()) {
+        HRSRC hRes = FindResource(globals::hIns, MAKEINTRESOURCE(IDR_INI_LANG_UK), IDI_RES_INI);
+        const HGLOBAL hData = LoadResource(globals::hIns, hRes);
+        const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
+        const auto content = static_cast<const char*>(LockResource(hData));
+        if (const int wCharsCount = MultiByteToWideChar(CP_UTF8, 0, content, dataSize, nullptr, 0); wCharsCount > 0) {
+            std::wstring winiContent(wCharsCount, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, content, dataSize, &winiContent[0], wCharsCount);
+            std::wistringstream input(winiContent);
+            std::wstring line;
+            while (std::getline(input, line)) {
+                std::wstring key, value;
+                if (!processIniFileLine(line, nullptr, key, value))
+                    continue;
+                const auto mId = std::ranges::find_if(language::messageTypeMap, [&key](const auto &pair) {
+                    return pair.second == key;
+                });
+                if (mId != language::messageTypeMap.end())
+                    messages[mId->first] = value;
+            }
+            language::messageTypeMap.clear();
+        }
     }
-    loadRawLangString(mType, string);
-    cache[mType] = string;
-    return false;
+    string = messages[mType];
+    if (string.empty())
+        string = L"<untranslated>";
 }
 
 // Format raw string
@@ -384,7 +416,7 @@ int utils::messageBox(const std::wstring &mText, const unsigned int uType) {
 
 std::wstring utils::message(const unsigned int mType, const std::vector<std::wstring> &values) {
     std::wstring s;
-    tryLoadCachedLangString(mType, s);
+    logcLangString(mType, s);
     s = formatLangString(s, values);
     return s;
 }
