@@ -20,6 +20,24 @@ set(VERSION_PRODUCT_REVISION 0)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.cpp" "${lang_h_output}")
 
+# Add language files (cmake for some reason doesn't see changes in file, adding them forcefully)
+#file(GLOB LANG_INI_FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/language.*.ini")
+#set(ALL_LANG_INI_OUTPUTS "")
+#foreach(ini_file IN LISTS LANG_INI_FILES)
+#    get_filename_component(ini_filename ${ini_file} NAME)
+#    set(output_file "${CMAKE_BINARY_DIR}/assets/language/${ini_filename}")
+#    add_custom_command(
+#            OUTPUT ${output_file}
+#            COMMAND ${CMAKE_COMMAND} -E copy ${ini_file} ${output_file}
+#            DEPENDS ${ini_file}
+#            COMMENT "Copying ${ini_file} to ${output_file}"
+#    )
+#    list(APPEND ALL_LANG_INI_OUTPUTS ${output_file})
+#endforeach()
+#add_custom_target(copy_language_inis ALL
+#        DEPENDS ${ALL_LANG_INI_OUTPUTS}
+#)
+
 # Replace all @LANG_ID_COUNTER@ in language.h.in
 set(lang_id_counter 1)
 set(lang_h_output "")
@@ -45,8 +63,6 @@ foreach(line IN LISTS gen_lines)
     endif()
 endforeach()
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/language.cpp.in ${CMAKE_BINARY_DIR}/language.cpp @ONLY)
-
 add_executable(${PROJECT_NAME} WIN32 main.cpp
         utils.cpp
         utils.h
@@ -59,8 +75,11 @@ add_executable(${PROJECT_NAME} WIN32 main.cpp
         assets/app.rc
         resources.h
         language.h
-        language.cpp)
+        language.cpp
+        assets/language/language.en.ini
+        assets/language/language.uk.ini)
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/language.cpp.in ${CMAKE_BINARY_DIR}/language.cpp @ONLY)
 configure_file(resources.h.in ${CMAKE_BINARY_DIR}/resources.h @ONLY)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR})
 
