@@ -9,7 +9,6 @@
 
 std::vector<taskbar::WindowInfo> taskbar::windows;
 bool taskbar::collectWindowsInfo = false;
-bool canCollect = false;
 
 HWND taskbar::getTaskbarHandle() {
     return FindWindow(L"Shell_TrayWnd", nullptr);
@@ -101,7 +100,7 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
 
 bool taskbar::isAnyWindowMaximized() {
     static WindowInfo lastDetectedWindow;
-    static bool wasFound = false;
+    static bool wasFound = false, canCollect = false;
 
     if (collectWindowsInfo) {
         // Since collectWindowsInfo can get updated inside EnumWindows (by main thread), let's ensure whenever it can start collecting
@@ -117,7 +116,7 @@ bool taskbar::isAnyWindowMaximized() {
                 lastDetectedWindow.detected = loopThroughWindowTags(config::ignoredWindows, lastDetectedWindow, wp, nullptr);
             if (!config::exceptionalWindows.empty())
                 lastDetectedWindow.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, lastDetectedWindow, wp, nullptr);
-            if (lastDetectedWindow.wasExceptional || !lastDetectedWindow.detected)
+            if (lastDetectedWindow.wasExceptional || !lastDetectedWindow.detected || (config::alwaysIgnoreWhenNotMaximized && wp.showCmd == SW_MAXIMIZE))
                 return true;
         }
         lastDetectedWindow = {};
@@ -131,10 +130,15 @@ bool taskbar::isAnyWindowMaximized() {
         if (!GetWindowPlacement(hwnd, &wp) || !IsWindowVisible(hwnd) || IsIconic(hwnd))
             return TRUE;
 
-        if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE)
-            return TRUE;
-
         WindowInfo wInfo = { hwnd };
+
+        if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE) {
+            if (collectWindowsInfo && canCollect)
+                wInfo.initiallyIgnored = true;
+            else
+                return TRUE;
+        }
+
         std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
 
         if (collectWindowsInfo && canCollect) {
@@ -153,13 +157,13 @@ bool taskbar::isAnyWindowMaximized() {
             GetWindowRect(hwnd, &wInfo.rect);
         }
 
-        if (!config::ignoredWindows.empty())
-            wInfo.detected = loopThroughWindowTags(config::ignoredWindows, wInfo, wp, &succeededIgnoreTagGroup);
-
-        if (!config::exceptionalWindows.empty())
-            wInfo.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, wInfo, wp, &succeededExceptionTagGroup);
-
-        wInfo.detected = wInfo.wasExceptional || !wInfo.detected;
+        if (!wInfo.initiallyIgnored) {
+            if (!config::ignoredWindows.empty())
+                wInfo.detected = loopThroughWindowTags(config::ignoredWindows, wInfo, wp, &succeededIgnoreTagGroup);
+            if (!config::exceptionalWindows.empty())
+                wInfo.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, wInfo, wp, &succeededExceptionTagGroup);
+            wInfo.detected = (wInfo.wasExceptional || !wInfo.detected) && !wInfo.initiallyIgnored;
+        }
 
         if (collectWindowsInfo && canCollect) {
             wInfo.fault = wInfo.wasExceptional ? succeededExceptionTagGroup : succeededIgnoreTagGroup;
