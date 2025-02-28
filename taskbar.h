@@ -14,6 +14,7 @@ public:
         bool wasExceptional = false;
         bool wasRectModified = false;
         bool finalDetection = false;
+        bool initiallyIgnored = false;
         DWORD focused = -1;
         wchar_t wndClass[256] = {};
         RECT rect;
