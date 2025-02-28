@@ -1,0 +1,61 @@
+#ifndef LANGUAGE_H
+#define LANGUAGE_H
+
+#include <string>
+#include <unordered_map>
+
+#define MSG_APPLICATION_NAME                  @LANG_ID_COUNTER@
+
+#define MSG_OUTPUT_STREAM_FAILED              @LANG_ID_COUNTER@
+
+#define MSG_SHORTCUT_CREATION_FAILED          @LANG_ID_COUNTER@
+#define MSG_SHORTCUT_ADD_VERIFY               @LANG_ID_COUNTER@
+#define MSG_SHORTCUT_REMOVE_VERIFY            @LANG_ID_COUNTER@
+
+#define MSG_TASKBAR_VISIBILITY_FIXED          @LANG_ID_COUNTER@
+
+#define MSG_CONFIG_LOAD_FAILED                @LANG_ID_COUNTER@
+#define MSG_CONFIG_INVALID_NUMBER             @LANG_ID_COUNTER@
+#define MSG_CONFIG_BELOW_MIN                  @LANG_ID_COUNTER@
+#define MSG_CONFIG_ABOVE_MAX                  @LANG_ID_COUNTER@
+#define MSG_CONFIG_INVALID_KEY                @LANG_ID_COUNTER@
+#define MSG_CONFIG_NOT_NUMBER                 @LANG_ID_COUNTER@
+#define MSG_CONFIG_NO_VALUE                   @LANG_ID_COUNTER@
+
+#define MSG_ARGS_INVALID                      @LANG_ID_COUNTER@
+
+#define MSG_UNCAUGHT_EXCEPTION_HEADER         @LANG_ID_COUNTER@
+#define MSG_UNCAUGHT_EXCEPTION_RETRY          @LANG_ID_COUNTER@
+#define MSG_UNCAUGHT_EXCEPTION_RETRY_FAILED   @LANG_ID_COUNTER@
+#define MSG_UNCAUGHT_EXCEPTION_WILL_TERMINATE @LANG_ID_COUNTER@
+#define MSG_UNCAUGHT_EXCEPTION_TRANSLATED_MSG @LANG_ID_COUNTER@
+#define MSG_UNCAUGHT_EXCEPTION_INFO           @LANG_ID_COUNTER@
+#define MSG_UNCAUGHT_EXCEPTION_INFO_CODE      @LANG_ID_COUNTER@
+#define MSG_UNCAUGHT_EXCEPTION_INFO_ADDR      @LANG_ID_COUNTER@
+
+#define MSG_WINDOW_CREATION_FAILED            @LANG_ID_COUNTER@
+#define MSG_WINDOW_REGISTER_FAILED            @LANG_ID_COUNTER@
+#define MSG_WINDOW_IRON_FAILED                @LANG_ID_COUNTER@
+
+#define MSG_MUTEX_FAILED                      @LANG_ID_COUNTER@
+
+#define MSG_APP_ALREADY_RUNNING_BUT_KILLED    @LANG_ID_COUNTER@
+#define MSG_APP_ALREADY_RUNNING               @LANG_ID_COUNTER@
+
+#define MSG_APP_WIN_DARK_MODE                 @LANG_ID_COUNTER@
+
+#define MSG_TRAY_EXIT                         @LANG_ID_COUNTER@
+#define MSG_TRAY_OPEN_GITHUB                  @LANG_ID_COUNTER@
+#define MSG_TRAY_ADD_STARTUP                  @LANG_ID_COUNTER@
+#define MSG_TRAY_REM_STARTUP                  @LANG_ID_COUNTER@
+#define MSG_TRAY_TB_PAUSE                     @LANG_ID_COUNTER@
+#define MSG_TRAY_TB_RESUME                    @LANG_ID_COUNTER@
+#define MSG_TRAY_CONFIG_RELOAD                @LANG_ID_COUNTER@
+#define MSG_TRAY_CONFIG_OPEN                  @LANG_ID_COUNTER@
+
+class language {
+public:
+    static std::unordered_map<unsigned int, std::wstring> messageTypeMap;
+};
+
+#endif //LANGUAGE_H
