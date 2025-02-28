@@ -14,6 +14,39 @@ set(VERSION_PRODUCT_VERSION  0)
 set(VERSION_PRODUCT_BUILD    0)
 set(VERSION_PRODUCT_REVISION 0)
 
+# Some weird bug, where ninja can complain about language.cpp with an error "missing and no known rule to make it"
+# After it first fails, if you change something in this file (just make a change, like editing or adding a comment somewhere, just to trigger a change), then it succeeds
+# Pre-creating the files fixes the issue
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.cpp" "${lang_h_output}")
+
+# Replace all @LANG_ID_COUNTER@ in language.h.in
+set(lang_id_counter 1)
+set(lang_h_output "")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/language.h.in" lines)
+foreach(line IN LISTS lines)
+    string(FIND "${line}" "@LANG_ID_COUNTER@" pos)
+    while(pos GREATER -1)
+        string(REPLACE "@LANG_ID_COUNTER@" "${lang_id_counter}" line "${line}")
+        math(EXPR lang_id_counter "${lang_id_counter} + 1")
+        string(FIND "${line}" "@LANG_ID_COUNTER@" pos)
+    endwhile()
+    set(lang_h_output "${lang_h_output}${line}\n")
+endforeach()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
+
+# Map language.h into unordered_map variable in language.cpp.inj
+file(STRINGS "${CMAKE_CURRENT_BINARY_DIR}/language.h" gen_lines)
+set(LANGUAGE_MAPPING_ENTRIES "")
+foreach(line IN LISTS gen_lines)
+    if(line MATCHES "^#define[ \t]+(MSG_[A-Z0-9_]+)[ \t]+[0-9]+")
+        string(REGEX REPLACE "^#define[ \t]+(MSG_[A-Z0-9_]+)[ \t]+[0-9]+" "\\1" macro "${line}")
+        set(LANGUAGE_MAPPING_ENTRIES "${LANGUAGE_MAPPING_ENTRIES}    { ${macro}, L\"${macro}\" },\n")
+    endif()
+endforeach()
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/language.cpp.in ${CMAKE_BINARY_DIR}/language.cpp @ONLY)
+
 add_executable(${PROJECT_NAME} WIN32 main.cpp
         utils.cpp
         utils.h
@@ -24,19 +57,15 @@ add_executable(${PROJECT_NAME} WIN32 main.cpp
         globals.cpp
         globals.h
         assets/app.rc
-        language/language.en.rc
         resources.h
-        language.h)
+        language.h
+        language.cpp)
 
-file(REMOVE ${CMAKE_BINARY_DIR}/resources.h)
 configure_file(resources.h.in ${CMAKE_BINARY_DIR}/resources.h @ONLY)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR})
 
-if(MINGW)
-    target_compile_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
-    target_link_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
-endif()
-
+target_compile_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
+target_link_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
 target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
 
 add_custom_command(
