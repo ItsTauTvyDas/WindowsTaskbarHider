@@ -1,7 +1,6 @@
 #include "config.h"
 
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <algorithm>
 #include "globals.h"
@@ -20,7 +19,9 @@ bool config::closeToTray = false;
 bool config::closeConfirmMessage = false;
 
 int config::taskbarUpdateInterval = 10;
-int config::opacity = 0;
+int config::opacityWhenHidden = 0;
+int config::opacityWhenShown = 90;
+int config::opacityWhenHovered = 100;
 
 std::vector<std::wstring> config::ignoredWindows = {L"title:", L"process:ApplicationFrameHost.exe"};
 std::vector<std::wstring> config::exceptionalWindows = {};
@@ -44,8 +45,11 @@ void config::save() {
     file << "[Taskbar]" << std::endl;
     file << "; Taskbar update loop interval in milliseconds" << std::endl;
     file << "UpdateInterval = " << taskbarUpdateInterval << std::endl;
-    file << "; Opacity from 0 to 255" << std::endl;
-    file << "Opacity = " << opacity << std::endl;
+    file << "; Opacity level from 0 to 100" << std::endl;
+    file << "OpacityWhenHidden = " << opacityWhenHidden << std::endl;
+    file << "; Bellow limit changes from 1 to 100, 0 causes the taskbar to lose interactivity" << std::endl;
+    file << "OpacityWhenShown = " << opacityWhenShown << std::endl;
+    file << "OpacityWhenHoveredOver = " << opacityWhenHovered << std::endl;
     file << "[Ignored Windows]" << std::endl;
     file << "; Setting this to false (0) could slow down the application with debug mode on" << std::endl;
     file << "AlwaysIgnoreWhenNotMaximized = " << alwaysIgnoreWhenNotMaximized << std::endl;
@@ -72,7 +76,7 @@ void config::open() {
     ShellExecute(nullptr, L"open", CONFIG_FILENAME, nullptr, nullptr, SW_SHOWNORMAL);
 }
 
-void invalidIntegerValue(const std::wstring &key, int &value, const int min, const int max) {
+void checkForInvalidIntegerValue(const std::wstring &key, auto &value, const int min, const int max) {
     if (value > max) {
         value = max;
         utils::messageBox(MSG_CONFIG_ABOVE_MAX, MB_ICONWARNING | MB_OK, {key, std::to_wstring(max)});
@@ -82,13 +86,30 @@ void invalidIntegerValue(const std::wstring &key, int &value, const int min, con
     }
 }
 
+bool checkForEmptyValueI(const std::wstring &key, const std::wstring &value, int &obj, const int defaultValue) {
+    if (value.empty()) {
+        obj = defaultValue;
+        utils::messageBox(MSG_CONFIG_NO_VALUE, MB_ICONWARNING | MB_OK, {key, std::to_wstring(defaultValue)});
+        return false;
+    }
+    obj = std::stoi(value);
+    return true;
+}
+
+void checkBoolValidation(const std::wstring &key, const std::wstring &value, bool &obj, const bool defaultValue) {
+    if (value.empty()) {
+        obj = defaultValue;
+        utils::messageBox(MSG_CONFIG_NO_VALUE, MB_ICONWARNING | MB_OK, {key, std::to_wstring(defaultValue)});
+        return;
+    }
+    int bValue = std::stoi(value);
+    checkForInvalidIntegerValue(key, bValue, 0, 1);
+    obj = bValue;
+}
+
 bool config::processSingle(const std::wstring &key, const std::wstring &value) {
     std::wstring formattedKey;
     try {
-        if (key.empty()) {
-
-        }
-
         const size_t pos = key.find('.');
         std::wstring category = key.substr(0, pos);
         std::ranges::replace(category, '_', ' ');
@@ -96,43 +117,48 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
         formattedKey = category + L" > " + readableKey;
 
         if (key == L"Taskbar.UpdateInterval") {
-            taskbarUpdateInterval = std::stoi(value);
-            invalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000);
+            if (checkForEmptyValueI(formattedKey, value, taskbarUpdateInterval, taskbarUpdateInterval))
+                checkForInvalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000);
         } else if (key == L"Window.DarkMode") {
-            darkMode = value != L"0";
+            checkBoolValidation(formattedKey, value, darkMode, darkMode);
         } else if (key == L"Window.LivePreview") {
-            livePreview = value != L"0";
+            checkBoolValidation(formattedKey, value, livePreview, livePreview);
         } else if (key == L"Window.ShowAllWindows") {
-            showAllWindows = value != L"0";
+            checkBoolValidation(formattedKey, value, showAllWindows, showAllWindows);
         } else if (key == L"Window_Behaviour.OpenOnStart") {
-            openOnStart = value != L"0";
+            checkBoolValidation(formattedKey, value, openOnStart, openOnStart);
         } else if (key == L"Window_Behaviour.CloseToTray") {
-            closeToTray = value != L"0";
+            checkBoolValidation(formattedKey, value, closeToTray, closeToTray);
         } else if (key == L"Window_Behaviour.CloseConfirmMessage") {
-            closeConfirmMessage = value != L"0";
-        } else if (key == L"Taskbar.Opacity") {
-            opacity = std::stoi(value);
-            invalidIntegerValue(formattedKey, opacity, 0, 255);
+            checkBoolValidation(formattedKey, value, closeConfirmMessage, closeConfirmMessage);
+        } else if (key == L"Taskbar.OpacityWhenHidden") {
+            if (checkForEmptyValueI(formattedKey, value, opacityWhenHidden, opacityWhenHidden))
+                checkForInvalidIntegerValue(formattedKey, opacityWhenHidden, 0, 100);
+            opacityWhenHidden = opacityWhenHidden > 0 ? 255 * opacityWhenHidden / 100 : 0;
+        } else if (key == L"Taskbar.OpacityWhenShown") {
+            if (checkForEmptyValueI(formattedKey, value, opacityWhenShown, opacityWhenShown))
+                checkForInvalidIntegerValue(formattedKey, opacityWhenShown, 1, 100);
+            opacityWhenShown = 255 * opacityWhenShown / 100;
+        } else if (key == L"Taskbar.OpacityWhenHoveredOver") {
+            if (checkForEmptyValueI(formattedKey, value, opacityWhenHovered, opacityWhenHovered))
+                checkForInvalidIntegerValue(formattedKey, opacityWhenHovered, 1, 100);
+            opacityWhenHovered = 255 * opacityWhenHovered / 100;
         } else if (key == L"Ignored_Windows.IgnoredWindows") {
             ignoredWindows = utils::splitString(value, '|');
         } else if (key == L"Ignored_Windows.ExceptionalWindows") {
             exceptionalWindows = utils::splitString(value, '|');
         } else if (key == L"Ignored_Windows.AlwaysIgnoreWhenNotMaximized") {
-            alwaysIgnoreWhenNotMaximized = value != L"0";
+            checkBoolValidation(formattedKey, value, alwaysIgnoreWhenNotMaximized, alwaysIgnoreWhenNotMaximized);
         } else {
             utils::messageBox(MSG_CONFIG_INVALID_KEY, MB_ICONWARNING | MB_OK, {key});
             return false;
         }
     } catch (const std::exception& e) {
-        // Rethrow with formatted text
-        std::wstring msg;
-        if (e.what() == "stoi")
+        wchar_t cMsg[256];
+        utils::toUnicode(e.what(), cMsg);
+        std::wstring msg = cMsg;
+        if (msg == L"stoi")
             msg = utils::message(MSG_CONFIG_NOT_NUMBER);
-        else {
-            wchar_t cMsg[256];
-            utils::toUnicode(e.what(), cMsg);
-            msg = cMsg;
-        }
         utils::messageBox(formattedKey + L": " + msg, MB_ICONWARNING | MB_OK);
     }
     return true;
@@ -146,24 +172,13 @@ void config::load() {
     std::wstring prefix;
 
     while (getline(file, line)) {
-        if (line.rfind('[', 0) == 0) {
-            prefix = line.substr(1, line.size() - 2);
-            std::ranges::replace(prefix, ' ', '_');
-            prefix += '.';
+        std::wstring key, value;
+        if (!utils::processIniFileLine(line, &prefix, key, value))
             continue;
+
+        if (key.empty()) {
+
         }
-
-        if (line.rfind(';', 0) == 0)
-            continue;
-
-        const size_t pos = line.find('=');
-        if (pos == std::string::npos)
-            continue;
-
-        std::wstring key = line.substr(0, pos);
-        utils::trim(key);
-        std::wstring value = line.substr(pos + 1);
-        utils::trim(value);
 
         processSingle(prefix + key, value);
     }

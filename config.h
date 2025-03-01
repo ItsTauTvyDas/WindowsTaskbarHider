@@ -14,7 +14,9 @@ public:
     static bool closeConfirmMessage;
     static bool alwaysIgnoreWhenNotMaximized;
     static int taskbarUpdateInterval;
-    static int opacity;
+    static int opacityWhenHidden;
+    static int opacityWhenShown;
+    static int opacityWhenHovered;
     static std::vector<std::wstring> ignoredWindows;
     static std::vector<std::wstring> exceptionalWindows;
 
