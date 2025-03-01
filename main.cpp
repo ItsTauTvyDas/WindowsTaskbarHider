@@ -204,7 +204,10 @@ void g_deleteLastBrush() {
 }
 
 void g_drawScrollBars(HDC hdc) {
+    #define SELECT_BRUSH utils::mouseInRect(&rect, VK_LBUTTON) ? brushClicked : brush
+
     HBRUSH brush = CreateSolidBrush(WCP_SCROLLBAR_COLOR);
+    HBRUSH brushClicked = CreateSolidBrush(WCP_BUTTON_CLICKED_BG);
 
     RECT rect;
     SCROLLBARINFO sbi = {};
@@ -216,36 +219,37 @@ void g_drawScrollBars(HDC hdc) {
     // Y scrollbar middle thumb
     bool paintScrollBarMiddleThumb = getYScrollBarMiddleThumb(rect, sbi);
     if (paintScrollBarMiddleThumb)
-        FillRect(hdc, &rect, brush);
+        FillRect(hdc, &rect, SELECT_BRUSH);
 
     // Y scrollbar thumbs
     rect.top = WSC_HEADER;
     rect.bottom = rect.top + 16;
-    FillRect(hdc, &rect, brush);
+    FillRect(hdc, &rect, SELECT_BRUSH);
     DrawText(hdc, L"\u02C4", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
     rect.top = windowClientHeight - 17;
     rect.bottom = windowClientHeight;
-    FillRect(hdc, &rect, brush);
+    FillRect(hdc, &rect, SELECT_BRUSH);
     DrawText(hdc, L"\u02C5", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
     // X scrollbar middle thumb
     paintScrollBarMiddleThumb = getXScrollBarMiddleThumb(rect, sbi);
     if (paintScrollBarMiddleThumb)
-        FillRect(hdc, &rect, brush);
+        FillRect(hdc, &rect, SELECT_BRUSH);
 
     // X scrollbar thumbs
     rect.left = 0;
     rect.right = 16;
-    FillRect(hdc, &rect, brush);
+    FillRect(hdc, &rect, SELECT_BRUSH);
     DrawText(hdc, L"\u02C2", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
     rect.left = windowClientWidth - WSC_SCROLLBAR_WIDTH - rect.right;
     rect.right = rect.left + 17;
-    FillRect(hdc, &rect, brush);
+    FillRect(hdc, &rect, SELECT_BRUSH);
     DrawText(hdc, L"\u02C3", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
     DeleteObject(brush);
+    DeleteObject(brushClicked);
 }
 
 HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
