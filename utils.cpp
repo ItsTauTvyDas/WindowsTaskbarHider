@@ -341,12 +341,13 @@ bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, s
     return true;
 }
 
+// Load or get cached string
 void utils::logcLangString(const unsigned int mType, std::wstring &string) {
     static std::unordered_map<unsigned int, std::wstring> messages;
     static std::mutex mutex;
     std::lock_guard lock(mutex);
     if (messages.empty()) {
-        HRSRC hRes = FindResource(globals::hIns, MAKEINTRESOURCE(IDR_INI_LANG_UK), IDI_RES_INI);
+        HRSRC hRes = FindResource(globals::hIns, MAKEINTRESOURCE(IDR_INI_LANG_EN), IDI_RES_INI);
         const HGLOBAL hData = LoadResource(globals::hIns, hRes);
         const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
         const auto content = static_cast<const char*>(LockResource(hData));
