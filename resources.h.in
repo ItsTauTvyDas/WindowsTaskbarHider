@@ -24,7 +24,8 @@
 
 #define ID_BUTTON_UPDATE             201
 #define ID_BUTTON_ACTIONS            202
-#define ID_SCROLLBAR                 203
+#define ID_SCROLLBAR_Y               203
+#define ID_SCROLLBAR_X               204
 
 #define IDS_CHECKBOX_MIN             210
 #define ID_CHECKBOX_AUTO_UPDATE      210

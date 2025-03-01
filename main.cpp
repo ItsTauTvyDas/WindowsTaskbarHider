@@ -31,7 +31,6 @@
 #define WSC_CHECKBOX_TEXT_OFFSET  20
 #define WSC_BUTTON_X_MARGIN       15
 #define WSC_CHECKBOX_SPACING      10
-#define WSC_VISIBLE_AREA          (windowClientHeight - WSC_HEADER)
 
 #define WMC_BUTTON                L"BUTTON"
 #define WMC_SCROLLBAR             L"SCROLLBAR"
@@ -80,7 +79,8 @@ bool quitting                = false,
      focused                 = false,
      g_tableSizesInitialized = false;
 
-HWND   g_hScrollBar        = nullptr,
+HWND   g_hYScrollBar       = nullptr,
+       g_hXScrollBar       = nullptr,
        g_hSettingsButton   = nullptr;
 HFONT  g_hDefaultFont      = nullptr,
        g_hDefaultFontBold  = nullptr,
@@ -90,7 +90,9 @@ HBRUSH g_lastCreatedBrush  = nullptr;
 int windowWidth          = 700,
     windowHeight         = 500,
     windowClientHeight   = 0,
+    windowClientWidth    = 0,
     g_windowScrollYPos   = 0,
+    g_windowScrollXPos   = 0,
     g_tableDefaultColumnWidths[W_GRID_MAX_COLUMNS],
     g_tableColumnWidths[W_GRID_MAX_COLUMNS],
     g_tableColumnXMargin = 10,
@@ -119,13 +121,22 @@ int getContentHeight() {
     return (static_cast<int>(std::size(taskbar::windows)) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET;
 }
 
-int getMaxScroll(const int contentHeight) {
+int getContentWidth() {
+    return std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), 0, std::plus());
+}
+
+int getMaxYScroll(const int contentHeight) {
     return contentHeight - (windowClientHeight - WSC_HEADER) - WSC_GRID_Y;
 }
 
-void updateScrollBarInfo() {
-    const int contentHeight = getContentHeight();
-    const int maxScroll = getMaxScroll(contentHeight);
+int getMaxXScroll(const int contentWidth) {
+    const int visibleWidth = windowClientWidth - WSC_SCROLLBAR_WIDTH;
+    return contentWidth > visibleWidth ? contentWidth - visibleWidth : 0;
+}
+
+void updateYScrollBarInfo() {
+    const int contentHeight = getContentHeight() + WSC_SCROLLBAR_WIDTH;
+    const int maxScroll = getMaxYScroll(contentHeight);
 
     if (g_windowScrollYPos > maxScroll)
         g_windowScrollYPos = maxScroll;
@@ -137,23 +148,48 @@ void updateScrollBarInfo() {
     si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
     si.nMin   = 0;
     si.nMax   = contentHeight - WSC_GRID_Y;
-    si.nPage  = WSC_VISIBLE_AREA;
+    si.nPage  = windowClientHeight - WSC_HEADER;
     si.nPos   = g_windowScrollYPos;
-    SetScrollInfo(g_hScrollBar, SB_CTL, &si, TRUE);
+    SetScrollInfo(g_hYScrollBar, SB_CTL, &si, TRUE);
 }
 
-void updateTaskBarVisibility() {
-    SetLayeredWindowAttributes(g_hScrollBar, 0, 1, LWA_ALPHA);
+void updateXScrollBarInfo() {
+    const int contentWidth = getContentWidth() + 20;
+    if (const int maxScroll = getMaxXScroll(contentWidth); g_windowScrollXPos > maxScroll)
+        g_windowScrollXPos = maxScroll;
+    if (g_windowScrollXPos < 0)
+        g_windowScrollXPos = 0;
+
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin   = 0;
+    si.nMax   = contentWidth;
+    si.nPage  = windowClientWidth - WSC_SCROLLBAR_WIDTH;
+    si.nPos   = g_windowScrollXPos;
+    SetScrollInfo(g_hXScrollBar, SB_CTL, &si, TRUE);
 }
 
-bool getScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) {
+void updateScrollBarsInfo() {
+    updateYScrollBarInfo();
+    updateXScrollBarInfo();
+}
+
+bool getYScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) {
     sbi.cbSize = sizeof(SCROLLBARINFO);
-    GetScrollBarInfo(g_hScrollBar, OBJID_CLIENT, &sbi);
-    const int top = WSC_HEADER + sbi.xyThumbTop;
-    const int height = sbi.xyThumbBottom - sbi.xyThumbTop;
-    if (getMaxScroll(getContentHeight()) <= 0)
+    GetScrollBarInfo(g_hYScrollBar, OBJID_CLIENT, &sbi);
+    rect = utils::rect(windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER + sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop);
+    if (getMaxYScroll(getContentHeight()) <= 0)
         return false;
-    rect = utils::rect(windowWidth - WSC_SCROLLBAR_WIDTH, top, WSC_SCROLLBAR_WIDTH, height);
+    return true;
+}
+
+bool getXScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) {
+    sbi.cbSize = sizeof(SCROLLBARINFO);
+    GetScrollBarInfo(g_hXScrollBar, OBJID_CLIENT, &sbi);
+    rect = utils::rect(sbi.xyThumbTop, windowHeight - WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH);
+    if (getMaxXScroll(getContentWidth()) <= 0)
+        return false;
     return true;
 }
 
@@ -167,41 +203,49 @@ void g_deleteLastBrush() {
     g_lastCreatedBrush = nullptr;
 }
 
-void g_drawScrollBar(HDC hdc) {
-    RECT rect;
-    if (SCROLLBARINFO sbi = {}; !getScrollBarMiddleThumb(rect, sbi))
-        return;
+void g_drawScrollBars(HDC hdc) {
     HBRUSH brush = CreateSolidBrush(WCP_SCROLLBAR_COLOR);
-    HBRUSH frame = CreateSolidBrush(WCP_FOREGROUND);
-    FillRect(hdc, &rect, brush);
-    rect.top = WSC_HEADER;
-    rect.bottom = rect.top + 16;
-    FillRect(hdc, &rect, brush);
+
+    RECT rect;
+    SCROLLBARINFO sbi = {};
+
     SelectObject(hdc, g_hDefaultFontBold);
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, WCP_FOREGROUND);
-    DrawText(hdc, L"\u02C4", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
-    // Might reconsider this later
-    // POINT triangle[3] = {
-    //     {rect.left + WSC_SCROLLBAR_WIDTH / 2, rect.top + 4},
-    //     {rect.left + 4, rect.top + 16 - 4},
-    //     {rect.left + WSC_SCROLLBAR_WIDTH - 4, rect.top + 16 - 4}
-    // };
-    //
-    // HPEN hPen = CreatePen(PS_SOLID, 1, WCP_SCROLLBAR_COLOR);
-    // HPEN hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
-    // SelectObject(hdc, frame);
-    // Polygon(hdc, triangle, 3);
-    // SelectObject(hdc, hOldPen);
-    // DeleteObject(hPen);
+    // Y scrollbar middle thumb
+    bool paintScrollBarMiddleThumb = getYScrollBarMiddleThumb(rect, sbi);
+    if (paintScrollBarMiddleThumb)
+        FillRect(hdc, &rect, brush);
+
+    // Y scrollbar thumbs
+    rect.top = WSC_HEADER;
+    rect.bottom = rect.top + 16;
+    FillRect(hdc, &rect, brush);
+    DrawText(hdc, L"\u02C4", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
     rect.top = windowClientHeight - 17;
     rect.bottom = windowClientHeight;
     FillRect(hdc, &rect, brush);
     DrawText(hdc, L"\u02C5", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+
+    // X scrollbar middle thumb
+    paintScrollBarMiddleThumb = getXScrollBarMiddleThumb(rect, sbi);
+    if (paintScrollBarMiddleThumb)
+        FillRect(hdc, &rect, brush);
+
+    // X scrollbar thumbs
+    rect.left = 0;
+    rect.right = 16;
+    FillRect(hdc, &rect, brush);
+    DrawText(hdc, L"\u02C2", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+
+    rect.left = windowClientWidth - WSC_SCROLLBAR_WIDTH - rect.right;
+    rect.right = rect.left + 17;
+    FillRect(hdc, &rect, brush);
+    DrawText(hdc, L"\u02C3", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+
     DeleteObject(brush);
-    DeleteObject(frame);
 }
 
 HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
@@ -423,12 +467,15 @@ void g_updateTable(HDC hdc) {
     SelectObject(hdc, g_hTableFont);
     SetBkMode(hdc, TRANSPARENT);
     g_calculateCurrentWidths(hdc, rows);
-    g_paintGrid(hdc, 10, y, rows);
-    g_printDataToGrid(hdc, 10, y, rows);
+    g_paintGrid(hdc, 10 - g_windowScrollXPos, y, rows);
+    g_printDataToGrid(hdc, 10 - g_windowScrollXPos, y, rows);
+
+    updateScrollBarsInfo();
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
     static NOTIFYICONDATA nid = {};
+    int *scrollPosition;
 
     switch (uMsg) {
         case WM_CREATE:
@@ -542,14 +589,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             SetClassLongPtr(hCheckBoxShowAllWindows, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
             SetWindowLongPtr(hCheckBoxShowAllWindows, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::showAllWindows));
 
-            g_hScrollBar = CreateWindowEx(
+            g_hYScrollBar = CreateWindowEx(
                 WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
                 WS_CHILD | WS_VISIBLE | SBS_VERT,
                 -WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, 0,
-                hwnd, reinterpret_cast<HMENU>(ID_SCROLLBAR), create->hInstance, nullptr);
-            SendMessage(g_hScrollBar, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
-            SendMessage(g_hScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            updateTaskBarVisibility();
+                hwnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_Y), create->hInstance, nullptr);
+            SendMessage(g_hYScrollBar, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
+            SendMessage(g_hYScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+            SetLayeredWindowAttributes(g_hYScrollBar, 0, 1, LWA_ALPHA);
+
+            g_hXScrollBar = CreateWindowEx(
+                WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
+                WS_CHILD | WS_VISIBLE | SBS_HORZ,
+                0, 0, 0, 0,
+                hwnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_X), create->hInstance, nullptr);
+            SendMessage(g_hXScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+            SetLayeredWindowAttributes(g_hXScrollBar, 0, 1, LWA_ALPHA);
 
             // Add icon
             Shell_NotifyIcon(NIM_ADD, &nid);
@@ -560,20 +615,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_SIZE:
         {
-            const int newWindowWidth = LOWORD(lParam);
-            const int newWindowHeight = HIWORD(lParam);
-            windowHeight = newWindowHeight;
-            windowWidth = newWindowWidth;
+            windowWidth = LOWORD(lParam);
+            windowHeight = HIWORD(lParam);
             // Reposition scrollbar
-            MoveWindow(g_hScrollBar, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, windowHeight - WSC_HEADER, TRUE);
+            MoveWindow(g_hYScrollBar, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, windowHeight - WSC_HEADER, TRUE);
+            MoveWindow(g_hXScrollBar, 0, windowHeight - WSC_SCROLLBAR_WIDTH, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, TRUE);
             RECT rect;
             GetWindowRect(g_hSettingsButton, &rect);
             MoveWindow(g_hSettingsButton, windowWidth - (rect.right - rect.left) - 10, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
             GetClientRect(hwnd, &rect);
-            windowClientHeight = rect.bottom - rect.top;
 
-            updateScrollBarInfo();
-            updateTaskBarVisibility();
+            windowClientHeight = rect.bottom - rect.top;
+            windowClientWidth = rect.right - rect.left;
+
+            updateScrollBarsInfo();
             g_redrawWindow(hwnd);
             break;
         }
@@ -681,7 +736,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             // Above table text
             SetBkColor(mHdc, WCP_BACKGROUND);
             SelectObject(mHdc, g_hDefaultFont);
-            g_drawText(mHdc, utils::message(MSG_WND_DEBUG_TABLE_HEADER_TEXT), 10, 80 - g_windowScrollYPos);
+            g_drawText(mHdc, utils::message(MSG_WND_DEBUG_TABLE_HEADER_TEXT), 10 - g_windowScrollXPos, 80 - g_windowScrollYPos);
 
             // Table
             g_updateTable(mHdc);
@@ -701,7 +756,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             g_drawText(mHdc, utils::message(MSG_WND_HEADER_TEXT), 10, 45);
 
             // Vertical scrollbar
-            g_drawScrollBar(mHdc);
+            g_drawScrollBars(mHdc);
 
             g_doubleBuffering(hwnd, ps, nullptr, false);
             break;
@@ -735,8 +790,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_UPDATE_GRID_REQUEST:
         {
             g_redrawLowerArea(hwnd);
-            updateScrollBarInfo();
-            updateTaskBarVisibility();
+            updateScrollBarsInfo();
             break;
         }
         case WM_COMMAND:
@@ -770,7 +824,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 case ID_CHECKBOX_DARK_MODE:
                 {
                     g_redrawWindow(hwnd);
-                    updateTaskBarVisibility();
                     break;
                 }
                 // Next ones are for system tray
@@ -811,37 +864,49 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             }
             break;
         }
-        case WM_VSCROLL:
-        {
+        case WM_HSCROLL:
+        case WM_VSCROLL: {
+            HWND hScrollBar = reinterpret_cast<HWND>(lParam);
+            if (!hScrollBar)
+                break;
+            int scrollBarID = GetDlgCtrlID(hScrollBar);
+            if (scrollBarID == ID_SCROLLBAR_X) {
+                scrollPosition = &g_windowScrollXPos;
+            } else if (scrollBarID == ID_SCROLLBAR_Y) {
+                scrollPosition = &g_windowScrollYPos;
+            } else {
+                break;
+            }
+
             switch (LOWORD(wParam))
             {
-                case SB_LINEUP:     g_windowScrollYPos -= 10;  break; // Arrow up
-                case SB_LINEDOWN:   g_windowScrollYPos += 10;  break; // Arrow down
-                case SB_PAGEUP:     g_windowScrollYPos -= 100; break; // Click upper thumb
-                case SB_PAGEDOWN:   g_windowScrollYPos += 100; break; // Click lower thumb
+                case SB_LINEUP:     *scrollPosition -= 10;  break; // Arrow up
+                case SB_LINEDOWN:   *scrollPosition += 10;  break; // Arrow down
+                case SB_PAGEUP:     *scrollPosition -= 100; break; // Click upper thumb
+                case SB_PAGEDOWN:   *scrollPosition += 100; break; // Click lower thumb
                 case SB_THUMBTRACK: {
                     SCROLLINFO si;
                     si.cbSize = sizeof(si);
                     si.fMask = SIF_TRACKPOS;
-                    GetScrollInfo(g_hScrollBar, SB_CTL, &si);
-                    g_windowScrollYPos = si.nTrackPos;
+                    GetScrollInfo(hScrollBar, SB_CTL, &si);
+                    *scrollPosition = si.nTrackPos;
                     break;
                 }
                 default: break;
             }
 
-            updateScrollBarInfo();
+            updateScrollBarsInfo();
             g_redrawLowerArea(hwnd);
             break;
         }
         case WM_MOUSEWHEEL:
         {
-            const int oldPos = g_windowScrollYPos;
-            g_windowScrollYPos += -(GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA * (WSC_SCROLL_ROWS * g_tableRowHeight));
-            updateScrollBarInfo();
-            if (oldPos == g_windowScrollYPos)
+            scrollPosition = GetKeyState(VK_SHIFT) & 0x8000 ? &g_windowScrollXPos : &g_windowScrollYPos;
+            const int oldPos = *scrollPosition;
+            *scrollPosition += -(GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA * (WSC_SCROLL_ROWS * g_tableRowHeight));
+            updateScrollBarsInfo();
+            if (oldPos == *scrollPosition)
                 break;
-            updateScrollBarInfo();
             g_redrawLowerArea(hwnd);
             break;
         }
@@ -855,7 +920,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             DeleteObject(g_hDefaultFont);
             DeleteObject(g_hDefaultFontBold);
             DeleteObject(g_hTableFont);
-            DeleteObject(g_hScrollBar);
+            DeleteObject(g_hYScrollBar);
+            DeleteObject(g_hXScrollBar);
             Shell_NotifyIcon(NIM_DELETE, &nid);
             PostQuitMessage(0);
             break;
