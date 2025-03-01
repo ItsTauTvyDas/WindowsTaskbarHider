@@ -27,7 +27,7 @@ public:
     static bool collectWindowsInfo;
 
     static HWND getTaskbarHandle();
-    static void setTaskbarVisibility(bool visible);
+    static void setTaskbarVisibility(bool visible, bool hoveredOver);
     static void resetTaskbar();
     static void updateTaskbarState();
 private:

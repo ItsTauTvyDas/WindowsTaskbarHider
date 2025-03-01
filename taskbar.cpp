@@ -131,30 +131,25 @@ bool taskbar::isAnyWindowMaximized() {
             return TRUE;
 
         WindowInfo wInfo = { hwnd };
-
         if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE) {
             if (collectWindowsInfo && canCollect)
                 wInfo.initiallyIgnored = true;
             else
                 return TRUE;
         }
+        wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
 
         std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
 
         if (collectWindowsInfo && canCollect) {
-            // Focus status (0 or 1)
             WINDOWINFO wi;
             wi.cbSize = sizeof(WINDOWINFO);
             GetWindowInfo(hwnd, &wi);
-            wInfo.focused = wi.dwWindowStatus;
-            // Process filename
-            utils::getProcessInfo(hwnd, wInfo.procFilename);
-            // Title
-            GetWindowText(hwnd, wInfo.title, sizeof(wInfo.title));
-            // Class
-            GetClassName(hwnd, wInfo.wndClass, sizeof(wInfo.wndClass));
-            // Rect
-            GetWindowRect(hwnd, &wInfo.rect);
+            wInfo.focused = wi.dwWindowStatus;                                    // Focus status (0 or 1)
+            utils::getProcessInfo(hwnd, wInfo.procFilename);                   // Process filename
+            GetWindowText(hwnd, wInfo.title, sizeof(wInfo.title));      // Title
+            GetClassName(hwnd, wInfo.wndClass, sizeof(wInfo.wndClass)); // Class
+            GetWindowRect(hwnd, &wInfo.rect);                                     // Rect
         }
 
         if (!wInfo.initiallyIgnored) {
@@ -171,6 +166,7 @@ bool taskbar::isAnyWindowMaximized() {
                 wasFound = true;
                 wInfo.finalDetection = true;
             }
+            wInfo.hwnd = nullptr;
             windows.push_back(wInfo);
         }
 
@@ -192,17 +188,23 @@ bool taskbar::isAnyWindowMaximized() {
     return maximized;
 }
 
-void taskbar::setTaskbarVisibility(const bool visible) {
+
+void taskbar::setTaskbarVisibility(const bool visible, const bool hoveredOver) {
     HWND taskbar = getTaskbarHandle();
     if (!taskbar) return;
     const LONG_PTR style = GetWindowLongPtr(taskbar, GWL_EXSTYLE);
     if (visible) {
-        SetWindowLongPtr(taskbar, GWL_EXSTYLE, style & ~WS_EX_LAYERED);
+        int opacity = config::opacityWhenShown;
+        if (hoveredOver)
+            opacity = config::opacityWhenHovered;
+        SetWindowLongPtr(taskbar, GWL_EXSTYLE, opacity == 0 ? style & ~WS_EX_LAYERED : style | WS_EX_LAYERED);
+        SetLayeredWindowAttributes(taskbar, 0, opacity, LWA_ALPHA);
         ShowWindow(taskbar, SW_SHOW);
     } else {
         SetWindowLongPtr(taskbar, GWL_EXSTYLE, style | WS_EX_LAYERED);
-        SetLayeredWindowAttributes(taskbar, 0, 0, LWA_ALPHA);
-        ShowWindow(taskbar, SW_HIDE);
+        SetLayeredWindowAttributes(taskbar, 0, config::opacityWhenHidden, LWA_ALPHA);
+        if (config::opacityWhenHidden == 0)
+            ShowWindow(taskbar, SW_HIDE);
     }
 }
 
@@ -215,5 +217,6 @@ void taskbar::resetTaskbar() {
 }
 
 void taskbar::updateTaskbarState() {
-    setTaskbarVisibility(isCursorOverTaskbar() || isAnyWindowMaximized());
+    const bool hoveredOver = isCursorOverTaskbar();
+    setTaskbarVisibility(hoveredOver || isAnyWindowMaximized(), hoveredOver);
 }
