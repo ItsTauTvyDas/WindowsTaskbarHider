@@ -314,6 +314,13 @@ RECT utils::rect(const int x, const int y, const int width, const int height) {
     return { x, y, x + width, y + height };
 }
 
+bool utils::mouseInRect(const RECT *rect, int vKey) {
+    POINT pt;
+    GetCursorPos(&pt);
+    ScreenToClient(globals::hWnd, &pt);
+    return PtInRect(rect, pt) && (GetAsyncKeyState(vKey) & 0x8000);
+}
+
 bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, std::wstring &key, std::wstring &value) {
     if (line.empty())
         return false;
