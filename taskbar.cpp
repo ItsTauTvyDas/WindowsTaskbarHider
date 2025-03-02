@@ -108,22 +108,22 @@ bool taskbar::isAnyWindowMaximized() {
         // Since collectWindowsInfo can get updated inside EnumWindows (by main thread), let's ensure whenever it can start collecting
         canCollect = true;
         windows.clear();
-        lastDetectedWindow = {};
     } else if (lastDetectedWindow.hwnd) {
         WINDOWPLACEMENT wp;
         wp.length = sizeof(WINDOWPLACEMENT);
         if (GetWindowPlacement(lastDetectedWindow.hwnd, &wp) && IsWindowVisible(lastDetectedWindow.hwnd) & !IsIconic(lastDetectedWindow.hwnd)) {
-            lastDetectedWindow = { lastDetectedWindow.hwnd };
-            if (!config::ignoredWindows.empty())
-                lastDetectedWindow.detected = loopThroughWindowTags(config::ignoredWindows, lastDetectedWindow, wp, nullptr);
-            if (!config::exceptionalWindows.empty())
-                lastDetectedWindow.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, lastDetectedWindow, wp, nullptr);
-            if (lastDetectedWindow.wasExceptional || !lastDetectedWindow.detected || (config::alwaysIgnoreWhenNotMaximized && wp.showCmd == SW_MAXIMIZE))
-                return true;
+            if (!config::alwaysIgnoreWhenNotMaximized || wp.showCmd == SW_MAXIMIZE) {
+                lastDetectedWindow = { lastDetectedWindow.hwnd };
+                if (!config::ignoredWindows.empty())
+                    lastDetectedWindow.detected = loopThroughWindowTags(config::ignoredWindows, lastDetectedWindow, wp, nullptr);
+                if (!config::exceptionalWindows.empty())
+                    lastDetectedWindow.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, lastDetectedWindow, wp, nullptr);
+                if (lastDetectedWindow.wasExceptional || !lastDetectedWindow.detected)
+                    return true;
+            }
         }
-        lastDetectedWindow = {};
     }
-
+    lastDetectedWindow = {};
     bool maximized = false;
     EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
         WINDOWPLACEMENT wp;
