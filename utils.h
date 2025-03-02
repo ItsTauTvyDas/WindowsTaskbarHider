@@ -28,7 +28,7 @@ public:
     static bool mouseInRect(const RECT *rect, int vKey);
     static std::wstring getFormattedTime();
     static bool processIniFileLine(const std::wstring& line, std::wstring *prefix, std::wstring &key, std::wstring &value);
-    static void logcLangString(unsigned int mType, std::wstring &string);
+    static void logcLangString(unsigned int mType, std::wstring *string);
     static std::wstring formatLangString(const std::wstring &rStr, const std::vector<std::wstring> &values);
     static int messageBox(unsigned int mType, unsigned int uType, const std::vector<std::wstring> &values = {});
     static int messageBox(const std::wstring &mText, unsigned int uType);

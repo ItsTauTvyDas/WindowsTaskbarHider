@@ -15,6 +15,9 @@ set(VERSION_PRODUCT_VERSION  0)
 set(VERSION_PRODUCT_BUILD    0)
 set(VERSION_PRODUCT_REVISION 0)
 
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.cpp" "${lang_h_output}")
+
 # Replace all @LANG_ID_COUNTER@ in language.h.in
 set(lang_id_counter 1)
 set(lang_h_output "")
@@ -29,6 +32,18 @@ foreach(line IN LISTS lines)
     set(lang_h_output "${lang_h_output}${line}\n")
 endforeach()
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
+
+# Create std::wstring array for supported languages
+file(GLOB language_files "${CMAKE_SOURCE_DIR}/assets/language/language.*.*.ini")
+set(SUPPORTED_LANGUAGES "{")
+foreach(file_path ${language_files})
+    get_filename_component(filename ${file_path} NAME)
+    string(REGEX REPLACE "^language\\.([^.]+)\\.([^.]+)\\.ini$" "\\1" lang_string ${filename})
+    string(REGEX REPLACE "^language\\.([^.]+)\\.([^.]+)\\.ini$" "\\2" lang_code ${filename})
+    string(APPEND SUPPORTED_LANGUAGES " { L\"${lang_string}\", ${lang_code} },")
+endforeach()
+string(REGEX REPLACE ",$" "" SUPPORTED_LANGUAGES "${SUPPORTED_LANGUAGES}") # Remove last comma
+string(APPEND SUPPORTED_LANGUAGES " }")
 
 # Map language.h into unordered_map variable in language.cpp.inj
 file(STRINGS "${CMAKE_CURRENT_BINARY_DIR}/language.h" gen_lines)
@@ -56,8 +71,8 @@ add_executable(${PROJECT_NAME} WIN32 main.cpp
         ${CMAKE_BINARY_DIR}/language.cpp
         language.h
         language.cpp
-        assets/language/language.en.ini
-        assets/language/language.uk.ini)
+        assets/language/language.en.2057.ini
+        assets/language/language.uk.1058.ini)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/language.cpp.in ${CMAKE_BINARY_DIR}/language.cpp @ONLY)
 configure_file(resources.h.in ${CMAKE_BINARY_DIR}/resources.h @ONLY)

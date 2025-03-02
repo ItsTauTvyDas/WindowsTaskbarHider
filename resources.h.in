@@ -7,8 +7,8 @@
 #define TRAY_TITLE                   PROJECT_NAME L" " VER_FILEVERSION_STR
 
 #define IDI_APP_ICON                 100
-#define IDI_RES_INI                  L"INI"
 
+#define APP_SUPPORTED_LANGUAGES      @SUPPORTED_LANGUAGES@
 #define IDR_INI_LANG_EN              2057
 #define IDR_INI_LANG_UK              1058
 

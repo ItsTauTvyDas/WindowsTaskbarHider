@@ -13,10 +13,12 @@ public:
     static bool closeToTray;
     static bool closeConfirmMessage;
     static bool alwaysIgnoreWhenNotMaximized;
+    static bool languageLoaded;
     static int taskbarUpdateInterval;
     static int opacityWhenHidden;
     static int opacityWhenShown;
     static int opacityWhenHovered;
+    static int languageCode;
     static std::vector<std::wstring> ignoredWindows;
     static std::vector<std::wstring> exceptionalWindows;
 

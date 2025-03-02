@@ -96,7 +96,6 @@ bool utils::processArguments(const int argc, wchar_t* argv[]) {
 std::wstring replaceLastErrorPlaceholder(const std::wstring& message) {
     LPWSTR errorText = utils::NTStatusMessageToText(GetLastError());
     std::wstring_view errorTextView(errorText ? errorText : L"");
-    // Use the wide vformat + wide args
     return std::vformat(message, std::wformat_args(std::make_wformat_args(errorTextView)));
 }
 
@@ -181,16 +180,16 @@ LPWSTR utils::NTStatusMessageToText(const DWORD NTStatusMessage)
 {
     // https://web.archive.org/web/20150121053632/http://support.microsoft.com/kb/259693
     LPWSTR lpMessageBuffer = nullptr;
-    const HMODULE Hand = LoadLibrary(L"NTDLL.DLL");
+    const HMODULE module = LoadLibrary(L"NTDLL.DLL");
     const DWORD length = FormatMessage(
     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_FROM_HMODULE,
-        Hand,
+        module,
         NTStatusMessage,
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         reinterpret_cast<LPTSTR>(&lpMessageBuffer),
         0,
         nullptr);
-    FreeLibrary(Hand);
+    FreeLibrary(module);
     return length > 0 ? lpMessageBuffer : nullptr;
 }
 
@@ -362,35 +361,46 @@ bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, s
 }
 
 // Load or get cached string
-void utils::logcLangString(const unsigned int mType, std::wstring &string) {
+void utils::logcLangString(const unsigned int mType, std::wstring *string) {
     static std::unordered_map<unsigned int, std::wstring> messages;
     static std::mutex mutex;
     std::lock_guard lock(mutex);
-    if (messages.empty()) {
-        HRSRC hRes = FindResource(globals::hIns, MAKEINTRESOURCE(IDR_INI_LANG_EN), IDI_RES_INI);
-        const HGLOBAL hData = LoadResource(globals::hIns, hRes);
-        const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
-        const auto content = static_cast<const char*>(LockResource(hData));
-        if (const int wCharsCount = MultiByteToWideChar(CP_UTF8, 0, content, dataSize, nullptr, 0); wCharsCount > 0) {
-            std::wstring winiContent(wCharsCount, L'\0');
-            MultiByteToWideChar(CP_UTF8, 0, content, dataSize, &winiContent[0], wCharsCount);
-            std::wistringstream input(winiContent);
-            std::wstring line;
-            while (std::getline(input, line)) {
-                std::wstring key, value;
-                if (!processIniFileLine(line, nullptr, key, value))
-                    continue;
-                const auto mId = std::ranges::find_if(language::messageTypeMap, [&key](const auto &pair) {
-                    return pair.second == key;
-                });
-                if (mId != language::messageTypeMap.end())
-                    messages[mId->first] = value;
+    if (messages.empty() || !config::languageLoaded) {
+        if (HRSRC hRes = FindResource(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
+            const HGLOBAL hData = LoadResource(globals::hIns, hRes);
+            const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
+            const auto content = static_cast<const char*>(LockResource(hData));
+            if (const int wCharsCount = MultiByteToWideChar(CP_UTF8, 0, content, dataSize, nullptr, 0); wCharsCount > 0) {
+                std::wstring winiContent(wCharsCount, L'\0');
+                MultiByteToWideChar(CP_UTF8, 0, content, dataSize, &winiContent[0], wCharsCount);
+                std::wistringstream input(winiContent);
+                std::wstring line;
+                while (std::getline(input, line)) {
+                    std::wstring key, value;
+                    if (!processIniFileLine(line, nullptr, key, value))
+                        continue;
+                    const auto mId = std::ranges::find_if(language::messageTypeMap, [&key](const auto &pair) {
+                        return pair.second == key;
+                    });
+                    if (mId != language::messageTypeMap.end()) {
+                        messages[mId->first].clear();
+                        messages[mId->first].reserve(value.size());
+                        for (size_t i = 0; i < value.size(); ++i) {
+                            if (value[i] == L'\\' && i + 1 < value.size() && value[i + 1] == L'n') {
+                                messages[mId->first].push_back(L'\n');
+                                ++i;
+                            } else
+                                messages[mId->first].push_back(value[i]);
+                        }
+                    }
+                }
             }
         }
     }
-    string = messages[mType];
-    if (string.empty())
-        string = L"<untranslated>";
+    if (!string) return;
+    *string = messages[mType];
+    if (string->empty())
+        *string = L"<untranslated>";
 }
 
 // Format raw string
@@ -443,7 +453,7 @@ int utils::messageBox(const std::wstring &mText, const unsigned int uType) {
 
 std::wstring utils::message(const unsigned int mType, const std::vector<std::wstring> &values) {
     std::wstring s;
-    logcLangString(mType, s);
+    logcLangString(mType, &s);
     s = formatLangString(s, values);
     return s;
 }
