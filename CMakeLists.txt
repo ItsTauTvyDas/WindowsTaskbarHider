@@ -28,13 +28,14 @@ string(REGEX REPLACE ",$" "" DEFAULT_SUPPORTED_LANGUAGES "${DEFAULT_SUPPORTED_LA
 string(APPEND DEFAULT_SUPPORTED_LANGUAGES " }")
 
 add_custom_command(
-        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/language.h"
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"
         COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/generate_language_files.cmake"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/language.h.in"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/language.h.in" "${CMAKE_CURRENT_SOURCE_DIR}/language.cpp.in"
         COMMENT "Generating language files (language.h and language.cpp)"
 )
 
-add_executable(${PROJECT_NAME} WIN32 main.cpp
+add_executable(${PROJECT_NAME} WIN32
+        main.cpp
         utils.cpp
         utils.h
         taskbar.cpp
@@ -45,13 +46,14 @@ add_executable(${PROJECT_NAME} WIN32 main.cpp
         globals.h
         assets/app.rc
         resources.h
-        language.h
-        language.cpp
+        "${CMAKE_CURRENT_BINARY_DIR}/language.h"
+        "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"
         assets/language/language.en.2057.ini
-        assets/language/language.uk.1058.ini)
+        assets/language/language.uk.1058.ini
+)
 
-configure_file(resources.h.in ${CMAKE_BINARY_DIR}/resources.h @ONLY)
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR})
+configure_file(resources.h.in "${CMAKE_CURRENT_BINARY_DIR}/resources.h" @ONLY)
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 target_compile_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
 target_link_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
