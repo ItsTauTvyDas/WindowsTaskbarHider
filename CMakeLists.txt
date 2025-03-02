@@ -4,7 +4,8 @@ cmake_policy(SET CMP0115 NEW)
 project(WindowsTaskbarHider)
 
 set(CMAKE_CXX_STANDARD       20)
-set(CMAKE_CXX_FLAGS          "-static -static-libgcc -static-libstdc++ -pthread")
+set(CMAKE_CXX_FLAGS          "${CMAKE_CXX_FLAGS} -static -static-libgcc -static-libstdc++ -pthread")
+set(CMAKE_CXX_FLAGS_DEBUG    "${CMAKE_CXX_FLAGS_DEBUG} -gdwarf-3")
 
 set(PRODUCT_COMPANY          "ItsTauTvyDas")
 set(PRODUCT_URL              "https://github.com/ItsTauTvyDas/WindowsTaskbarHider")
@@ -13,30 +14,6 @@ set(VERSION_PRODUCT_NUMBER   1)
 set(VERSION_PRODUCT_VERSION  0)
 set(VERSION_PRODUCT_BUILD    0)
 set(VERSION_PRODUCT_REVISION 0)
-
-# Some weird bug, where ninja can complain about language.cpp with an error "missing and no known rule to make it"
-# After it first fails, if you change something in this file (just make a change, like editing or adding a comment somewhere, just to trigger a change), then it succeeds
-# Pre-creating the files fixes the issue
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.cpp" "${lang_h_output}")
-
-# Add language files (cmake for some reason doesn't see changes in file, adding them forcefully)
-#file(GLOB LANG_INI_FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/language/language.*.ini")
-#set(ALL_LANG_INI_OUTPUTS "")
-#foreach(ini_file IN LISTS LANG_INI_FILES)
-#    get_filename_component(ini_filename ${ini_file} NAME)
-#    set(output_file "${CMAKE_BINARY_DIR}/assets/language/${ini_filename}")
-#    add_custom_command(
-#            OUTPUT ${output_file}
-#            COMMAND ${CMAKE_COMMAND} -E copy ${ini_file} ${output_file}
-#            DEPENDS ${ini_file}
-#            COMMENT "Copying ${ini_file} to ${output_file}"
-#    )
-#    list(APPEND ALL_LANG_INI_OUTPUTS ${output_file})
-#endforeach()
-#add_custom_target(copy_language_inis ALL
-#        DEPENDS ${ALL_LANG_INI_OUTPUTS}
-#)
 
 # Replace all @LANG_ID_COUNTER@ in language.h.in
 set(lang_id_counter 1)
@@ -74,6 +51,9 @@ add_executable(${PROJECT_NAME} WIN32 main.cpp
         globals.h
         assets/app.rc
         resources.h
+        # Adding them makes cmake notice changes in language.h.in file, idk how bad it is specifying both files from source and binary directory
+        ${CMAKE_BINARY_DIR}/language.h
+        ${CMAKE_BINARY_DIR}/language.cpp
         language.h
         language.cpp
         assets/language/language.en.ini
