@@ -99,7 +99,9 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
 }
 
 bool taskbar::isAnyWindowMaximized() {
+    checkForAutoCollect();
     static WindowInfo lastDetectedWindow;
+    static std::vector<WindowInfo> previousWindows;
     static bool wasFound = false, canCollect = false;
 
     if (collectWindowsInfo) {
@@ -180,7 +182,10 @@ bool taskbar::isAnyWindowMaximized() {
     }, reinterpret_cast<LPARAM>(&maximized));
     // ReSharper disable once CppDFAConstantConditions
     if (collectWindowsInfo && canCollect) {
-        SendMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
+        if (previousWindows != windows) {
+            SendMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
+            previousWindows = windows;
+        }
         collectWindowsInfo = false;
         canCollect = false;
     }
@@ -219,4 +224,15 @@ void taskbar::resetTaskbar() {
 void taskbar::updateTaskbarState() {
     const bool hoveredOver = isCursorOverTaskbar();
     setTaskbarVisibility(hoveredOver || isAnyWindowMaximized(), hoveredOver);
+}
+
+void taskbar::checkForAutoCollect() {
+    if (collectWindowsInfo || !config::livePreview)
+        return;
+    static DWORD lastTick = GetTickCount();
+    DWORD currentTick = GetTickCount();
+    if (currentTick - lastTick >= 1000) {
+        collectWindowsInfo = true;
+        lastTick = currentTick;
+    }
 }
