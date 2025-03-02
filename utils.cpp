@@ -4,6 +4,7 @@
 #include <format>
 #include <shlobj.h>
 #include <fstream>
+#include <iomanip>
 #include "windows.h"
 #include "resources.h"
 #include "config.h"
@@ -318,7 +319,19 @@ bool utils::mouseInRect(const RECT *rect, int vKey) {
     POINT pt;
     GetCursorPos(&pt);
     ScreenToClient(globals::hWnd, &pt);
-    return PtInRect(rect, pt) && (GetAsyncKeyState(vKey) & 0x8000);
+    return PtInRect(rect, pt) && GetAsyncKeyState(vKey) & 0x8000;
+}
+
+
+std::wstring utils::getFormattedTime() {
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    std::wostringstream oss;
+    oss << std::setfill(L'0') << std::setw(2) << st.wHour << L":"
+        << std::setfill(L'0') << std::setw(2) << st.wMinute << L":"
+        << std::setfill(L'0') << std::setw(2) << st.wSecond << L"."
+        << std::setfill(L'0') << std::setw(3) << st.wMilliseconds;
+    return oss.str();
 }
 
 bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, std::wstring &key, std::wstring &value) {
