@@ -180,8 +180,10 @@ inline void resizeChildWindows(HWND hwnd, LPCREATESTRUCT create);
 inline void updateLanguage(HWND hwnd) {
     for (auto i = 0; i < W_GRID_MAX_COLUMNS; i++)
         g_tableHeaders[i] = utils::message(MSG_WND_DEBUG_TABLE_STATUS + i);
-    if (hwnd)
+    if (hwnd) {
         resizeChildWindows(hwnd, nullptr);
+        SetWindowText(hwnd, utils::message(MSG_APPLICATION_NAME).c_str());
+    }
 }
 
 inline bool getYScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) {
@@ -589,7 +591,6 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
         g_childWindows.push_back(g_hSettingsButton);
     } else {
         SetWindowText(g_childWindows[i], text.c_str());
-        // MoveWindow(g_childWindows[i], rect.left, rect.top, rect.right, rect.bottom, TRUE);
         MoveWindow(g_childWindows[i], windowWidth - rect.right - 10, 10, rect.right, rect.bottom, TRUE);
         i++;
     }
@@ -664,11 +665,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
     static NOTIFYICONDATA nid = {};
     int *scrollPosition;
 
-    updateLanguage(nullptr);
-
     switch (uMsg) {
         case WM_CREATE:
         {
+            updateLanguage(nullptr);
+
             // Get icon for system tray
             const auto pcs = reinterpret_cast<CREATESTRUCT *>(lParam);
             const auto hTrayIcon = static_cast<HICON>(pcs->lpCreateParams);
@@ -880,12 +881,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
 
             // Table update time text
             std::wstring text = utils::message(MSG_WND_LAST_UPDATE_AT) + L" ";
-            static int lastUpdatedTextWidth = 0;
-            if (lastUpdatedTextWidth == 0)
-                lastUpdatedTextWidth = g_calculateTextWidth(mHdc, text, g_hDefaultFont);
             if (g_lastUpdatedTimeTextWidth == 0)
                 g_lastUpdatedTimeTextWidth = g_calculateTextWidth(mHdc, g_lastTableUpdateTime, g_hDefaultFontBold);
-            g_drawText(mHdc, text, windowClientWidth - lastUpdatedTextWidth - g_lastUpdatedTimeTextWidth - 10, 45);
+            g_drawText(mHdc, text, windowClientWidth - g_calculateTextWidth(mHdc, text, g_hDefaultFont) - g_lastUpdatedTimeTextWidth - 10, 45);
             auto oldFont = SelectObject(mHdc, g_hDefaultFontBold);
             g_drawText(mHdc, g_lastTableUpdateTime, windowClientWidth - g_lastUpdatedTimeTextWidth - 10, 45);
             SelectObject(mHdc, oldFont);
@@ -1199,9 +1197,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
 
     // Create window
     globals::hWnd = CreateWindowEx(
-        WS_EX_CLIENTEDGE,
-        PROJECT_NAME,
-        utils::message(MSG_APPLICATION_NAME).c_str(),
+        WS_EX_CLIENTEDGE, PROJECT_NAME, utils::message(MSG_APPLICATION_NAME).c_str(),
         WS_OVERLAPPEDWINDOW,
         static_cast<short>((screenWidth - windowWidth) / 2),
         static_cast<short>((screenHeight - windowHeight) / 2),
@@ -1215,10 +1211,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         }, true);
         return 1;
     }
-
-    // atexit([] {
-    //     MessageBoxA(globals::hWnd, "Application was closed.", PROJECT_NAME, MB_ICONINFORMATION | MB_OK);
-    // });
 
     taskbarLoopThread = std::thread(taskbarLoop);
 
