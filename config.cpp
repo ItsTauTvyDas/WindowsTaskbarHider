@@ -132,7 +132,7 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
                 checkForInvalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000, noErrors);
         } else if (key == L"General.Language") {
             languageLoaded = false;
-            auto languages = std::unordered_map<std::wstring, int>(APP_SUPPORTED_LANGUAGES);
+            auto languages = std::unordered_map<std::wstring, int>(APP_DEFAULT_LANGUAGES);
             if (!languages.contains(value)) {
                 auto keysView = std::views::keys(languages);
                 const std::vector languagesVector(keysView.begin(), keysView.end());
