@@ -54,7 +54,7 @@
 #define MSG_WND_HEADER_ACTIONS                    @LANG_ID_COUNTER@
 #define MSG_WND_HEADER_TEXT                       @LANG_ID_COUNTER@
 #define MSG_WND_DEBUG_TABLE_HEADER_TEXT           @LANG_ID_COUNTER@
-// The order of some macros below MUSTN'T be changed!
+// The order of macros below MUSTN'T be changed!
 #define MSG_WND_DEBUG_TABLE_STATUS                @LANG_ID_COUNTER@
 #define MSG_WND_DEBUG_TABLE_TRIGGERED_BY          @LANG_ID_COUNTER@
 #define MSG_WND_DEBUG_TABLE_WND_PROCESS           @LANG_ID_COUNTER@
