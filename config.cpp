@@ -12,8 +12,8 @@
 
 bool config::alwaysIgnoreWhenNotMaximized = true;
 bool config::darkMode;
-bool config::livePreview = true;
-bool config::showAllWindows = true;
+bool config::livePreview = false;
+bool config::showAllWindows = false;
 bool config::openOnStart = false;
 bool config::closeToTray = false;
 bool config::closeConfirmMessage = false;
@@ -160,27 +160,35 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
         if (msg == L"stoi")
             msg = utils::message(MSG_CONFIG_NOT_NUMBER);
         utils::messageBox(formattedKey + L": " + msg, MB_ICONWARNING | MB_OK);
+        return false;
     }
     return true;
 }
 
-void config::load() {
+bool config::load() {
     ensureConfigurationExists();
 
     std::wifstream file(CONFIG_FILENAME);
     std::wstring line;
     std::wstring prefix;
+    bool noErrors = true;
 
+    int lineNum = 0;
     while (getline(file, line)) {
+        lineNum++;
         std::wstring key, value;
         if (!utils::processIniFileLine(line, &prefix, key, value))
             continue;
 
         if (key.empty()) {
-
+            utils::messageBox(MSG_CONFIG_INVALID_SYNTAX, MB_ICONERROR | MB_OK, { std::to_wstring(lineNum), line });
+            noErrors = false;
+            continue;
         }
 
-        processSingle(prefix + key, value);
+        if (!processSingle(prefix + key, value))
+            noErrors = false;
     }
     file.close();
+    return noErrors;
 }

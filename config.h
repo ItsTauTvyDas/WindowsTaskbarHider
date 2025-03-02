@@ -20,7 +20,7 @@ public:
     static std::vector<std::wstring> ignoredWindows;
     static std::vector<std::wstring> exceptionalWindows;
 
-    static void load();
+    static bool load();
     static void save();
     static void open();
     static bool processSingle(const std::wstring &key, const std::wstring &value);
