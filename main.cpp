@@ -4,6 +4,8 @@
 #include "globals.h"
 #include "resources.h"
 #include <dwmapi.h>
+#include <windowsx.h>
+#include <iostream>
 #include <sstream>
 #include <thread>
 #include <numeric>
@@ -11,15 +13,15 @@
 
 #define WM_TRAY_ICON           (WM_USER + 1)
 
-#define WCP_BASE_COLOR         config::darkMode ? darkColorPalette [0]  : lightColorPalette[0]
-#define WCP_FOREGROUND         config::darkMode ? darkColorPalette [1]  : lightColorPalette[1]
-#define WCP_BACKGROUND         config::darkMode ? darkColorPalette [2]  : lightColorPalette[2]
-#define WCP_BACKGROUND2        config::darkMode ? darkColorPalette [3]  : lightColorPalette[3]
-#define WCP_BUTTON_BG          config::darkMode ? darkColorPalette [4]  : lightColorPalette[4]
-#define WCP_BUTTON_BORDER      config::darkMode ? darkColorPalette [5]  : lightColorPalette[5]
-#define WCP_BUTTON_CLICKED_BG  config::darkMode ? darkColorPalette [6]  : lightColorPalette[6]
-#define WCP_SCROLLBAR_COLOR    config::darkMode ? darkColorPalette [7]  : lightColorPalette[7]
-#define WCP_SCROLLBAR_BG       config::darkMode ? darkColorPalette [8]  : lightColorPalette[8]
+#define WCP_BASE_COLOR         config::darkMode ? darkColorPalette [0] : lightColorPalette[0]
+#define WCP_FOREGROUND         config::darkMode ? darkColorPalette [1] : lightColorPalette[1]
+#define WCP_BACKGROUND         config::darkMode ? darkColorPalette [2] : lightColorPalette[2]
+#define WCP_BACKGROUND2        config::darkMode ? darkColorPalette [3] : lightColorPalette[3]
+#define WCP_BUTTON_BG          config::darkMode ? darkColorPalette [4] : lightColorPalette[4]
+#define WCP_BUTTON_BORDER      config::darkMode ? darkColorPalette [5] : lightColorPalette[5]
+#define WCP_BUTTON_CLICKED_BG  config::darkMode ? darkColorPalette [6] : lightColorPalette[6]
+#define WCP_SCROLLBAR_COLOR    config::darkMode ? darkColorPalette [7] : lightColorPalette[7]
+#define WCP_SCROLLBAR_BG       config::darkMode ? darkColorPalette [8] : lightColorPalette[8]
 
 #define WSC_BUTTON_DEFAULT_W      120
 #define WSC_BUTTON_DEFAULT_H      30
@@ -32,9 +34,11 @@
 #define WSC_BUTTON_X_MARGIN       15
 #define WSC_CHECKBOX_SPACING      10
 
+#define APP_WINDOW_MIN_WIDTH      800
+#define APP_WINDOW_MIN_HEIGHT     550
+
 #define WMC_BUTTON                L"BUTTON"
 #define WMC_SCROLLBAR             L"SCROLLBAR"
-#define WMC_STATIC                L"STATIC"
 
 #define W_GRID_MAX_COLUMNS        8
 
@@ -73,30 +77,36 @@ const std::wstring g_tableHeaders[] = {
     utils::message(MSG_WND_DEBUG_TABLE_WND_TITLE)
 };
 
-std::thread taskbarLoopThread;
+constexpr bool g_tableCollapsableHeaders[] = {
+    false, true, true, true, true, false, false, true
+};
 
+std::thread taskbarLoopThread;
 bool quitting                = false,
      focused                 = false,
-     g_tableSizesInitialized = false;
-
+     g_tableSizesInitialized = false,
+     g_tableHeaderCheckboxCollapseStates[W_GRID_MAX_COLUMNS] = {};
+RECT g_trackableCheckBoxes[W_GRID_MAX_COLUMNS] = {};
 HWND   g_hYScrollBar       = nullptr,
        g_hXScrollBar       = nullptr,
        g_hSettingsButton   = nullptr;
 HFONT  g_hDefaultFont      = nullptr,
        g_hDefaultFontBold  = nullptr,
+       g_hTableFontBold    = nullptr,
        g_hTableFont        = nullptr;
 HBRUSH g_lastCreatedBrush  = nullptr;
-
-int windowWidth          = 700,
-    windowHeight         = 500,
-    windowClientHeight   = 0,
-    windowClientWidth    = 0,
-    g_windowScrollYPos   = 0,
-    g_windowScrollXPos   = 0,
-    g_tableDefaultColumnWidths[W_GRID_MAX_COLUMNS],
-    g_tableColumnWidths[W_GRID_MAX_COLUMNS],
-    g_tableColumnXMargin = 10,
-    g_tableRowHeight     = 30;
+int windowWidth                = APP_WINDOW_MIN_WIDTH,
+    windowHeight               = APP_WINDOW_MIN_HEIGHT,
+    windowClientHeight         = 0,
+    windowClientWidth          = 0,
+    g_windowScrollYPos         = 0,
+    g_windowScrollXPos         = 0,
+    g_tableDefaultColumnWidths[W_GRID_MAX_COLUMNS] = {},
+    g_tableColumnWidths[W_GRID_MAX_COLUMNS] = {},
+    g_tableColumnXMargin       = 10,
+    g_tableRowHeight           = 30,
+    g_lastUpdatedTimeTextWidth = 0;
+std::wstring g_lastTableUpdateTime = L"00:00:00.000";
 
 void taskbarLoop() {
     bool called = false;
@@ -118,11 +128,11 @@ void taskbarLoop() {
 
 int getContentHeight() {
     // +1 for header row
-    return (static_cast<int>(std::size(taskbar::windows)) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET;
+    return (static_cast<int>(std::size(taskbar::windows)) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET + (config::livePreview ? windowClientHeight : 0);
 }
 
 int getContentWidth() {
-    return std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), 0, std::plus());
+    return std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), config::livePreview ? windowClientWidth : 0, std::plus());
 }
 
 int getMaxYScroll(const int contentHeight) {
@@ -131,14 +141,12 @@ int getMaxYScroll(const int contentHeight) {
 
 int getMaxXScroll(const int contentWidth) {
     const int visibleWidth = windowClientWidth - WSC_SCROLLBAR_WIDTH;
-    return contentWidth > visibleWidth ? contentWidth - visibleWidth : 0;
+    return contentWidth - visibleWidth;
 }
 
 void updateYScrollBarInfo() {
     const int contentHeight = getContentHeight() + WSC_SCROLLBAR_WIDTH;
-    const int maxScroll = getMaxYScroll(contentHeight);
-
-    if (g_windowScrollYPos > maxScroll)
+    if (const int maxScroll = getMaxYScroll(contentHeight); g_windowScrollYPos > maxScroll)
         g_windowScrollYPos = maxScroll;
     if (g_windowScrollYPos < 0)
         g_windowScrollYPos = 0;
@@ -179,7 +187,7 @@ bool getYScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) {
     sbi.cbSize = sizeof(SCROLLBARINFO);
     GetScrollBarInfo(g_hYScrollBar, OBJID_CLIENT, &sbi);
     rect = utils::rect(windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER + sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop);
-    if (getMaxYScroll(getContentHeight()) <= 0)
+    if (getMaxYScroll(getContentHeight()) <= -WSC_SCROLLBAR_WIDTH)
         return false;
     return true;
 }
@@ -188,7 +196,7 @@ bool getXScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) {
     sbi.cbSize = sizeof(SCROLLBARINFO);
     GetScrollBarInfo(g_hXScrollBar, OBJID_CLIENT, &sbi);
     rect = utils::rect(sbi.xyThumbTop, windowHeight - WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH);
-    if (getMaxXScroll(getContentWidth()) <= 0)
+    if (getMaxXScroll(getContentWidth()) <= -20)
         return false;
     return true;
 }
@@ -244,7 +252,7 @@ void g_drawScrollBars(HDC hdc) {
     DrawText(hdc, L"\u02C2", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
     rect.left = windowClientWidth - WSC_SCROLLBAR_WIDTH - rect.right;
-    rect.right = rect.left + 17;
+    rect.right = rect.left + 16;
     FillRect(hdc, &rect, SELECT_BRUSH);
     DrawText(hdc, L"\u02C3", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
@@ -256,7 +264,6 @@ HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
     static HBITMAP memBitmap;
     static HGDIOBJ oldBitmap;
     static HDC mHdc, hdc;
-    static int width, height;
     if (start) {
         if (!oHdc)
             hdc = BeginPaint(hwnd, &ps);
@@ -264,17 +271,12 @@ HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
             hdc = oHdc;
         mHdc = CreateCompatibleDC(hdc);
 
-        RECT rc;
-        GetClientRect(hwnd, &rc);
-        width = rc.right - rc.left;
-        height = rc.bottom - rc.top;
-
-        memBitmap = CreateCompatibleBitmap(hdc, width, height);
+        memBitmap = CreateCompatibleBitmap(hdc, windowClientWidth, windowClientHeight);
         oldBitmap = SelectObject(mHdc, memBitmap);
         return mHdc;
     }
 
-    BitBlt(hdc, 0, 0, width, height, mHdc, 0, 0, SRCCOPY);
+    BitBlt(hdc, 0, 0, windowClientWidth, windowClientHeight, mHdc, 0, 0, SRCCOPY);
 
     SelectObject(mHdc, oldBitmap);
     DeleteObject(memBitmap);
@@ -286,8 +288,6 @@ HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
     memBitmap = nullptr;
     oldBitmap = nullptr;
     mHdc = nullptr;
-    width = 0;
-    height = 0;
     return nullptr;
 }
 
@@ -295,8 +295,63 @@ inline void g_drawText(HDC hdc, const std::wstring &text, const int x, const int
     TextOut(hdc, x, y, text.c_str(), static_cast<int>(text.length()));
 }
 
+void g_drawCheckBox(HDC mHdc, bool pState, const RECT oRect, const LPCWSTR text, HBRUSH &background, HBRUSH &foreground, const bool reverse, const int *id) {
+    if (!background)
+        background = CreateSolidBrush(WCP_BACKGROUND2);
+    if (!foreground)
+        foreground = CreateSolidBrush(WCP_FOREGROUND);
+
+    // Background color
+    FillRect(mHdc, &oRect, background);
+
+    if (id)
+        g_trackableCheckBoxes[*id] = oRect;
+
+    // Create checkbox rect
+    RECT boxRect = oRect;
+    boxRect.right = boxRect.left + 16;
+    boxRect.top += (boxRect.bottom - boxRect.top - 16 ) / 2;
+    boxRect.bottom = boxRect.top + 16;
+
+    // Draw checkbox rect
+    FillRect(mHdc, &boxRect, background);
+    FrameRect(mHdc, &boxRect, foreground);
+    if (reverse)
+        pState = !pState;
+    if (pState)
+    {
+        // Create a little rect inside checkbox rect
+        boxRect.left += 3;
+        boxRect.top += 3;
+        boxRect.right -= 3;
+        boxRect.bottom -= 3;
+        FillRect(mHdc, &boxRect, foreground);
+    }
+
+    RECT textRect = oRect;
+    textRect.left += WSC_CHECKBOX_TEXT_OFFSET;
+    const auto oldBkColor = SetBkColor(mHdc, WCP_BACKGROUND2);
+    const auto oldTextColor = SetTextColor(mHdc, WCP_FOREGROUND);
+    DrawTextW(mHdc, text, -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+    SetBkColor(mHdc, oldBkColor);
+    SetTextColor(mHdc, oldTextColor);
+}
+
+int g_calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font) {
+    HGDIOBJ oldFont = nullptr;
+    if (font)
+        oldFont = SelectObject(hdc, font);
+    SIZE sz;
+    GetTextExtentPoint32(hdc, text.c_str(), static_cast<int>(text.size()), &sz);
+    if (font)
+        SelectObject(hdc, oldFont);
+    return sz.cx;
+}
+
 void g_redrawLowerArea(HWND hwnd) {
-    const RECT rect { 0, WSC_HEADER, windowWidth, windowClientHeight };
+    RECT rect { 0, WSC_HEADER, windowWidth, windowClientHeight };
+    InvalidateRect(hwnd, &rect, TRUE);
+    rect = utils::rect(windowClientWidth - g_lastUpdatedTimeTextWidth - 10, 45, g_lastUpdatedTimeTextWidth, 30);
     InvalidateRect(hwnd, &rect, TRUE);
 }
 
@@ -309,19 +364,11 @@ void g_redrawWindow(HWND hwnd) {
     RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
 }
 
-int g_calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font) {
-    const auto oldFont = static_cast<HFONT>(SelectObject(hdc, font));
-    SIZE sz;
-    GetTextExtentPoint32(hdc, text.c_str(), static_cast<int>(text.size()), &sz);
-    SelectObject(hdc, oldFont);
-    return sz.cx;
-}
-
 void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
     const int gridWidth = std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), 0, std::plus());
     const int gridHeight = rows * g_tableRowHeight;
 
-    RECT rect = { sx, sy, gridWidth + sx, sy + g_tableRowHeight };
+    const RECT rect = { sx, sy, gridWidth + sx, sy + g_tableRowHeight };
     FillRect(hdc, &rect, g_createBrush(WCP_BACKGROUND2));
     g_deleteLastBrush();
 
@@ -369,9 +416,11 @@ void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
 }
 
 inline void g_calculateDefaultWidths(HDC hdc) {
-    for (auto i = 0; i < std::size(g_tableHeaders); i++) {
+    for (auto i = 0; i < W_GRID_MAX_COLUMNS; i++) {
         std::wstring header = g_tableHeaders[i];
         g_tableDefaultColumnWidths[i] = g_calculateTextWidth(hdc, header, g_hTableFont);
+        if (g_tableCollapsableHeaders[i])
+            g_tableDefaultColumnWidths[i] += WSC_CHECKBOX_TEXT_OFFSET;
     }
 }
 
@@ -389,7 +438,7 @@ std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
                 value = utils::message(MSG_WND_DEBUG_TABLE_STATUS_IGNORED);
             break;
         }
-        case 1: {
+        case 1: { // Triggered by
             if (wInfo.initiallyIgnored)
                 value += utils::message(MSG_WND_DEBUG_TABLE_TB_INT_NMAXIMIZED);
             else if (wInfo.fault.empty() && wInfo.detected)
@@ -432,39 +481,61 @@ inline void g_calculateCurrentWidths(HDC hdc, const int rows) {
         if (row > 0)
             wInfo = taskbar::windows[row - 1];
         for (auto col = 0; col < W_GRID_MAX_COLUMNS; col++)
-            if (const std::wstring value = row == 0 ? g_tableHeaders[col] : getWindowValue(wInfo, col); !value.empty())
-                if (const int width = g_calculateTextWidth(hdc, value, g_hTableFont) + 2 * g_tableColumnXMargin; widths[col] < width)
+            if (const std::wstring value = row == 0 ? g_tableHeaders[col] : getWindowValue(wInfo, col); !value.empty()) {
+                int width = g_calculateTextWidth(hdc, value, g_hTableFont) + 2 * g_tableColumnXMargin;
+                if (row == 0 && g_tableCollapsableHeaders[col])
+                    width += WSC_CHECKBOX_TEXT_OFFSET;
+                if (g_tableHeaderCheckboxCollapseStates[col]) {
+                    widths[col] = g_tableDefaultColumnWidths[col] + WSC_CHECKBOX_TEXT_OFFSET;
+                    continue;
+                }
+                if (widths[col] < width)
                     widths[col] = width;
+            }
     }
 
     std::copy(std::begin(widths), std::end(widths), std::begin(g_tableColumnWidths));
 }
 
 inline void g_printDataToGrid(HDC hdc, const int sx, const int sy, const int rows) {
+    HBRUSH background = nullptr, foreground = nullptr;
     for (auto row = 0; row < rows; row++) {
-        const int y = sy + 7 + row * g_tableRowHeight;
+        // constexpr int textTopMargin = 7;
+        const int y = sy + row * g_tableRowHeight;
         int x = sx;
         taskbar::WindowInfo wInfo;
         if (row > 0)
             wInfo = taskbar::windows[row - 1];
         for (auto col = 0; col < W_GRID_MAX_COLUMNS; col++) {
+            constexpr int textLeftMargin = 10;
             std::wstring value;
+            RECT rect = utils::rect(x + textLeftMargin, y + 1, g_tableColumnWidths[col] - textLeftMargin, g_tableRowHeight - 1);
             if (row == 0) { // Header
                 value = g_tableHeaders[col];
-                g_drawText(hdc, value, x + 10, y);
+                const auto oldFont = SelectObject(hdc, g_hTableFontBold);
+                if (g_tableCollapsableHeaders[col]) {
+                    g_drawCheckBox(hdc, g_tableHeaderCheckboxCollapseStates[col], rect, value.c_str(), background, foreground, true, &col);
+                } else {
+                    DrawText(hdc, value.c_str(), -1, &rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                }
+                SelectObject(hdc, oldFont);
             } else {
                 value = getWindowValue(wInfo, col);
-                if (!value.empty())
-                    g_drawText(hdc, value, x + 10, y);
+                if (!value.empty()) {
+                    DrawText(hdc, value.c_str(), -1, &rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                }
             }
             x += g_tableColumnWidths[col];
         }
     }
+    DeleteObject(background);
+    DeleteObject(foreground);
 }
 
 void g_updateTable(HDC hdc) {
     if (g_tableDefaultColumnWidths[0] == 0)
         g_calculateDefaultWidths(hdc);
+
     const int y = WSC_GRID_Y - g_windowScrollYPos;
     const int rows = static_cast<int>(std::size(taskbar::windows)) + 1; // +header
 
@@ -528,6 +599,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             // By doing this character widths might be incorrect, but for now I didn't notice anything (yet)
             wcscpy_s(lf.lfFaceName, LF_FACESIZE, L"Consolas");
             g_hTableFont = CreateFontIndirect(&lf);
+
+            // Re-create table font but bold
+            GetObject(g_hTableFont, sizeof(lf), &lf);
+            lf.lfWeight = FW_BOLD;
+            g_hTableFontBold = CreateFontIndirect(&lf);
 
             HCURSOR lPtrHandCursor = LoadCursor(nullptr, IDC_HAND);
             auto hdc = GetDC(hwnd);
@@ -627,13 +703,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             RECT rect;
             GetWindowRect(g_hSettingsButton, &rect);
             MoveWindow(g_hSettingsButton, windowWidth - (rect.right - rect.left) - 10, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
-            GetClientRect(hwnd, &rect);
 
+            GetClientRect(hwnd, &rect);
             windowClientHeight = rect.bottom - rect.top;
             windowClientWidth = rect.right - rect.left;
 
             updateScrollBarsInfo();
             g_redrawWindow(hwnd);
+            break;
+        }
+        case WM_LBUTTONDOWN:
+        {
+            POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            if (pt.y <= WSC_HEADER) // Checkbox is not visible
+                break;
+            for (auto i = 0; i < W_GRID_MAX_COLUMNS; i++) {
+                const RECT rect = g_trackableCheckBoxes[i];
+                if (PtInRect(&rect, pt)) {
+                    g_tableHeaderCheckboxCollapseStates[i] = !g_tableHeaderCheckboxCollapseStates[i];
+                    g_redrawLowerArea(hwnd);
+                    updateXScrollBarInfo();
+                    break;
+                }
+            }
             break;
         }
         case WM_ACTIVATE:
@@ -678,43 +770,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     g_doubleBuffering(hwnd, ps, draw->hDC, false);
                     break;
                 }
+                case ID_CHECKBOX_TABLE_HEADER:
                 case ID_CHECKBOX_SHOW_ALL_WINDOWS:
                 case ID_CHECKBOX_DARK_MODE:
                 case ID_CHECKBOX_AUTO_UPDATE:
                 {
                     HDC mHdc = g_doubleBuffering(hwnd, ps, draw->hDC, true);
 
-                    const auto background = CreateSolidBrush(WCP_BACKGROUND2);
-                    const auto foreground = CreateSolidBrush(WCP_FOREGROUND);
-
-                    // Background color
-                    FillRect(mHdc, &draw->rcItem, background);
-
-                    // Create checkbox rect
-                    RECT boxRect = draw->rcItem;
-                    boxRect.right = boxRect.left + 16;
-                    boxRect.top += (boxRect.bottom - boxRect.top - 16 ) / 2;
-                    boxRect.bottom = boxRect.top + 16;
-
-                    // Draw checkbox rect
-                    FillRect(mHdc, &boxRect, background);
-                    FrameRect(mHdc, &boxRect, foreground);
-                    if (const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(draw->hwndItem, GWLP_USERDATA)); pState ? *pState : false)
-                    {
-                        // Create a little rect inside checkbox rect
-                        boxRect.left += 3;
-                        boxRect.top += 3;
-                        boxRect.right -= 3;
-                        boxRect.bottom -= 3;
-                        FillRect(mHdc, &boxRect, foreground);
-                    }
-
-                    RECT textRect = draw->rcItem;
-                    textRect.left += 20;
-                    SetBkColor(mHdc, WCP_BACKGROUND2);
-                    SetTextColor(mHdc, WCP_FOREGROUND);
+                    HBRUSH background = nullptr, foreground = nullptr;
+                    const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(draw->hwndItem, GWLP_USERDATA));
                     SelectObject(mHdc, g_hDefaultFont);
-                    DrawTextW(mHdc, text, -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+                    g_drawCheckBox(mHdc, pState ? *pState : false, draw->rcItem, text, background, foreground, false, nullptr);
 
                     DeleteObject(background);
                     DeleteObject(foreground);
@@ -754,12 +820,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             FillRect(mHdc, &wRect, g_createBrush(WCP_BACKGROUND2));
             g_deleteLastBrush();
 
-            // Header text
             SetBkColor(mHdc, WCP_BACKGROUND2);
             SelectObject(mHdc, g_hDefaultFont);
+
+            // Header text
             g_drawText(mHdc, utils::message(MSG_WND_HEADER_TEXT), 10, 45);
 
-            // Vertical scrollbar
+            // Table update time text
+            std::wstring text = utils::message(MSG_WND_LAST_UPDATE_AT) + L" ";
+            static int lastUpdatedTextWidth = 0;
+            if (lastUpdatedTextWidth == 0)
+                lastUpdatedTextWidth = g_calculateTextWidth(mHdc, text, g_hDefaultFont);
+            if (g_lastUpdatedTimeTextWidth == 0)
+                g_lastUpdatedTimeTextWidth = g_calculateTextWidth(mHdc, g_lastTableUpdateTime, g_hDefaultFontBold);
+            g_drawText(mHdc, text, windowClientWidth - lastUpdatedTextWidth - g_lastUpdatedTimeTextWidth - 10, 45);
+            auto oldFont = SelectObject(mHdc, g_hDefaultFontBold);
+            g_drawText(mHdc, g_lastTableUpdateTime, windowClientWidth - g_lastUpdatedTimeTextWidth - 10, 45);
+            SelectObject(mHdc, oldFont);
+
+            // Draw scrollbars
             g_drawScrollBars(mHdc);
 
             g_doubleBuffering(hwnd, ps, nullptr, false);
@@ -793,6 +872,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_UPDATE_GRID_REQUEST:
         {
+            if (!focused && config::livePreview)
+                break;
+            g_lastTableUpdateTime = utils::getFormattedTime();
             g_redrawLowerArea(hwnd);
             updateScrollBarsInfo();
             break;
@@ -805,7 +887,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 if (const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(hCheckbox, GWLP_USERDATA))) {
                     // Inverse checkbox state
                     *pState = !*pState;
-                    if (lwParam != ID_CHECKBOX_DARK_MODE)
+                    if (lwParam != ID_CHECKBOX_DARK_MODE) // No need for updating, as dark mode check already redraws the window
                         g_redrawWindow(hCheckbox);
                 }
             }
@@ -823,6 +905,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 }
                 case ID_CHECKBOX_AUTO_UPDATE:
                 {
+                    g_windowScrollXPos = 0;
+                    g_windowScrollYPos = 0;
+                    g_redrawWindow(hwnd);
+                    updateScrollBarsInfo();
                     break;
                 }
                 case ID_CHECKBOX_DARK_MODE:
@@ -843,8 +929,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 }
                 case ID_TRAY_RELOAD_CONFIG:
                 {
-                    config::load();
-                    utils::messageBox(MSG_CONFIG_RELOADED, MB_ICONINFORMATION | MB_OK);
+                    if (config::load())
+                        utils::messageBox(MSG_CONFIG_RELOADED, MB_ICONINFORMATION | MB_OK);
+                    else
+                        utils::messageBox(MSG_CONFIG_RELOADED_WITH_ERRORS, MB_ICONWARNING | MB_OK);
                     g_redrawWindow(hwnd);
                     break;
                 }
@@ -916,8 +1004,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_GETMINMAXINFO: {
             const auto lpMinMaxInfo = reinterpret_cast<LPMINMAXINFO>(lParam);
-            lpMinMaxInfo->ptMinTrackSize.x = 700;
-            lpMinMaxInfo->ptMinTrackSize.y = 400;
+            lpMinMaxInfo->ptMinTrackSize.x = APP_WINDOW_MIN_WIDTH;
+            lpMinMaxInfo->ptMinTrackSize.y = APP_WINDOW_MIN_HEIGHT;
             break;
         }
         case WM_DESTROY: {
