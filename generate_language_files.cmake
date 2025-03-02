@@ -1,0 +1,26 @@
+# Replace all @LANG_ID_COUNTER@ in language.h.in
+set(lang_id_counter 1)
+set(lang_h_output "")
+file(STRINGS "../language.h.in" lines)
+foreach(line IN LISTS lines)
+    string(FIND "${line}" "@LANG_ID_COUNTER@" pos)
+    while(pos GREATER -1)
+        string(REPLACE "@LANG_ID_COUNTER@" "${lang_id_counter}" line "${line}")
+        math(EXPR lang_id_counter "${lang_id_counter} + 1")
+        string(FIND "${line}" "@LANG_ID_COUNTER@" pos)
+    endwhile()
+    set(lang_h_output "${lang_h_output}${line}\n")
+endforeach()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
+
+# Map language.h into unordered_map variable in language.cpp.in
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/language.h" gen_lines)
+set(LANGUAGE_MAPPING_ENTRIES "")
+foreach(line IN LISTS gen_lines)
+    if(line MATCHES "^#define[ \t]+(MSG_[A-Z0-9_]+)[ \t]+[0-9]+")
+        string(REGEX REPLACE "^#define[ \t]+(MSG_[A-Z0-9_]+)[ \t]+[0-9]+" "\\1" macro "${line}")
+        set(LANGUAGE_MAPPING_ENTRIES "${LANGUAGE_MAPPING_ENTRIES}    { ${macro}, L\"${macro}\" },\n")
+    endif()
+endforeach()
+
+configure_file(../language.cpp.in ${CMAKE_BINARY_DIR}/language.cpp @ONLY)

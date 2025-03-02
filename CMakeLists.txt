@@ -15,45 +15,24 @@ set(VERSION_PRODUCT_VERSION  0)
 set(VERSION_PRODUCT_BUILD    0)
 set(VERSION_PRODUCT_REVISION 0)
 
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.cpp" "${lang_h_output}")
-
-# Replace all @LANG_ID_COUNTER@ in language.h.in
-set(lang_id_counter 1)
-set(lang_h_output "")
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/language.h.in" lines)
-foreach(line IN LISTS lines)
-    string(FIND "${line}" "@LANG_ID_COUNTER@" pos)
-    while(pos GREATER -1)
-        string(REPLACE "@LANG_ID_COUNTER@" "${lang_id_counter}" line "${line}")
-        math(EXPR lang_id_counter "${lang_id_counter} + 1")
-        string(FIND "${line}" "@LANG_ID_COUNTER@" pos)
-    endwhile()
-    set(lang_h_output "${lang_h_output}${line}\n")
-endforeach()
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${lang_h_output}")
-
 # Create std::wstring array for supported languages
 file(GLOB language_files "${CMAKE_SOURCE_DIR}/assets/language/language.*.*.ini")
-set(SUPPORTED_LANGUAGES "{")
+set(DEFAULT_SUPPORTED_LANGUAGES "{")
 foreach(file_path ${language_files})
     get_filename_component(filename ${file_path} NAME)
     string(REGEX REPLACE "^language\\.([^.]+)\\.([^.]+)\\.ini$" "\\1" lang_string ${filename})
     string(REGEX REPLACE "^language\\.([^.]+)\\.([^.]+)\\.ini$" "\\2" lang_code ${filename})
-    string(APPEND SUPPORTED_LANGUAGES " { L\"${lang_string}\", ${lang_code} },")
+    string(APPEND DEFAULT_SUPPORTED_LANGUAGES " { L\"${lang_string}\", ${lang_code} },")
 endforeach()
-string(REGEX REPLACE ",$" "" SUPPORTED_LANGUAGES "${SUPPORTED_LANGUAGES}") # Remove last comma
-string(APPEND SUPPORTED_LANGUAGES " }")
+string(REGEX REPLACE ",$" "" DEFAULT_SUPPORTED_LANGUAGES "${DEFAULT_SUPPORTED_LANGUAGES}") # Remove last comma
+string(APPEND DEFAULT_SUPPORTED_LANGUAGES " }")
 
-# Map language.h into unordered_map variable in language.cpp.inj
-file(STRINGS "${CMAKE_CURRENT_BINARY_DIR}/language.h" gen_lines)
-set(LANGUAGE_MAPPING_ENTRIES "")
-foreach(line IN LISTS gen_lines)
-    if(line MATCHES "^#define[ \t]+(MSG_[A-Z0-9_]+)[ \t]+[0-9]+")
-        string(REGEX REPLACE "^#define[ \t]+(MSG_[A-Z0-9_]+)[ \t]+[0-9]+" "\\1" macro "${line}")
-        set(LANGUAGE_MAPPING_ENTRIES "${LANGUAGE_MAPPING_ENTRIES}    { ${macro}, L\"${macro}\" },\n")
-    endif()
-endforeach()
+add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/language.h"
+        COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/generate_language_files.cmake"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/language.h.in"
+        COMMENT "Generating language files (language.h and language.cpp)"
+)
 
 add_executable(${PROJECT_NAME} WIN32 main.cpp
         utils.cpp
@@ -66,15 +45,11 @@ add_executable(${PROJECT_NAME} WIN32 main.cpp
         globals.h
         assets/app.rc
         resources.h
-        # Adding them makes cmake notice changes in language.h.in file, idk how bad it is specifying both files from source and binary directory
-        ${CMAKE_BINARY_DIR}/language.h
-        ${CMAKE_BINARY_DIR}/language.cpp
         language.h
         language.cpp
         assets/language/language.en.2057.ini
         assets/language/language.uk.1058.ini)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/language.cpp.in ${CMAKE_BINARY_DIR}/language.cpp @ONLY)
 configure_file(resources.h.in ${CMAKE_BINARY_DIR}/resources.h @ONLY)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR})
 
