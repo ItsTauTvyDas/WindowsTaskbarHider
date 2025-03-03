@@ -59,7 +59,7 @@ void config::save() {
     file << "[Ignored Windows]" << std::endl;
     file << "; Setting this to false (0) could slow down the application with debug mode on" << std::endl;
     file << "AlwaysIgnoreWhenNotMaximized = " << alwaysIgnoreWhenNotMaximized << std::endl;
-    file << "; Available tags: process/p (text), title/t (text), class/c (text), focus/f (0 or 1), maximized/m (0 or 1), left (int), top (int), right (int), bottom (int)" << std::endl;
+    file << "; Available tags: process/p (text), title/t (text), class/c (text), focus/f (0 or 1), maximized/m (0 or 1), left (number), top (int), right (number), bottom (number), monitor/mon (number >= 0)" << std::endl;
     file << "; Separator: |" << std::endl;
     file << ";" << std::endl;
     file << "; Ignore UWP container window and windows with empty titles" << std::endl;

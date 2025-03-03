@@ -6,6 +6,7 @@
 #include <ranges>
 #include "config.h"
 #include "globals.h"
+#include "monitors.h"
 #include "resources.h"
 #include "utils.h"
 
@@ -70,6 +71,9 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                 if (wInfo.wndClass[0] == L'\0')
                     GetClassName(wInfo.hwnd, wInfo.wndClass, sizeof(wInfo.wndClass));
                 if (std::wstring(wInfo.wndClass) == value)
+                    succeededTags++;
+            } else if (key == L"monitor" || key == L"mon") {
+                if (const int index = std::stoi(value); index >= 0 && index < sizeof(monitors::indexedMonitors) && monitors::indexedMonitors[index] == wInfo.hMonitor)
                     succeededTags++;
             } else if (key == L"maximized" || key == L"m") {
                 if (wp.showCmd == SW_MAXIMIZE == stoi(value))
