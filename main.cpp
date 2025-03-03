@@ -1134,14 +1134,12 @@ void signalHandler(const int signum) {
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) {
     signal(SIGSEGV, signalHandler);
     globals::hIns = hInstance;
-    // for (auto i = 1; i < argc; i++)
-    //     globals::args += argv[i];
     SetUnhandledExceptionFilter(reinterpret_cast<LPTOP_LEVEL_EXCEPTION_FILTER>(CrashHandler));
-    // const auto exe = std::string(argv[0]);
-    // globals::exe = exe.substr(exe.find_last_of("/\\") + 1);
-    //
-    // if (!utils::processArguments(argc, argv))
-    //     return 0;
+
+    int argc;
+    const LPWSTR commandLine = GetCommandLineW();
+    if (const LPWSTR *argv = CommandLineToArgvW(commandLine, &argc); !utils::processArguments(argc, argv, commandLine))
+        return 0;
 
     config::darkMode = utils::isUserUsingDarkTheme();
 

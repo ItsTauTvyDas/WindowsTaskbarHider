@@ -9,7 +9,7 @@ class utils {
 public:
     static void getProcessInfo(HWND hwnd, std::wstring &processExeName);
     static bool killProcessByName(const wchar_t *processName, DWORD currentPid);
-    static bool processArguments(int argc, wchar_t* argv[]);
+    static bool processArguments(int argc, const LPWSTR *argv, LPWSTR commandLine);
     static void showExceptionMessageBox(const std::function<void(std::wstringstream&)>& callback, bool allowRetry);
     static LPWSTR replaceCharacterWithText(LPWSTR lpstr, wchar_t target, const std::wstring &replacement, int skip = 0);
     static std::string exceptionNameA(DWORD exceptionCode);
