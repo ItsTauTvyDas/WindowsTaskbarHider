@@ -15,7 +15,6 @@ public:
         bool detected = false;
         bool wasExceptional = false;
         bool wasRectModified = false;
-        bool finalDetection = false;
         bool initiallyIgnored = false;
         DWORD focused = -1;
         wchar_t wndClass[256] = {};
@@ -24,7 +23,7 @@ public:
         std::wstring fault;
         std::wstring procFilename;
 
-        WindowInfo reset() const;
+        [[nodiscard]] WindowInfo reset() const;
         void updateMonitor();
 
         bool operator==(const WindowInfo& o) const {
@@ -34,7 +33,6 @@ public:
                    hMonitor                          == o.hMonitor &&
                    wasExceptional                    == o.wasExceptional &&
                    wasRectModified                   == o.wasRectModified &&
-                   finalDetection                    == o.finalDetection &&
                    focused                           == o.focused &&
                    initiallyIgnored                  == o.initiallyIgnored &&
                    std::wcscmp(wndClass, o.wndClass) == 0 &&
@@ -55,6 +53,7 @@ public:
     static void setTaskbarVisibility(HWND hwnd, bool visible, bool hoveredOver);
     static void resetTaskbar();
     static void updateTaskbarState();
+    static void clearErrorState();
 private:
     static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows();
     static bool isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos);

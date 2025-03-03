@@ -12,6 +12,8 @@
 
 std::mutex taskbarMutex;
 std::unordered_map<HMONITOR, HWND> taskbarHandles;
+bool errorState = false;
+
 std::vector<taskbar::WindowInfo> taskbar::windows;
 bool taskbar::collectWindowsInfo = false;
 
@@ -119,7 +121,7 @@ void taskbar::WindowInfo::updateMonitor() {
 std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
     checkForAutoCollect();
     static std::vector<WindowInfo> previousWindows;
-    static bool wasFound = false, canCollect = false;
+    static bool canCollect = false;
 
     if (collectWindowsInfo) {
         // Since collectWindowsInfo can get updated inside EnumWindows (by main thread), let's ensure whenever it can start collecting
@@ -128,61 +130,64 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
     }
     // TODO implement caching
     std::unordered_map<HMONITOR, WindowInfo> maximizedWindows = {};
-    EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
-        WINDOWPLACEMENT wp;
-        wp.length = sizeof(WINDOWPLACEMENT);
+    try {
+        EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
+            WINDOWPLACEMENT wp;
+            wp.length = sizeof(WINDOWPLACEMENT);
 
-        if (!GetWindowPlacement(hwnd, &wp) || !IsWindowVisible(hwnd) || IsIconic(hwnd))
-            return TRUE;
-
-        WindowInfo wInfo = {};
-        if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE) {
-            if (collectWindowsInfo && canCollect)
-                wInfo.initiallyIgnored = true;
-            else
+            if (!GetWindowPlacement(hwnd, &wp) || !IsWindowVisible(hwnd) || IsIconic(hwnd))
                 return TRUE;
-        }
-        wInfo.hwnd = hwnd;
-        wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
-        wInfo.updateMonitor();
 
-        std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
-
-        if (collectWindowsInfo && canCollect) {
-            WINDOWINFO wi;
-            wi.cbSize = sizeof(WINDOWINFO);
-            GetWindowInfo(hwnd, &wi);
-            wInfo.focused = wi.dwWindowStatus;                                    // Focus status (0 or 1)
-            utils::getProcessInfo(hwnd, wInfo.procFilename);                   // Process filename
-            GetWindowText(hwnd, wInfo.title, sizeof(wInfo.title));      // Title
-            GetClassName(hwnd, wInfo.wndClass, sizeof(wInfo.wndClass)); // Class
-            GetWindowRect(hwnd, &wInfo.rect);                                     // Rect
-        }
-
-        if (!wInfo.initiallyIgnored) {
-            if (!config::ignoredWindows.empty())
-                wInfo.detected = loopThroughWindowTags(config::ignoredWindows, wInfo, wp, &succeededIgnoreTagGroup);
-            if (!config::exceptionalWindows.empty())
-                wInfo.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, wInfo, wp, &succeededExceptionTagGroup);
-            wInfo.detected = (wInfo.wasExceptional || !wInfo.detected) && !wInfo.initiallyIgnored;
-        }
-
-        if (collectWindowsInfo && canCollect) {
-            wInfo.fault = wInfo.wasExceptional ? succeededExceptionTagGroup : succeededIgnoreTagGroup;
-            if (wInfo.detected && !wasFound) {
-                wasFound = true;
-                wInfo.finalDetection = true;
+            WindowInfo wInfo = {};
+            if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE) {
+                if (collectWindowsInfo && canCollect)
+                    wInfo.initiallyIgnored = true;
+                else
+                    return TRUE;
             }
-            wInfo.hwnd = nullptr;
-            windows.push_back(wInfo);
-        }
+            wInfo.hwnd = hwnd;
+            wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
+            wInfo.updateMonitor();
 
-        if (wInfo.detected) {
-            (*reinterpret_cast<std::unordered_map<HMONITOR, WindowInfo>*>(lParam))[wInfo.hMonitor] = wInfo;
-            return config::showAllWindows;
-        }
-        return TRUE;
-    }, reinterpret_cast<LPARAM>(&maximizedWindows));
+            std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
+
+            if (collectWindowsInfo && canCollect) {
+                WINDOWINFO wi;
+                wi.cbSize = sizeof(WINDOWINFO);
+                GetWindowInfo(hwnd, &wi);
+                wInfo.focused = wi.dwWindowStatus;                                    // Focus status (0 or 1)
+                utils::getProcessInfo(hwnd, wInfo.procFilename);                   // Process filename
+                GetWindowText(hwnd, wInfo.title, sizeof(wInfo.title));      // Title
+                GetClassName(hwnd, wInfo.wndClass, sizeof(wInfo.wndClass)); // Class
+                GetWindowRect(hwnd, &wInfo.rect);                                     // Rect
+            }
+
+            if (!wInfo.initiallyIgnored) {
+                if (!config::ignoredWindows.empty())
+                    wInfo.detected = loopThroughWindowTags(config::ignoredWindows, wInfo, wp, &succeededIgnoreTagGroup);
+                if (!config::exceptionalWindows.empty())
+                    wInfo.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, wInfo, wp, &succeededExceptionTagGroup);
+                wInfo.detected = (wInfo.wasExceptional || !wInfo.detected) && !wInfo.initiallyIgnored;
+            }
+
+            if (collectWindowsInfo && canCollect) {
+                wInfo.fault = wInfo.wasExceptional ? succeededExceptionTagGroup : succeededIgnoreTagGroup;
+                wInfo.hwnd = nullptr;
+                windows.push_back(wInfo);
+            }
+
+            if (wInfo.detected) {
+                auto &map = *reinterpret_cast<std::unordered_map<HMONITOR, WindowInfo>*>(lParam);
+                map[wInfo.hMonitor] = wInfo;
+                return config::showAllWindows || map.size() != monitors::monitorCount;
+            }
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(&maximizedWindows));
+    } catch (std::exception &ex) {
+        if (!errorState)
+            PostMessage(globals::hWnd, WM_TASKBAR_THREAD_ERROR, 0, reinterpret_cast<LPARAM>(new std::string(ex.what())));
+        errorState = true;
+    }
     // ReSharper disable once CppDFAConstantConditions
     if (collectWindowsInfo && canCollect) {
         if (previousWindows != windows) {
@@ -192,8 +197,11 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
         collectWindowsInfo = false;
         canCollect = false;
     }
-    wasFound = false;
     return maximizedWindows;
+}
+
+void taskbar::clearErrorState() {
+    errorState = false;
 }
 
 bool taskbar::isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos) {
@@ -244,9 +252,8 @@ void taskbar::updateTaskbarState() {
     }
     const auto windows = findAllMaximizedWindows();
     std::lock_guard lock(taskbarMutex);
-    for (auto &[hMonitor, wnd] : taskbarHandles) {
-        setTaskbarVisibility(wnd, windows.contains(hMonitor), false);
-    }
+    for (auto &[hMonitor, taskbar] : taskbarHandles)
+        setTaskbarVisibility(taskbar, windows.contains(hMonitor), false);
 }
 
 void taskbar::checkForAutoCollect() {
