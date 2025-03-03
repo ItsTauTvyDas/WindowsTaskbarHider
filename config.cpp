@@ -131,15 +131,14 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             if (checkForEmptyValueI(formattedKey, value, taskbarUpdateInterval, taskbarUpdateInterval, noErrors))
                 checkForInvalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000, noErrors);
         } else if (key == L"General.Language") {
-            languageLoaded = false;
             auto languages = std::unordered_map<std::wstring, int>(APP_DEFAULT_LANGUAGES);
             if (!languages.contains(value)) {
                 auto keysView = std::views::keys(languages);
                 const std::vector languagesVector(keysView.begin(), keysView.end());
                 utils::messageBox(MSG_CONFIG_INVALID_LANGUAGE, MB_ICONWARNING | MB_OK, {utils::joinString(languagesVector, L", ")});
-                languageLoaded = true;
                 return false;
             }
+            languageLoaded = false;
             languageCode = languages[value];
             utils::logcLangString(0, nullptr); // Trigger language cache to update
             languageLoaded = true;
