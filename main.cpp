@@ -10,6 +10,7 @@
 #include <thread>
 #include <numeric>
 #include "language.h"
+#include "monitors.h"
 
 #define WM_TRAY_ICON           (WM_USER + 1)
 
@@ -1058,6 +1059,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             break;
         }
         case WM_DISPLAYCHANGE: {
+            monitors::indexMonitors();
             taskbar::findTaskbarHandles();
             break;
         }
@@ -1212,6 +1214,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         return 1;
     }
 
+    monitors::indexMonitors();
     taskbar::findTaskbarHandles();
     auto taskbarLoopThread = std::thread(taskbarLoop);
 
