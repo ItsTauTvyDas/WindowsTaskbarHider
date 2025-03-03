@@ -1,30 +1,36 @@
 #include "taskbar.h"
 
 #include <iostream>
+#include <mutex>
 #include <windows.h>
+#include <ranges>
 #include "config.h"
 #include "globals.h"
 #include "resources.h"
 #include "utils.h"
 
+std::mutex taskbarMutex;
+std::unordered_map<HMONITOR, HWND> taskbarHandles;
 std::vector<taskbar::WindowInfo> taskbar::windows;
 bool taskbar::collectWindowsInfo = false;
 
-HWND taskbar::getTaskbarHandle() {
-    return FindWindow(L"Shell_TrayWnd", nullptr);
-}
-
-bool taskbar::isCursorOverTaskbar() {
-    HWND taskbar = getTaskbarHandle();
-    if (!taskbar) return false;
-
-    RECT taskbarRect;
-    GetWindowRect(taskbar, &taskbarRect);
-
-    POINT cursorPos;
-    GetCursorPos(&cursorPos);
-
-    return PtInRect(&taskbarRect, cursorPos);
+void taskbar::findTaskbarHandles() {
+    std::lock_guard lock(taskbarMutex);
+    taskbarHandles.clear();
+    EnumWindows([](HWND hwnd, const LPARAM) -> BOOL {
+        if (char className[256]; GetClassNameA(hwnd, className, sizeof(className)) && hwnd != nullptr) {
+            const auto prefix = "Shell_", suffix = "TrayWnd";
+            const size_t prefixLen = strlen(prefix), suffixLen = strlen(suffix);
+            if (const size_t len = strlen(className); len >= prefixLen + suffixLen &&
+                                                      strncmp(className, prefix, prefixLen) == 0 &&
+                                                      strcmp(className + len - suffixLen, suffix) == 0) {
+                WindowInfo wInfo = { hwnd };
+                wInfo.updateMonitor();
+                taskbarHandles[wInfo.hMonitor] = hwnd;
+            }
+        }
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(nullptr));
 }
 
 bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::WindowInfo &wInfo, const WINDOWPLACEMENT &wp, std::wstring *succeededTagGroup) {
@@ -98,9 +104,16 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
     return false;
 }
 
-bool taskbar::isAnyWindowMaximized() {
+taskbar::WindowInfo taskbar::WindowInfo::reset() const {
+    return { hwnd, hMonitor };
+}
+
+void taskbar::WindowInfo::updateMonitor() {
+    hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+}
+
+std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
     checkForAutoCollect();
-    static WindowInfo lastDetectedWindow;
     static std::vector<WindowInfo> previousWindows;
     static bool wasFound = false, canCollect = false;
 
@@ -108,23 +121,9 @@ bool taskbar::isAnyWindowMaximized() {
         // Since collectWindowsInfo can get updated inside EnumWindows (by main thread), let's ensure whenever it can start collecting
         canCollect = true;
         windows.clear();
-    } else if (lastDetectedWindow.hwnd) {
-        WINDOWPLACEMENT wp;
-        wp.length = sizeof(WINDOWPLACEMENT);
-        if (GetWindowPlacement(lastDetectedWindow.hwnd, &wp) && IsWindowVisible(lastDetectedWindow.hwnd) & !IsIconic(lastDetectedWindow.hwnd)) {
-            if (!config::alwaysIgnoreWhenNotMaximized || wp.showCmd == SW_MAXIMIZE) {
-                lastDetectedWindow = { lastDetectedWindow.hwnd };
-                if (!config::ignoredWindows.empty())
-                    lastDetectedWindow.detected = loopThroughWindowTags(config::ignoredWindows, lastDetectedWindow, wp, nullptr);
-                if (!config::exceptionalWindows.empty())
-                    lastDetectedWindow.wasExceptional = loopThroughWindowTags(config::exceptionalWindows, lastDetectedWindow, wp, nullptr);
-                if (lastDetectedWindow.wasExceptional || !lastDetectedWindow.detected)
-                    return true;
-            }
-        }
     }
-    lastDetectedWindow = {};
-    bool maximized = false;
+    // TODO implement caching
+    std::unordered_map<HMONITOR, WindowInfo> maximizedWindows = {};
     EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
         WINDOWPLACEMENT wp;
         wp.length = sizeof(WINDOWPLACEMENT);
@@ -132,14 +131,16 @@ bool taskbar::isAnyWindowMaximized() {
         if (!GetWindowPlacement(hwnd, &wp) || !IsWindowVisible(hwnd) || IsIconic(hwnd))
             return TRUE;
 
-        WindowInfo wInfo = { hwnd };
+        WindowInfo wInfo = {};
         if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE) {
             if (collectWindowsInfo && canCollect)
                 wInfo.initiallyIgnored = true;
             else
                 return TRUE;
         }
+        wInfo.hwnd = hwnd;
         wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
+        wInfo.updateMonitor();
 
         std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
 
@@ -173,13 +174,13 @@ bool taskbar::isAnyWindowMaximized() {
         }
 
         if (wInfo.detected) {
-            *reinterpret_cast<bool*>(lParam) = true;
-            if (!(collectWindowsInfo && canCollect))
-                lastDetectedWindow = { hwnd };
+            (*reinterpret_cast<std::unordered_map<HMONITOR, WindowInfo>*>(lParam))[wInfo.hMonitor] = wInfo;
+            // if (!(collectWindowsInfo && canCollect))
+            //     lastDetectedWindow = wInfo.reset();
             return config::showAllWindows;
         }
         return TRUE;
-    }, reinterpret_cast<LPARAM>(&maximized));
+    }, reinterpret_cast<LPARAM>(&maximizedWindows));
     // ReSharper disable once CppDFAConstantConditions
     if (collectWindowsInfo && canCollect) {
         if (previousWindows != windows) {
@@ -190,13 +191,24 @@ bool taskbar::isAnyWindowMaximized() {
         canCollect = false;
     }
     wasFound = false;
-    return maximized;
+    return maximizedWindows;
 }
 
+bool taskbar::isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos) {
+    GetCursorPos(&cursorPos);
+    std::lock_guard lock(taskbarMutex);
+    for (const auto &taskbar : taskbarHandles | std::views::values) {
+        RECT taskbarRect;
+        GetWindowRect(taskbar, &taskbarRect);
+        if (PtInRect(&taskbarRect, cursorPos)) {
+            taskbarWindow = taskbar;
+            return true;
+        }
+    }
+    return false;
+}
 
-void taskbar::setTaskbarVisibility(const bool visible, const bool hoveredOver) {
-    HWND taskbar = getTaskbarHandle();
-    if (!taskbar) return;
+void taskbar::setTaskbarVisibility(HWND taskbar, const bool visible, const bool hoveredOver) {
     const LONG_PTR style = GetWindowLongPtr(taskbar, GWL_EXSTYLE);
     if (visible) {
         int opacity = config::opacityWhenShown;
@@ -214,24 +226,32 @@ void taskbar::setTaskbarVisibility(const bool visible, const bool hoveredOver) {
 }
 
 void taskbar::resetTaskbar() {
-    HWND taskbar = getTaskbarHandle();
-    if (!taskbar) return;
-    SetWindowLongPtr(taskbar, GWL_EXSTYLE, GetWindowLongPtr(taskbar, GWL_EXSTYLE) & ~WS_EX_LAYERED);
-    SetLayeredWindowAttributes(taskbar, 0, 255, LWA_ALPHA);
-    ShowWindow(taskbar, SW_SHOW);
+    std::lock_guard lock(taskbarMutex);
+    for (HWND hwnd : taskbarHandles | std::views::values) {
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
+        SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+        ShowWindow(hwnd, SW_SHOW);
+    }
 }
 
 void taskbar::updateTaskbarState() {
-    const bool hoveredOver = isCursorOverTaskbar();
-    setTaskbarVisibility(hoveredOver || isAnyWindowMaximized(), hoveredOver);
+    HWND hoveredTaskbar;
+    if (POINT cursorPos; isCursorOverTaskbar(hoveredTaskbar, cursorPos)) {
+        setTaskbarVisibility(hoveredTaskbar, true, true);
+        return;
+    }
+    const auto windows = findAllMaximizedWindows();
+    std::lock_guard lock(taskbarMutex);
+    for (auto &[hMonitor, wnd] : taskbarHandles) {
+        setTaskbarVisibility(wnd, windows.contains(hMonitor), false);
+    }
 }
 
 void taskbar::checkForAutoCollect() {
     if (collectWindowsInfo || !config::livePreview)
         return;
     static DWORD lastTick = GetTickCount();
-    DWORD currentTick = GetTickCount();
-    if (currentTick - lastTick >= 1000) {
+    if (const DWORD currentTick = GetTickCount(); currentTick - lastTick >= 1000) {
         collectWindowsInfo = true;
         lastTick = currentTick;
     }

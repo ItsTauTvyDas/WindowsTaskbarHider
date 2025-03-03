@@ -3,12 +3,14 @@
 
 #include <dwmapi.h>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class taskbar {
 public:
     struct WindowInfo {
         HWND hwnd = nullptr;
+        HMONITOR hMonitor = nullptr;
         bool maximized = false;
         bool detected = false;
         bool wasExceptional = false;
@@ -22,9 +24,14 @@ public:
         std::wstring fault;
         std::wstring procFilename;
 
+        WindowInfo reset() const;
+        void updateMonitor();
+
         bool operator==(const WindowInfo& o) const {
             return maximized                         == o.maximized &&
                    detected                          == o.detected &&
+                   hwnd                              == o.hwnd &&
+                   hMonitor                          == o.hMonitor &&
                    wasExceptional                    == o.wasExceptional &&
                    wasRectModified                   == o.wasRectModified &&
                    finalDetection                    == o.finalDetection &&
@@ -44,14 +51,14 @@ public:
     static std::vector<WindowInfo> windows;
     static bool collectWindowsInfo;
 
-    static HWND getTaskbarHandle();
-    static void setTaskbarVisibility(bool visible, bool hoveredOver);
+    static void findTaskbarHandles();
+    static void setTaskbarVisibility(HWND hwnd, bool visible, bool hoveredOver);
     static void resetTaskbar();
     static void updateTaskbarState();
-    static void checkForAutoCollect();
 private:
-    static bool isAnyWindowMaximized();
-    static bool isCursorOverTaskbar();
+    static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows();
+    static bool isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos);
+    static void checkForAutoCollect();
 };
 
 #endif //TASKBAR_H
