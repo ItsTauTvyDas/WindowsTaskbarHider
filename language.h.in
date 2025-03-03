@@ -62,6 +62,7 @@
 #define MSG_WND_DEBUG_TABLE_WND_CLASS             @LANG_ID_COUNTER@
 #define MSG_WND_DEBUG_TABLE_WND_SIZE              @LANG_ID_COUNTER@
 #define MSG_WND_DEBUG_TABLE_WND_STATE             @LANG_ID_COUNTER@
+#define MSG_WND_DEBUG_TABLE_WND_MONITOR           @LANG_ID_COUNTER@
 #define MSG_WND_DEBUG_TABLE_WND_FOCUS             @LANG_ID_COUNTER@
 #define MSG_WND_DEBUG_TABLE_WND_TITLE             @LANG_ID_COUNTER@
 // End of ordered macros
@@ -76,6 +77,8 @@
 #define MSG_WND_YES                               @LANG_ID_COUNTER@
 #define MSG_WND_NO                                @LANG_ID_COUNTER@
 #define MSG_WND_LAST_UPDATE_AT                    @LANG_ID_COUNTER@
+
+#define MSG_TASKBAR_THREAD_EXCEPTION_OCCURRED     @LANG_ID_COUNTER@
 
 #define MSG_TRAY_EXIT                             @LANG_ID_COUNTER@
 #define MSG_TRAY_OPEN_GITHUB                      @LANG_ID_COUNTER@
