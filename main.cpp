@@ -41,7 +41,7 @@
 #define WMC_BUTTON                L"BUTTON"
 #define WMC_SCROLLBAR             L"SCROLLBAR"
 
-#define W_GRID_MAX_COLUMNS        8
+#define W_GRID_MAX_COLUMNS        9
 
 constexpr COLORREF darkColorPalette[] = {
     RGB(  0,   0,   0), // Base color
@@ -71,7 +71,7 @@ std::wstring g_tableHeaders[W_GRID_MAX_COLUMNS] = {};
 std::vector<HWND> g_childWindows;
 
 constexpr bool g_tableCollapsableHeaders[] = {
-    false, true, true, true, true, false, false, true
+    false, true, true, true, true, false, false, false, true
 };
 
 bool quitting                = false,
@@ -392,7 +392,7 @@ inline void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
 
     // Draw horizontal lines
     for (int row = 0; row <= rows; row++) {
-        const bool detected = config::showAllWindows && row > 0 && row < rows ? taskbar::windows[row - 1].finalDetection : false;
+        const bool detected = config::showAllWindows && row > 0 && row < rows ? taskbar::windows[row - 1].detected : false;
         hPen = CreatePen(PS_SOLID, 1, detected ? RGB(255, 0, 0) : WCP_FOREGROUND);
         hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
         int y = row * g_tableRowHeight + sy;
@@ -460,7 +460,16 @@ inline std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int c
             break;
         }
         case 5: value = utils::message(wInfo.maximized == 1 ? MSG_WND_DEBUG_TABLE_STATE_MAXIMIZED : MSG_WND_DEBUG_TABLE_STATE_MINIMIZED); break; // State
-        case 6: { // Title
+        case 6: { // Monitor
+            for (auto i = 0; i < monitors::monitorCount; i++) {
+                if (wInfo.hMonitor == monitors::indexedMonitors[i]) {
+                    value = std::to_wstring(i);
+                    break;
+                }
+            }
+            break;
+        }
+        case 7: { // Title
             if (wInfo.focused == 1)
                 value = utils::message(MSG_WND_YES);
             else if (wInfo.focused == 0)
@@ -469,7 +478,7 @@ inline std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int c
                 value = std::to_wstring(wInfo.focused);
             break;
         }
-        case 7: value = wInfo.title; break; // Title
+        case 8: value = wInfo.title; break; // Title
         default: value = L"???"; break; // unknown
     }
     return value;
@@ -534,7 +543,7 @@ inline void g_printDataToGrid(HDC hdc, const int sx, const int sy, const int row
     DeleteObject(foreground);
 }
 
-inline void g_updateTable(HDC hdc) {
+inline void g_updateTable(HDC hdc, const bool onlyPaintGrid) {
     if (g_tableDefaultColumnWidths[0] == 0)
         g_calculateDefaultWidths(hdc);
 
@@ -543,9 +552,11 @@ inline void g_updateTable(HDC hdc) {
 
     SelectObject(hdc, g_hTableFont);
     SetBkMode(hdc, TRANSPARENT);
-    g_calculateCurrentWidths(hdc, rows);
+    if (!onlyPaintGrid)
+        g_calculateCurrentWidths(hdc, rows);
     g_paintGrid(hdc, 10 - g_windowScrollXPos, y, rows);
-    g_printDataToGrid(hdc, 10 - g_windowScrollXPos, y, rows);
+    if (!onlyPaintGrid)
+        g_printDataToGrid(hdc, 10 - g_windowScrollXPos, y, rows);
 
     updateScrollBarsInfo();
 }
@@ -861,7 +872,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             g_drawText(mHdc, utils::message(MSG_WND_DEBUG_TABLE_HEADER_TEXT), 10 - g_windowScrollXPos, 80 - g_windowScrollYPos);
 
             // Table
-            g_updateTable(mHdc);
+            g_updateTable(mHdc, false);
 
             // Header
             RECT wRect;
@@ -919,6 +930,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             }
             break;
         }
+        case WM_TASKBAR_THREAD_ERROR: {
+            auto what = reinterpret_cast<std::string*>(lParam);
+            std::wstring message;
+            if (*what == "stoi") {
+                message = utils::message(MSG_CONFIG_NOT_NUMBER);
+            } else {
+                message = std::wstring(what->begin(), what->end());
+            }
+            utils::messageBox(MSG_TASKBAR_THREAD_EXCEPTION_OCCURRED, MB_ICONERROR | MB_OK, { message });
+            delete what;
+            break;
+        }
         case WM_UPDATE_GRID_REQUEST:
         {
             if (!focused && config::livePreview)
@@ -946,8 +969,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     SendMessage(hwnd, WM_TRAY_ICON, 0, WM_CONTEXTMENU);
                     break;
                 }
+                case ID_CHECKBOX_SHOW_ALL_WINDOWS: {
+                    g_redrawLowerArea(hwnd);
+                    // No break needed
+                }
                 case ID_BUTTON_UPDATE:
-                case ID_CHECKBOX_SHOW_ALL_WINDOWS:
                 {
                     taskbar::collectWindowsInfo = true;
                     break;
@@ -984,6 +1010,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                         utils::messageBox(MSG_CONFIG_RELOADED_WITH_ERRORS, MB_ICONWARNING | MB_OK);
                     updateLanguage(hwnd);
                     g_redrawWindow(hwnd);
+                    taskbar::clearErrorState();
                     break;
                 }
                 case ID_TRAY_PAUSE_HIDER:
@@ -1011,8 +1038,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             HWND hScrollBar = reinterpret_cast<HWND>(lParam);
             if (!hScrollBar)
                 break;
-            int scrollBarID = GetDlgCtrlID(hScrollBar);
-            if (scrollBarID == ID_SCROLLBAR_X) {
+            if (int scrollBarID = GetDlgCtrlID(hScrollBar); scrollBarID == ID_SCROLLBAR_X) {
                 scrollPosition = &g_windowScrollXPos;
             } else if (scrollBarID == ID_SCROLLBAR_Y) {
                 scrollPosition = &g_windowScrollYPos;
@@ -1138,7 +1164,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     SetUnhandledExceptionFilter(reinterpret_cast<LPTOP_LEVEL_EXCEPTION_FILTER>(CrashHandler));
 
     int argc;
-    const LPWSTR commandLine = GetCommandLineW();
+    LPWSTR commandLine = GetCommandLineW();
     if (const LPWSTR *argv = CommandLineToArgvW(commandLine, &argc); !utils::processArguments(argc, argv, commandLine))
         return 0;
 
