@@ -25,6 +25,7 @@ public:
 
         [[nodiscard]] WindowInfo reset() const;
         void updateMonitor();
+        void updateValues(HWND hwnd);
 
         bool operator==(const WindowInfo& o) const {
             return maximized                         == o.maximized &&
@@ -47,6 +48,7 @@ public:
     };
 
     static std::vector<WindowInfo> windows;
+    static std::unordered_map<HMONITOR, bool> taskbarForcedVisibilityStates;
     static bool collectWindowsInfo;
     static bool forceToCollect;
 

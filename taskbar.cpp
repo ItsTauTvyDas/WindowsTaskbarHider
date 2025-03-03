@@ -15,6 +15,7 @@ std::unordered_map<HMONITOR, HWND> taskbarHandles;
 bool errorState = false;
 
 std::vector<taskbar::WindowInfo> taskbar::windows;
+std::unordered_map<HMONITOR, bool> taskbar::taskbarForcedVisibilityStates;
 bool taskbar::collectWindowsInfo = false;
 bool taskbar::forceToCollect = false;
 
@@ -121,6 +122,15 @@ void taskbar::WindowInfo::updateMonitor() {
     hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
 }
 
+void taskbar::WindowInfo::updateValues(HWND hwnd) {
+    WINDOWINFO wi; wi.cbSize = sizeof(WINDOWINFO); GetWindowInfo(hwnd, &wi);
+    focused = wi.dwWindowStatus;                              // Focus status (0 or 1)
+    utils::getProcessInfo(hwnd, procFilename);             // Process filename
+    GetWindowText(hwnd, title, sizeof(title));      // Title
+    GetClassName(hwnd, wndClass, sizeof(wndClass)); // Class
+    GetWindowRect(hwnd, &rect);                               // Rect
+}
+
 std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
     checkForAutoCollect();
     static std::vector<WindowInfo> previousWindows;
@@ -155,16 +165,8 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
             wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
 
             std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
-            if (collectWindowsInfo && canCollect) {
-                WINDOWINFO wi;
-                wi.cbSize = sizeof(WINDOWINFO);
-                GetWindowInfo(hwnd, &wi);
-                wInfo.focused = wi.dwWindowStatus;                                    // Focus status (0 or 1)
-                utils::getProcessInfo(hwnd, wInfo.procFilename);                   // Process filename
-                GetWindowText(hwnd, wInfo.title, sizeof(wInfo.title));      // Title
-                GetClassName(hwnd, wInfo.wndClass, sizeof(wInfo.wndClass)); // Class
-                GetWindowRect(hwnd, &wInfo.rect);                                     // Rect
-            }
+            if (collectWindowsInfo && canCollect)
+                wInfo.updateValues(hwnd);
 
             if (!wInfo.initiallyIgnored) {
                 if (!config::ignoredWindows.empty())
@@ -251,6 +253,15 @@ void taskbar::resetTaskbar() {
 
 void taskbar::updateTaskbarState() {
     HWND hoveredTaskbar;
+    for (auto i = 0; i < monitors::monitorCount; i++) {
+        const auto hMonitor = monitors::indexedMonitors[i];
+        if (const auto state = taskbarForcedVisibilityStates.find(hMonitor); state != taskbarForcedVisibilityStates.end()) {
+            if (state->second) {
+                setTaskbarVisibility(taskbarHandles[hMonitor], true, false);
+                return;
+            }
+        }
+    }
     if (POINT cursorPos; isCursorOverTaskbar(hoveredTaskbar, cursorPos)) {
         setTaskbarVisibility(hoveredTaskbar, true, true);
         return;
