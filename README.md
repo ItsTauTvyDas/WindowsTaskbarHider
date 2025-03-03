@@ -41,11 +41,11 @@ This application doesn't hide the taskbar completely like Windows does, it only 
 * Automatically notices display changes (e.g. another monitor got connected/disconnected)
 
 ## Program's arguments
-| Argument          | Alias      |  Parameters  | Description                                                            |
-|-------------------|------------|:------------:|------------------------------------------------------------------------|
-| `--reset-taskbar` | `-rtb`     |     None     | Reset taskbar and exit.                                                |
-| `--no-config`     | `-nc`      |     None     | Don't load/save config, unless loaded from system tray menu.           |
-| `--config:<key>`  | `-c:<key>` |  \<value\>   | Override config's value (internally) before launching the application. |
+| Argument          | Alias      |  Parameters  | Description                                     |
+|-------------------|------------|:------------:|-------------------------------------------------|
+| `--reset-taskbar` | `-rtb`     |     None     | Reset taskbar and exit                          |
+| `--no-config`     | `-nc`      |     None     | Don't load/save config, unless loaded from menu |
+| `--config:<key>`  | `-c:<key>` |  \<value\>   | Override config's value (internally)            |
 
 ## Configuration
 A file called config.ini is going to be created next to exe file (unless `--no-config` argument specified).
