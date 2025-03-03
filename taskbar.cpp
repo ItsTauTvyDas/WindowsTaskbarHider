@@ -16,6 +16,7 @@ bool errorState = false;
 
 std::vector<taskbar::WindowInfo> taskbar::windows;
 bool taskbar::collectWindowsInfo = false;
+bool taskbar::forceToCollect = false;
 
 void taskbar::findTaskbarHandles() {
     std::lock_guard lock(taskbarMutex);
@@ -190,9 +191,10 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
     }
     // ReSharper disable once CppDFAConstantConditions
     if (collectWindowsInfo && canCollect) {
-        if (previousWindows != windows) {
+        if (previousWindows != windows || forceToCollect) {
             SendMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
             previousWindows = windows;
+            forceToCollect = false;
         }
         collectWindowsInfo = false;
         canCollect = false;

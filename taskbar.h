@@ -48,6 +48,7 @@ public:
 
     static std::vector<WindowInfo> windows;
     static bool collectWindowsInfo;
+    static bool forceToCollect;
 
     static void findTaskbarHandles();
     static void setTaskbarVisibility(HWND hwnd, bool visible, bool hoveredOver);

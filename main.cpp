@@ -970,8 +970,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     break;
                 }
                 case ID_CHECKBOX_SHOW_ALL_WINDOWS: {
-                    g_redrawLowerArea(hwnd);
-                    // No break needed
+                    taskbar::forceToCollect = true;
+                    // No need to break
                 }
                 case ID_BUTTON_UPDATE:
                 {
