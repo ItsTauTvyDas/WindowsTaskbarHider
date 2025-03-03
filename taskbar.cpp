@@ -175,8 +175,6 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
 
         if (wInfo.detected) {
             (*reinterpret_cast<std::unordered_map<HMONITOR, WindowInfo>*>(lParam))[wInfo.hMonitor] = wInfo;
-            // if (!(collectWindowsInfo && canCollect))
-            //     lastDetectedWindow = wInfo.reset();
             return config::showAllWindows;
         }
         return TRUE;
