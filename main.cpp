@@ -73,7 +73,6 @@ constexpr bool g_tableCollapsableHeaders[] = {
     false, true, true, true, true, false, false, true
 };
 
-std::thread taskbarLoopThread;
 bool quitting                = false,
      focused                 = false,
      g_tableSizesInitialized = false,
@@ -1059,6 +1058,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             lpMinMaxInfo->ptMinTrackSize.y = APP_WINDOW_MIN_HEIGHT;
             break;
         }
+        case WM_DISPLAYCHANGE: {
+            taskbar::findTaskbarHandles();
+            break;
+        }
         case WM_DESTROY: {
             DeleteObject(g_hDefaultFont);
             DeleteObject(g_hDefaultFontBold);
@@ -1212,7 +1215,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         return 1;
     }
 
-    taskbarLoopThread = std::thread(taskbarLoop);
+    taskbar::findTaskbarHandles();
+    auto taskbarLoopThread = std::thread(taskbarLoop);
 
     ShowWindow(globals::hWnd, nShowCmd);
     UpdateWindow(globals::hWnd);
