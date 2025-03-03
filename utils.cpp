@@ -66,7 +66,7 @@ void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName) {
     CloseHandle(hProcessSnap);
 }
 
-bool utils::processArguments(const int argc, const LPWSTR *argv, const LPWSTR commandLine) {
+bool utils::processArguments(const int argc, const LPWSTR *argv, LPWSTR commandLine) {
     if (argv == nullptr) {
         messageBox(MSG_ARGS_PARSE_FAILED, MB_ICONERROR | MB_OK, { std::wstring(commandLine) });
         return false;
