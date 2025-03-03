@@ -143,7 +143,7 @@ inline void updateYScrollBarInfo() {
         g_windowScrollYPos = 0;
 
     SCROLLINFO si = {};
-    si.cbSize = sizeof(si);
+    si.cbSize = sizeof(SCROLLINFO);
     si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
     si.nMin   = 0;
     si.nMax   = contentHeight - WSC_GRID_Y;
@@ -160,7 +160,7 @@ inline void updateXScrollBarInfo() {
         g_windowScrollXPos = 0;
 
     SCROLLINFO si = {};
-    si.cbSize = sizeof(si);
+    si.cbSize = sizeof(SCROLLINFO);
     si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
     si.nMin   = 0;
     si.nMax   = contentWidth;
@@ -502,7 +502,6 @@ inline void g_calculateCurrentWidths(HDC hdc, const int rows) {
 inline void g_printDataToGrid(HDC hdc, const int sx, const int sy, const int rows) {
     HBRUSH background = nullptr, foreground = nullptr;
     for (auto row = 0; row < rows; row++) {
-        // constexpr int textTopMargin = 7;
         const int y = sy + row * g_tableRowHeight;
         int x = sx;
         taskbar::WindowInfo wInfo;
@@ -673,7 +672,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             const auto pcs = reinterpret_cast<CREATESTRUCT *>(lParam);
             const auto hTrayIcon = static_cast<HICON>(pcs->lpCreateParams);
             // Create system tray icon
-            nid.cbSize = sizeof(nid);
+            nid.cbSize = sizeof(NOTIFYICONDATA);
             nid.hWnd = hwnd;
             nid.uID = 1;
             nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
@@ -1028,7 +1027,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 case SB_PAGEDOWN:   *scrollPosition += 100; break; // Click lower thumb
                 case SB_THUMBTRACK: {
                     SCROLLINFO si;
-                    si.cbSize = sizeof(si);
+                    si.cbSize = sizeof(SCROLLINFO);
                     si.fMask = SIF_TRACKPOS;
                     GetScrollInfo(hScrollBar, SB_CTL, &si);
                     *scrollPosition = si.nTrackPos;
