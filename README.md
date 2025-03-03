@@ -53,8 +53,7 @@ A file called config.ini is going to be created next to exe file (unless `--no-c
 
 
 ## TODO
-- [ ] Show taskbar when start menu is open.
-- [ ] Show taskbar when hovering over window's preview.
+- [ ] Settings and other similar apps that uses ApplicationFrameHost.exe don't get detected
 - [ ] Show taskbar when any context menu from taskbar is opened.
 - [ ] Maybe add animations when taskbar is appearing/disappearing?
 
