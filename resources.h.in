@@ -22,6 +22,7 @@
 #define ID_TRAY_ADD_REMOVE_STARTUP   105
 #define ID_TRAY_GITHUB               106
 #define ID_TRAY_HEADER               107
+#define ID_TRAY_EXPOSE_INTERNALS     108
 
 #define ID_BUTTON_UPDATE             201
 #define ID_BUTTON_ACTIONS            202
