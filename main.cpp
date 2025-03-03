@@ -1197,24 +1197,43 @@ void signalHandler(const int signum) {
     exit(signum);
 }
 
-void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG, DWORD, DWORD)
+void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject, LONG, DWORD, DWORD)
 {
     if (idObject != OBJID_WINDOW)
         return;
     std::wstring className(256, L'\0');
     const int len = GetClassName(hwnd, className.data(), static_cast<int>(className.size()));
     className.resize(len);
-    if (className == L"Windows.UI.Core.CoreWindow") {
-        std::wstring proc;
-        utils::getProcessInfo(hwnd, proc);
-        if (proc == L"StartMenuExperienceHost.exe" || proc == L"SearchApp.exe") {
-            DWORD cloaked = 0;
-            if (const HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr)) {
-                taskbar::WindowInfo wInfo = { hwnd };
-                wInfo.updateMonitor();
-                taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = cloaked == 0; // 0 when closed
+    std::wstring proc;
+    taskbar::WindowInfo wInfo;
+    switch (event) {
+        // Detecting start menu via hide/show events won't work, it uses DWM attributes,
+        // and it seems they trigger location change? (the location is always the same)
+        case EVENT_OBJECT_LOCATIONCHANGE: {
+            if (className == L"Windows.UI.Core.CoreWindow") {
+                utils::getProcessInfo(hwnd, proc);
+                if (proc == L"StartMenuExperienceHost.exe" || proc == L"SearchApp.exe") {
+                    wInfo.hwnd = hwnd;
+                    wInfo.updateMonitor();
+                    DWORD cloaked = 0;
+                    if (const HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr))
+                        taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = cloaked == 0; // 0 when closed
+                }
+            }
+            break;
+        }
+        case EVENT_OBJECT_SHOW:
+        case EVENT_OBJECT_HIDE: {
+            if (className == L"TaskListThumbnailWnd" || className == L"TaskListOverlayWnd") {
+                utils::getProcessInfo(hwnd, proc);
+                if (proc == L"Explorer.EXE") {
+                    wInfo.hwnd = hwnd;
+                    wInfo.updateMonitor();
+                    taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = IsWindowVisible(hwnd);
+                }
             }
         }
+        default: break;
     }
 }
 
@@ -1300,8 +1319,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         return 1;
     }
 
-    HWINEVENTHOOK hook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, nullptr, WinEventProc,
-        0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+    HWINEVENTHOOK hook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+    HWINEVENTHOOK hook2 = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
     monitors::indexMonitors();
     taskbar::findTaskbarHandles();
@@ -1317,6 +1336,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     }
 
     UnhookWinEvent(hook);
+    UnhookWinEvent(hook2);
 
     quitting = true;
     if (taskbarLoopThread.joinable())
