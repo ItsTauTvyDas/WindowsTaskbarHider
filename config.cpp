@@ -14,23 +14,31 @@
 
 bool config::alwaysIgnoreWhenNotMaximized = true;
 bool config::darkMode;
-bool config::livePreview;
+bool config::autoUpdate;
 bool config::showAllWindows;
 bool config::openOnStart;
 bool config::closeToTray;
-bool config::closeConfirmMessage;
+bool config::minimizeToTray = true;
+bool config::closeConfirmMessage = true;
+bool config::disableAutoUpdateWhenUnfocused = true;
 bool config::languageLoaded;
 
 int config::taskbarUpdateInterval = 10;
 int config::opacityWhenHidden;
 int config::opacityWhenShown = 90;
 int config::opacityWhenHovered = 100;
+int config::opacityWhenHiddenInternal;
+int config::opacityWhenShownInternal;
+int config::opacityWhenHoveredInternal;
 int config::languageCode = IDR_INI_LANG_EN;
+
+std::wstring config::I_TaskbarWindowClassNameStarts = L"Shell_";
+std::wstring config::I_TaskbarWindowClassNameEnds = L"TrayWnd";
 
 std::vector<std::wstring> config::ignoredWindows = {L"title:", L"process:ApplicationFrameHost.exe"};
 std::vector<std::wstring> config::exceptionalWindows = {};
 
-void config::save() {
+void config::save(const bool exposeInternalKeys) {
     std::wofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
         utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
@@ -38,16 +46,19 @@ void config::save() {
     }
     file << "[General]" << std::endl;
     file << "Language = en" << std::endl;
+    file << "" << std::endl;
     file << "[Window]" << std::endl;
     file << "; Default values for checkboxes in the window display" << std::endl;
     file << "DarkMode = " << darkMode << std::endl;
-    file << "LivePreview = " << livePreview << std::endl;
+    file << "AutoUpdate = " << autoUpdate << std::endl;
     file << "ShowAllWindows = " << showAllWindows << std::endl;
     file << "[Window Behaviour]" << std::endl;
     file << "OpenOnStart = " << openOnStart << std::endl;
-    file << "CloseToTray = " << openOnStart << std::endl;
+    file << "CloseToTray = " << closeToTray << std::endl;
+    file << "MinimizeToTray = " << minimizeToTray << std::endl;
     file << "; Only works if CloseToTray is disabled" << std::endl;
-    file << "CloseConfirmMessage = " << openOnStart << std::endl;
+    file << "CloseConfirmMessage = " << closeConfirmMessage << std::endl;
+    file << "" << std::endl;
     file << "[Taskbar]" << std::endl;
     file << "; Taskbar update loop interval in milliseconds" << std::endl;
     file << "UpdateInterval = " << taskbarUpdateInterval << std::endl;
@@ -56,6 +67,8 @@ void config::save() {
     file << "; Bellow limit changes from 1 to 100, 0 causes the taskbar to lose interactivity" << std::endl;
     file << "OpacityWhenShown = " << opacityWhenShown << std::endl;
     file << "OpacityWhenHoveredOver = " << opacityWhenHovered << std::endl;
+    file << "DisableAutoUpdateWhenUnfocused = " << disableAutoUpdateWhenUnfocused << std::endl;
+    file << "" << std::endl;
     file << "[Ignored Windows]" << std::endl;
     file << "; Setting this to false (0) could slow down the application with debug mode on" << std::endl;
     file << "AlwaysIgnoreWhenNotMaximized = " << alwaysIgnoreWhenNotMaximized << std::endl;
@@ -69,13 +82,20 @@ void config::save() {
     file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
     file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
     file << "ExceptionalWindows = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
+    if (exposeInternalKeys) {
+        file << "" << std::endl;
+        file << "[Internal]" << std::endl;
+        file << "; ONLY CHANGE VALUES BELOW IF YOU KNOW WHAT YOU'RE DOING" << std::endl;
+        file << "TaskbarWindowClassNameStarts = " << I_TaskbarWindowClassNameStarts << std::endl;
+        file << "TaskbarWindowClassNameEnds = " << I_TaskbarWindowClassNameEnds << std::endl;
+    }
     file.flush();
     file.close();
 }
 
 void config::ensureConfigurationExists() {
     if (!utils::fileExists(CONFIG_FILENAME))
-        save();
+        save(false);
 }
 
 void config::open() {
@@ -102,6 +122,16 @@ bool checkForEmptyValueI(const std::wstring &key, const std::wstring &value, int
         return false;
     }
     obj = std::stoi(value);
+    return true;
+}
+
+bool checkForEmptyValueS(const std::wstring &key, const std::wstring &value, std::wstring &obj, bool &noErrors) {
+    if (value.empty()) {
+        utils::messageBox(MSG_CONFIG_NO_VALUE, MB_ICONWARNING | MB_OK, {key, obj});
+        noErrors = false;
+        return false;
+    }
+    obj = value;
     return true;
 }
 
@@ -144,8 +174,8 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             languageLoaded = true;
         } else if (key == L"Window.DarkMode") {
             checkBoolValidation(formattedKey, value, darkMode, darkMode, noErrors);
-        } else if (key == L"Window.LivePreview") {
-            checkBoolValidation(formattedKey, value, livePreview, livePreview, noErrors);
+        } else if (key == L"Window.AutoUpdate") {
+            checkBoolValidation(formattedKey, value, autoUpdate, autoUpdate, noErrors);
         } else if (key == L"Window.ShowAllWindows") {
             checkBoolValidation(formattedKey, value, showAllWindows, showAllWindows, noErrors);
         } else if (key == L"Window_Behaviour.OpenOnStart") {
@@ -154,24 +184,32 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             checkBoolValidation(formattedKey, value, closeToTray, closeToTray, noErrors);
         } else if (key == L"Window_Behaviour.CloseConfirmMessage") {
             checkBoolValidation(formattedKey, value, closeConfirmMessage, closeConfirmMessage, noErrors);
+        } else if (key == L"Window_Behaviour.MinimizeToTray") {
+            checkBoolValidation(formattedKey, value, minimizeToTray, minimizeToTray, noErrors);
         } else if (key == L"Taskbar.OpacityWhenHidden") {
             if (checkForEmptyValueI(formattedKey, value, opacityWhenHidden, opacityWhenHidden, noErrors))
                 checkForInvalidIntegerValue(formattedKey, opacityWhenHidden, 0, 100, noErrors);
-            opacityWhenHidden = opacityWhenHidden > 0 ? 255 * opacityWhenHidden / 100 : 0;
+            opacityWhenHiddenInternal = opacityWhenHidden > 0 ? 255 * opacityWhenHidden / 100 : 0;
         } else if (key == L"Taskbar.OpacityWhenShown") {
             if (checkForEmptyValueI(formattedKey, value, opacityWhenShown, opacityWhenShown, noErrors))
                 checkForInvalidIntegerValue(formattedKey, opacityWhenShown, 1, 100, noErrors);
-            opacityWhenShown = 255 * opacityWhenShown / 100;
+            opacityWhenShownInternal = 255 * opacityWhenShown / 100;
+        } else if (key == L"Taskbar.DisableAutoUpdateWhenUnfocused") {
+            checkBoolValidation(formattedKey, value, disableAutoUpdateWhenUnfocused, disableAutoUpdateWhenUnfocused, noErrors);
         } else if (key == L"Taskbar.OpacityWhenHoveredOver") {
             if (checkForEmptyValueI(formattedKey, value, opacityWhenHovered, opacityWhenHovered, noErrors))
                 checkForInvalidIntegerValue(formattedKey, opacityWhenHovered, 1, 100, noErrors);
-            opacityWhenHovered = 255 * opacityWhenHovered / 100;
+            opacityWhenHoveredInternal = 255 * opacityWhenHovered / 100;
         } else if (key == L"Ignored_Windows.IgnoredWindows") {
             ignoredWindows = utils::splitString(value, '|');
         } else if (key == L"Ignored_Windows.ExceptionalWindows") {
             exceptionalWindows = utils::splitString(value, '|');
         } else if (key == L"Ignored_Windows.AlwaysIgnoreWhenNotMaximized") {
             checkBoolValidation(formattedKey, value, alwaysIgnoreWhenNotMaximized, alwaysIgnoreWhenNotMaximized, noErrors);
+        } else if (key == L"Internal.TaskbarWindowClassNameStarts") {
+            checkForEmptyValueS(formattedKey, value, I_TaskbarWindowClassNameStarts, noErrors);
+        } else if (key == L"Internal.TaskbarWindowClassNameEnds") {
+            checkForEmptyValueS(formattedKey, value, I_TaskbarWindowClassNameEnds, noErrors);
         } else {
             utils::messageBox(MSG_CONFIG_INVALID_KEY, MB_ICONWARNING | MB_OK, {key});
             return false;
