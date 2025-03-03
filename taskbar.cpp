@@ -249,6 +249,7 @@ void taskbar::checkForAutoCollect() {
     if (collectWindowsInfo || !config::livePreview)
         return;
     static DWORD lastTick = GetTickCount();
+    // Make it only enable if passed time was 1 second, otherwise the window could lag a lot
     if (const DWORD currentTick = GetTickCount(); currentTick - lastTick >= 1000) {
         collectWindowsInfo = true;
         lastTick = currentTick;
