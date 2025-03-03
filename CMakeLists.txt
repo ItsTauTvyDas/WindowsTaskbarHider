@@ -50,6 +50,8 @@ add_executable(${PROJECT_NAME} WIN32
         "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"
         assets/language/language.en.2057.ini
         assets/language/language.uk.1058.ini
+        monitors.cpp
+        monitors.h
 )
 
 configure_file(resources.h.in "${CMAKE_CURRENT_BINARY_DIR}/resources.h" @ONLY)
