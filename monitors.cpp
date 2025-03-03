@@ -4,6 +4,7 @@
 #include <vector>
 
 HMONITOR monitors::indexedMonitors[64];
+int monitors::monitorCount;
 
 void monitors::indexMonitors() {
     memset(indexedMonitors, 0, sizeof(monitors));
@@ -15,6 +16,7 @@ void monitors::indexMonitors() {
     std::ranges::sort(monitors, [](const MonitorRect& a, const MonitorRect& b) {
         return a.rect.left < b.rect.left;
     });
-    for(auto i = 0; i < monitors.size(); ++i)
+    for(auto i = 0; i < monitors.size(); i++)
         indexedMonitors[i] = monitors[i].hMonitor;
+    monitorCount = static_cast<int>(std::size(monitors));
 }

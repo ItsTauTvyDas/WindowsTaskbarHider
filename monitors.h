@@ -11,6 +11,8 @@ public:
     };
 
     static HMONITOR indexedMonitors[64];
+    static int monitorCount;
+
     static void indexMonitors();
 };
 
