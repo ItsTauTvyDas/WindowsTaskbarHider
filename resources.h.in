@@ -13,6 +13,7 @@
 #define IDR_INI_LANG_UK              1058
 
 #define WM_UPDATE_GRID_REQUEST       (WM_APP + 1)
+#define WM_TASKBAR_THREAD_ERROR      (WM_APP + 2)
 
 #define ID_TRAY_OPEN_CONFIG          101
 #define ID_TRAY_RELOAD_CONFIG        102
