@@ -80,6 +80,9 @@ you can provide an absolute path to the mentioned executables, but don't forget 
 "C:\path\to\cmake.exe" ... -DCMAKE_MAKE_PROGRAM="C:\path\to\ninja.exe" -G ...
 ```
 
+### Updating language keys (language.h.in and assets/language/language.\*.ini files)
+If you are using IDE like CLion, make sure to clean CMake project before building, otherwise CMake won't notice those changed.
+
 ## Credits and appreciation!
 * Thanks to [SuperNeon4ik](https://github.com/SuperNeon4ik) for Ukrainian translations!
 * The icon was designed by [justicon (freepik.com)](https://www.freepik.com/icon/programming_1567754)
