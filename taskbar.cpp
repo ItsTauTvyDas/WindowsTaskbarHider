@@ -22,13 +22,15 @@ void taskbar::findTaskbarHandles() {
     std::lock_guard lock(taskbarMutex);
     taskbarHandles.clear();
     EnumWindows([](HWND hwnd, const LPARAM) -> BOOL {
-        if (char className[256]; GetClassNameA(hwnd, className, sizeof(className)) && hwnd != nullptr) {
-            const auto prefix = "Shell_", suffix = "TrayWnd";
-            const size_t prefixLen = strlen(prefix), suffixLen = strlen(suffix);
-            if (const size_t len = strlen(className); len >= prefixLen + suffixLen &&
-                                                      strncmp(className, prefix, prefixLen) == 0 &&
-                                                      strcmp(className + len - suffixLen, suffix) == 0) {
-                WindowInfo wInfo = { hwnd };
+        std::wstring className(256, L'\0');
+        if (const int len = GetClassNameW(hwnd, className.data(), static_cast<int>(className.size())); len > 0) {
+            className.resize(len);
+            const std::wstring& prefix = config::I_TaskbarWindowClassNameStarts;
+            const std::wstring& suffix = config::I_TaskbarWindowClassNameEnds;
+            if (className.find(prefix) != 0)
+                return TRUE;
+            if (className.size() >= suffix.size() && className.compare(className.size() - suffix.size(), suffix.size(), suffix) == 0) {
+                WindowInfo wInfo { hwnd };
                 wInfo.updateMonitor();
                 taskbarHandles[wInfo.hMonitor] = hwnd;
             }
@@ -147,11 +149,12 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
                     return TRUE;
             }
             wInfo.hwnd = hwnd;
-            wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
             wInfo.updateMonitor();
+            if (const auto taskbar = taskbarHandles.find(wInfo.hMonitor); taskbar != taskbarHandles.end() && taskbarHandles[wInfo.hMonitor] == hwnd)
+                return TRUE;
+            wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
 
             std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
-
             if (collectWindowsInfo && canCollect) {
                 WINDOWINFO wi;
                 wi.cbSize = sizeof(WINDOWINFO);
@@ -223,16 +226,16 @@ bool taskbar::isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos) {
 void taskbar::setTaskbarVisibility(HWND taskbar, const bool visible, const bool hoveredOver) {
     const LONG_PTR style = GetWindowLongPtr(taskbar, GWL_EXSTYLE);
     if (visible) {
-        int opacity = config::opacityWhenShown;
+        int opacity = config::opacityWhenShownInternal;
         if (hoveredOver)
-            opacity = config::opacityWhenHovered;
+            opacity = config::opacityWhenHoveredInternal;
         SetWindowLongPtr(taskbar, GWL_EXSTYLE, opacity == 0 ? style & ~WS_EX_LAYERED : style | WS_EX_LAYERED);
         SetLayeredWindowAttributes(taskbar, 0, opacity, LWA_ALPHA);
         ShowWindow(taskbar, SW_SHOW);
     } else {
         SetWindowLongPtr(taskbar, GWL_EXSTYLE, style | WS_EX_LAYERED);
-        SetLayeredWindowAttributes(taskbar, 0, config::opacityWhenHidden, LWA_ALPHA);
-        if (config::opacityWhenHidden == 0)
+        SetLayeredWindowAttributes(taskbar, 0, config::opacityWhenHiddenInternal, LWA_ALPHA);
+        if (config::opacityWhenHiddenInternal == 0)
             ShowWindow(taskbar, SW_HIDE);
     }
 }
@@ -259,7 +262,7 @@ void taskbar::updateTaskbarState() {
 }
 
 void taskbar::checkForAutoCollect() {
-    if (collectWindowsInfo || !config::livePreview)
+    if (collectWindowsInfo || !config::autoUpdate)
         return;
     static DWORD lastTick = GetTickCount();
     // Make it only enable if passed time was 1 second, otherwise the window could lag a lot
