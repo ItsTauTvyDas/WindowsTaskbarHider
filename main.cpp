@@ -12,6 +12,8 @@
 #include "language.h"
 #include "monitors.h"
 
+#pragma comment(lib, "Dwmapi.lib")
+
 #define WM_TRAY_ICON           (WM_USER + 1)
 
 #define WCP_BASE_COLOR         config::darkMode ? darkColorPalette [0] : lightColorPalette[0]
@@ -1195,6 +1197,27 @@ void signalHandler(const int signum) {
     exit(signum);
 }
 
+void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG, DWORD, DWORD)
+{
+    if (idObject != OBJID_WINDOW)
+        return;
+    std::wstring className(256, L'\0');
+    const int len = GetClassName(hwnd, className.data(), static_cast<int>(className.size()));
+    className.resize(len);
+    if (className == L"Windows.UI.Core.CoreWindow") {
+        std::wstring proc;
+        utils::getProcessInfo(hwnd, proc);
+        if (proc == L"StartMenuExperienceHost.exe" || proc == L"SearchApp.exe") {
+            DWORD cloaked = 0;
+            if (const HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr)) {
+                taskbar::WindowInfo wInfo = { hwnd };
+                wInfo.updateMonitor();
+                taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = cloaked == 0; // 0 when closed
+            }
+        }
+    }
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) {
     signal(SIGSEGV, signalHandler);
     globals::hIns = hInstance;
@@ -1277,6 +1300,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         return 1;
     }
 
+    HWINEVENTHOOK hook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, nullptr, WinEventProc,
+        0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+
     monitors::indexMonitors();
     taskbar::findTaskbarHandles();
     auto taskbarLoopThread = std::thread(taskbarLoop);
@@ -1289,6 +1315,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    UnhookWinEvent(hook);
 
     quitting = true;
     if (taskbarLoopThread.joinable())
