@@ -41,7 +41,8 @@
 
 #define MSG_WINDOW_CREATION_FAILED                @LANG_ID_COUNTER@
 #define MSG_WINDOW_REGISTER_FAILED                @LANG_ID_COUNTER@
-#define MSG_WINDOW_IRON_FAILED                    @LANG_ID_COUNTER@
+#define MSG_WINDOW_ICON_FAILED                    @LANG_ID_COUNTER@
+#define MSG_WINDOW_CLOSE_CONFIRMATION             @LANG_ID_COUNTER@
 
 #define MSG_MUTEX_FAILED                          @LANG_ID_COUNTER@
 
@@ -88,6 +89,7 @@
 #define MSG_TRAY_TB_RESUME                        @LANG_ID_COUNTER@
 #define MSG_TRAY_CONFIG_RELOAD                    @LANG_ID_COUNTER@
 #define MSG_TRAY_CONFIG_OPEN                      @LANG_ID_COUNTER@
+#define MSG_TRAY_CONFIG_EXPOSE_INTERNALS          @LANG_ID_COUNTER@
 
 class language {
 public:
