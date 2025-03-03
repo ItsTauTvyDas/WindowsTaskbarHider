@@ -120,11 +120,11 @@ void taskbarLoop() {
 
 inline int getContentHeight() {
     // +1 for header row
-    return (static_cast<int>(std::size(taskbar::windows)) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET + (config::livePreview ? windowClientHeight : 0);
+    return (static_cast<int>(std::size(taskbar::windows)) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET + (config::autoUpdate ? windowClientHeight : 0);
 }
 
 inline int getContentWidth() {
-    return std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), config::livePreview ? windowClientWidth : 0, std::plus());
+    return std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), config::autoUpdate ? windowClientWidth : 0, std::plus());
 }
 
 inline int getMaxYScroll(const int contentHeight) {
@@ -619,7 +619,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
         SendMessage(hCheckBoxAutoUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(hCheckBoxAutoUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
-        SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::livePreview));
+        SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::autoUpdate));
         g_childWindows.push_back(hCheckBoxAutoUpdate);
     } else {
         SetWindowText(g_childWindows[i], text.c_str());
@@ -758,21 +758,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_SIZE:
         {
-            windowWidth = LOWORD(lParam);
-            windowHeight = HIWORD(lParam);
-            // Reposition scrollbar
-            MoveWindow(g_hYScrollBar, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, windowHeight - WSC_HEADER, TRUE);
-            MoveWindow(g_hXScrollBar, 0, windowHeight - WSC_SCROLLBAR_WIDTH, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, TRUE);
-            RECT rect;
-            GetWindowRect(g_hSettingsButton, &rect);
-            MoveWindow(g_hSettingsButton, windowWidth - (rect.right - rect.left) - 10, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
+            if (wParam == SIZE_MINIMIZED) {
+                if (config::minimizeToTray)
+                    ShowWindow(hwnd, SW_HIDE);
+                else
+                    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+            } else {
+                windowWidth = LOWORD(lParam);
+                windowHeight = HIWORD(lParam);
+                // Reposition scrollbar
+                MoveWindow(g_hYScrollBar, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, windowHeight - WSC_HEADER, TRUE);
+                MoveWindow(g_hXScrollBar, 0, windowHeight - WSC_SCROLLBAR_WIDTH, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, TRUE);
+                RECT rect;
+                GetWindowRect(g_hSettingsButton, &rect);
+                MoveWindow(g_hSettingsButton, windowWidth - (rect.right - rect.left) - 10, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
 
-            GetClientRect(hwnd, &rect);
-            windowClientHeight = rect.bottom - rect.top;
-            windowClientWidth = rect.right - rect.left;
+                GetClientRect(hwnd, &rect);
+                windowClientHeight = rect.bottom - rect.top;
+                windowClientWidth = rect.right - rect.left;
 
-            updateScrollBarsInfo();
-            g_redrawWindow(hwnd);
+                updateScrollBarsInfo();
+                g_redrawWindow(hwnd);
+            }
             break;
         }
         case WM_LBUTTONDOWN:
@@ -906,12 +913,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_TRAY_ICON:
         {
-            if (lParam == WM_RBUTTONUP || lParam == WM_LBUTTONUP || lParam == WM_CONTEXTMENU) {
+            if (lParam == WM_LBUTTONUP) {
+                if (!IsWindowVisible(hwnd))
+                    ShowWindow(hwnd, SW_SHOWNORMAL);
+                else if (IsIconic(hwnd))
+                    ShowWindow(hwnd, SW_RESTORE);
+                else
+                    ShowWindow(hwnd, SW_SHOW);
+                SetForegroundWindow(hwnd);
+            } else if (lParam == WM_RBUTTONUP || lParam == WM_CONTEXTMENU) {
                 HMENU hMenu = CreatePopupMenu();
                 if (lParam != WM_CONTEXTMENU)
                     AppendMenu(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, TRAY_TITLE);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, utils::message(MSG_TRAY_CONFIG_OPEN).c_str());
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, utils::message(MSG_TRAY_CONFIG_RELOAD).c_str());
+                if (lParam == WM_CONTEXTMENU) {
+                    AppendMenu(hMenu, MF_STRING, ID_TRAY_EXPOSE_INTERNALS, utils::message(MSG_TRAY_CONFIG_EXPOSE_INTERNALS).c_str());
+                }
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, utils::message(globals::taskbarLoopRunState ?  MSG_TRAY_TB_PAUSE : MSG_TRAY_TB_RESUME).c_str());
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
@@ -944,8 +962,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_UPDATE_GRID_REQUEST:
         {
-            if (!focused && config::livePreview)
-                break;
+            if (config::autoUpdate) {
+                if (!focused && config::disableAutoUpdateWhenUnfocused)
+                    break;
+            }
             g_lastTableUpdateTime = utils::getFormattedTime();
             g_redrawLowerArea(hwnd);
             updateScrollBarsInfo();
@@ -1002,6 +1022,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     config::open();
                     break;
                 }
+                case ID_TRAY_EXPOSE_INTERNALS: {
+                    config::save(true);
+                    // No need for break
+                }
                 case ID_TRAY_RELOAD_CONFIG:
                 {
                     if (config::load())
@@ -1010,6 +1034,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                         utils::messageBox(MSG_CONFIG_RELOADED_WITH_ERRORS, MB_ICONWARNING | MB_OK);
                     updateLanguage(hwnd);
                     g_redrawWindow(hwnd);
+                    taskbar::resetTaskbar();
                     taskbar::clearErrorState();
                     break;
                 }
@@ -1089,10 +1114,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             taskbar::findTaskbarHandles();
             break;
         }
+        case WM_CLOSE: {
+            if (config::closeConfirmMessage && !config::closeToTray) {
+                if (utils::messageBox(MSG_WINDOW_CLOSE_CONFIRMATION, MB_ICONQUESTION | MB_YESNO) == 7)
+                    break;
+            } else if (config::closeToTray) {
+                ShowWindow(hwnd, SW_HIDE);
+                break;
+            }
+            DestroyWindow(hwnd);
+            break;
+        }
         case WM_DESTROY: {
             DeleteObject(g_hDefaultFont);
             DeleteObject(g_hDefaultFontBold);
             DeleteObject(g_hTableFont);
+            DeleteObject(g_hTableFontBold);
             DeleteObject(g_hYScrollBar);
             DeleteObject(g_hXScrollBar);
             Shell_NotifyIcon(NIM_DELETE, &nid);
@@ -1197,7 +1234,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     HICON hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
     if (!hIcon) {
         utils::showExceptionMessageBox([](std::wstringstream& crashInfo) {
-            crashInfo << utils::message(MSG_WINDOW_IRON_FAILED);
+            crashInfo << utils::message(MSG_WINDOW_ICON_FAILED);
         }, true);
         return 1;
     }
@@ -1244,7 +1281,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     taskbar::findTaskbarHandles();
     auto taskbarLoopThread = std::thread(taskbarLoop);
 
-    ShowWindow(globals::hWnd, nShowCmd);
+    ShowWindow(globals::hWnd, !config::openOnStart ? SW_HIDE : nShowCmd);
     UpdateWindow(globals::hWnd);
 
     MSG msg;
