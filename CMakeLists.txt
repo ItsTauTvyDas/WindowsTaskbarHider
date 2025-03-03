@@ -60,6 +60,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}"
 target_compile_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
 target_link_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
 target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
+target_link_libraries(${PROJECT_NAME} PRIVATE Dwmapi)
 
 add_custom_command(
         TARGET ${PROJECT_NAME} POST_BUILD
