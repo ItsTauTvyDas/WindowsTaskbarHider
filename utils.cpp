@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <unordered_map>
 #include <mutex>
+#include <psapi.h>
 #include <bits/ranges_algo.h>
 #include "language.h"
 
@@ -43,27 +44,23 @@ bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
 }
 
 void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName) {
-    DWORD processId;
-    GetWindowThreadProcessId(hwnd, &processId);
-
-    processExeName = L"_unknown";
-
-    HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hProcessSnap == INVALID_HANDLE_VALUE)
+    DWORD pid;
+    GetWindowThreadProcessId(hwnd, &pid);
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (!hProcess) {
+        processExeName = L"#_unknown";
         return;
+    }
 
-    PROCESSENTRY32 pe32;
-    pe32.dwSize = sizeof(PROCESSENTRY32);
-
-    if (Process32First(hProcessSnap, &pe32))
-        do {
-            if (pe32.th32ProcessID == processId) {
-                processExeName = pe32.szExeFile;
-                break;
-            }
-        } while (Process32Next(hProcessSnap, &pe32));
-
-    CloseHandle(hProcessSnap);
+    wchar_t processName[MAX_PATH] = {0};
+    if (GetModuleBaseNameW(hProcess, nullptr, processName, MAX_PATH) == 0)
+    {
+        CloseHandle(hProcess);
+        processExeName = L"#_unknown";
+        return;
+    }
+    CloseHandle(hProcess);
+    processExeName = std::wstring(processName);
 }
 
 bool utils::processArguments(const int argc, const LPWSTR *argv, LPWSTR commandLine) {
