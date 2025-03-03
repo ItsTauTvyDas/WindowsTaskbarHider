@@ -1,0 +1,20 @@
+#include "monitors.h"
+
+#include <algorithm>
+#include <vector>
+
+HMONITOR monitors::indexedMonitors[64];
+
+void monitors::indexMonitors() {
+    memset(indexedMonitors, 0, sizeof(monitors));
+    std::vector<MonitorRect> monitors;
+    EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR hMonitor, HDC, LPRECT lpMonitorRect, LPARAM dwData) -> BOOL {
+        reinterpret_cast<std::vector<MonitorRect>*>(dwData)->push_back({ hMonitor, *lpMonitorRect });
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&monitors));
+    std::ranges::sort(monitors, [](const MonitorRect& a, const MonitorRect& b) {
+        return a.rect.left < b.rect.left;
+    });
+    for(auto i = 0; i < monitors.size(); ++i)
+        indexedMonitors[i] = monitors[i].hMonitor;
+}
