@@ -57,7 +57,6 @@ A file called config.ini is going to be created next to exe file (unless `--no-c
 
 ## Building
 This project was built using CMake (^3.10), MinGW (^11.0 w64), Ninja and CLion IDE.
-
 You can build the project without any studios with the following commands:
 ### Configure the release build (Ninja)
 ```bash
@@ -65,12 +64,17 @@ cmake.exe -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=ninja.exe -G Ninja -S 
 ```
 ### Build the executable
 ```bash
-cmake.exe --build <source>/cmake-build-release --target WindowsTaskbarHider -j 6
+cmake.exe --build <source>\cmake-build-release --target WindowsTaskbarHider -j 6
 ```
 `<source>` is a path (absolute or relative) to the source directory. If you don't have added cmake.exe and/or ninja.exe,
-you can provide an absolute path to the mentioned executables, but don't forget to quote them like:
+you can provide an absolute path to the mentioned executables, but don't forget to quote them like this
 ```bash
 "C:\path\to\cmake.exe" ... -DCMAKE_MAKE_PROGRAM="C:\path\to\ninja.exe" -G ...
+```
+### Updating language keys (language.h.in and assets/language/language.\*.ini files)
+Make sure to clean CMake project before building, otherwise CMake won't notice those changes
+```bash
+cmake.exe --build <source>\cmake-build-debug --target clean -j 6
 ```
 ### CMake used flags (from CMakeLists.txt)
 | Build Type | Category            | Flags                                             |
@@ -79,8 +83,6 @@ you can provide an absolute path to the mentioned executables, but don't forget 
 | Release    | `C++ compiler`      | -Os -ffunction-sections -fdata-sections           |
 | Release    | `Executable linker` | -Wl,--gc-sections -s                              |
 | Debug      | `C++ compiler`      | -gdwarf-3                                         |
-### Updating language keys (language.h.in and assets/language/language.\*.ini files)
-If you are using IDE like CLion, make sure to clean CMake project before building, otherwise CMake won't notice those changed.
 
 ## Credits and appreciation!
 * Thanks to [SuperNeon4ik](https://github.com/SuperNeon4ik) for Ukrainian translations!
