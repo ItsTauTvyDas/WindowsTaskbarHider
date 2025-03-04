@@ -1,7 +1,7 @@
 # Windows Taskbar Hider - Make your wallpaper look cleaner!
 
 ## What is this?
-This is an application that hides the taskbar when no window is maximized!
+This is a light-weight Windows-only application that hides the taskbar when no window is maximized!
 The initial idea was to show a cleaner desktop with desktop icons disabled.
 This can work perfectly with **TranslucentTB** to make the desktop look even more cleaner.
 **Keep in mind that the taskbar still pertains its area, it doesn't extend your desktop.**
@@ -50,36 +50,35 @@ This application doesn't hide the taskbar completely like Windows does, it only 
 ## Configuration
 A file called config.ini is going to be created next to exe file (unless `--no-config` argument specified).
 
-
-
 ## TODO
 - [ ] Settings and other similar apps that uses ApplicationFrameHost.exe don't get detected
-- [ ] Show taskbar when any context menu from taskbar is opened.
+- [ ] Show taskbar when any context menu from taskbar is opened
 - [ ] Maybe add animations when taskbar is appearing/disappearing?
 
 ## Building
-This project was built using MinGW and CLion IDE.
+This project was built using CMake (^3.10), MinGW (^11.0 w64), Ninja and CLion IDE.
 
 You can build the project without any studios with the following commands:
-
-### Configure the release build.
-
+### Configure the release build (Ninja)
 ```bash
 cmake.exe -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=ninja.exe -G Ninja -S <source> -B <source>/cmake-build-release
 ```
-
-### Build the executable.
-
+### Build the executable
 ```bash
 cmake.exe --build <source>/cmake-build-release --target WindowsTaskbarHider -j 6
 ```
 `<source>` is a path (absolute or relative) to the source directory. If you don't have added cmake.exe and/or ninja.exe,
 you can provide an absolute path to the mentioned executables, but don't forget to quote them like:
-
 ```bash
 "C:\path\to\cmake.exe" ... -DCMAKE_MAKE_PROGRAM="C:\path\to\ninja.exe" -G ...
 ```
-
+### CMake used flags (from CMakeLists.txt)
+| Build Type | Category            | Flags                                             |
+|------------|---------------------|---------------------------------------------------|
+| Both       | `C++ compiler`      | -static -static-libgcc -static-libstdc++ -pthread |
+| Release    | `C++ compiler`      | -Os -ffunction-sections -fdata-sections           |
+| Release    | `Executable linker` | -Wl,--gc-sections -s                              |
+| Debug      | `C++ compiler`      | -gdwarf-3                                         |
 ### Updating language keys (language.h.in and assets/language/language.\*.ini files)
 If you are using IDE like CLion, make sure to clean CMake project before building, otherwise CMake won't notice those changed.
 
