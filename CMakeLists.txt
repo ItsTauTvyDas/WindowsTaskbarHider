@@ -4,10 +4,9 @@ cmake_policy(SET CMP0115 NEW)
 project(WindowsTaskbarHider)
 
 set(CMAKE_CXX_STANDARD             20)
-set(CMAKE_CXX_FLAGS                "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++ -pthread")
-set(CMAKE_CXX_FLAGS_RELEASE        "${CMAKE_CXX_FLAGS_RELEASE} -Os -ffunction-sections -fdata-sections")
+set(CMAKE_CXX_FLAGS_RELEASE        "${CMAKE_CXX_FLAGS_RELEASE} -static -static-libgcc -static-libstdc++ -Os -fdata-sections -ffunction-sections")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -Wl,--gc-sections -s -static -lpthread")
 set(CMAKE_CXX_FLAGS_DEBUG          "${CMAKE_CXX_FLAGS_DEBUG} -gdwarf-3")
-set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -Wl,--gc-sections -s")
 
 set(PRODUCT_COMPANY          "ItsTauTvyDas")
 set(PRODUCT_URL              "https://github.com/ItsTauTvyDas/WindowsTaskbarHider")
