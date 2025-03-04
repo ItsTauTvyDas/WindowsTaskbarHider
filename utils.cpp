@@ -68,6 +68,7 @@ bool utils::processArguments(const int argc, const LPWSTR *argv, LPWSTR commandL
         messageBox(MSG_ARGS_PARSE_FAILED, MB_ICONERROR | MB_OK, { std::wstring(commandLine) });
         return false;
     }
+    globals::exe = std::wstring(argv[0]);
     if (argc < 2) return true;
     auto arg = std::wstring(argv[1]);
 
