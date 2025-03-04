@@ -964,10 +964,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_UPDATE_GRID_REQUEST:
         {
-            if (config::autoUpdate) {
-                if (!focused && config::disableAutoUpdateWhenUnfocused)
-                    break;
-            }
+            if (!IsWindowVisible(hwnd) || (config::autoUpdate && !focused && config::disableAutoUpdateWhenUnfocused))
+                break;
             g_lastTableUpdateTime = utils::getFormattedTime();
             g_redrawLowerArea(hwnd);
             updateScrollBarsInfo();
