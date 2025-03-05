@@ -34,6 +34,13 @@ int config::languageCode = IDR_INI_LANG_EN;
 
 std::wstring config::I_TaskbarWindowClassNameStarts = L"Shell_";
 std::wstring config::I_TaskbarWindowClassNameEnds = L"TrayWnd";
+std::vector<std::wstring> config::I_ExceptionalWindows = {
+    L"explorer.exe=TaskListThumbnailWnd",                  // Preview of windows when hovered over a taskbar app icon
+    L"explorer.exe=TaskListOverlayWnd",                    // Same as above
+    L"explorer.exe=NotifyIconOverflowWindow",              // More tray icons arrow window
+    L"explorer.exe=CiceroUIWndFrame",                      // Language chooser window
+    L"ShellExperienceHost.exe=Windows.UI.Core.CoreWindow", // Wireless/Ethernet, sound, time windows
+};
 
 std::vector<std::wstring> config::ignoredWindows = {L"title:", L"process:ApplicationFrameHost.exe"};
 std::vector<std::wstring> config::exceptionalWindows = {};
@@ -86,8 +93,9 @@ void config::save(const bool exposeInternalKeys) {
         file << "" << std::endl;
         file << "[Internal]" << std::endl;
         file << "; ONLY CHANGE VALUES BELOW IF YOU KNOW WHAT YOU'RE DOING" << std::endl;
-        file << "TaskbarWindowClassNameStarts = " << I_TaskbarWindowClassNameStarts << std::endl;
-        file << "TaskbarWindowClassNameEnds = " << I_TaskbarWindowClassNameEnds << std::endl;
+        file << "___TaskbarWindowClassNameStarts = " << I_TaskbarWindowClassNameStarts << std::endl;
+        file << "___TaskbarWindowClassNameEnds = " << I_TaskbarWindowClassNameEnds << std::endl;
+        file << "___TaskbarExceptionalWindows = " << utils::joinString(I_ExceptionalWindows, L",") << std::endl;
     }
     file.flush();
     file.close();
@@ -206,10 +214,12 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             exceptionalWindows = utils::splitString(value, '|');
         } else if (key == L"Ignored_Windows.AlwaysIgnoreWhenNotMaximized") {
             checkBoolValidation(formattedKey, value, alwaysIgnoreWhenNotMaximized, alwaysIgnoreWhenNotMaximized, noErrors);
-        } else if (key == L"Internal.TaskbarWindowClassNameStarts") {
+        } else if (key == L"Internal.___TaskbarWindowClassNameStarts") {
             checkForEmptyValueS(formattedKey, value, I_TaskbarWindowClassNameStarts, noErrors);
-        } else if (key == L"Internal.TaskbarWindowClassNameEnds") {
+        } else if (key == L"Internal.___TaskbarWindowClassNameEnds") {
             checkForEmptyValueS(formattedKey, value, I_TaskbarWindowClassNameEnds, noErrors);
+        } else if (key == L"Internal.___TaskbarExceptionalWindows") {
+            I_ExceptionalWindows = utils::splitString(value, L',');
         } else {
             utils::messageBox(MSG_CONFIG_INVALID_KEY, MB_ICONWARNING | MB_OK, {key});
             return false;
