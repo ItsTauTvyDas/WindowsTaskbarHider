@@ -1222,13 +1222,22 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
         }
         case EVENT_OBJECT_SHOW:
         case EVENT_OBJECT_HIDE: {
-            if (className == L"TaskListThumbnailWnd" || className == L"TaskListOverlayWnd") {
-                utils::getProcessInfo(hwnd, proc);
-                if (proc == L"Explorer.EXE") {
-                    wInfo.hwnd = hwnd;
-                    wInfo.updateMonitor();
-                    taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = IsWindowVisible(hwnd);
-                }
+            utils::getProcessInfo(hwnd, proc);
+            if (std::ranges::find(config::I_ExceptionalWindows, proc + L"=" + className) != config::I_ExceptionalWindows.end()) {
+                wInfo.hwnd = hwnd;
+                wInfo.updateMonitor();
+                taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = event == EVENT_OBJECT_SHOW;
+            } else if (LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE); style & WS_POPUP || className == L"#32768") {
+                wInfo.hwnd = hwnd; wInfo.updateMonitor();
+                HWND taskbar = taskbar::taskbarHandles[wInfo.hMonitor];
+                if (hwnd == taskbar) break;
+                RECT taskbarRect; GetWindowRect(taskbar, &taskbarRect); // Get taskbar location
+                RECT windowRect; GetWindowRect(hwnd, &windowRect); // Get window location
+                if (taskbarRect.left < windowRect.right &&
+                    taskbarRect.right > windowRect.left &&
+                    taskbarRect.top < windowRect.bottom &&
+                    taskbarRect.bottom > windowRect.top)
+                    taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = event == EVENT_OBJECT_SHOW;
             }
         }
         default: break;
@@ -1265,9 +1274,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
 
     // In case when mutex fails
     if (utils::killProcessByName(globals::exe.c_str(), GetCurrentProcessId())) {
-        if (utils::messageBox(MSG_APP_ALREADY_RUNNING_BUT_KILLED, MB_ICONQUESTION | MB_YESNO) == 7) {
+        if (utils::messageBox(MSG_APP_ALREADY_RUNNING_BUT_KILLED, MB_ICONQUESTION | MB_YESNO) == 7)
             exit(0);
-        }
     }
 
     // Load icon
