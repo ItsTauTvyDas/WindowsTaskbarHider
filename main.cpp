@@ -1228,6 +1228,7 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
                 wInfo.updateMonitor();
                 taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = event == EVENT_OBJECT_SHOW;
             } else if (LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE); style & WS_POPUP || className == L"#32768") {
+                // #32768 class is mostly used for menus
                 wInfo.hwnd = hwnd; wInfo.updateMonitor();
                 HWND taskbar = taskbar::taskbarHandles[wInfo.hMonitor];
                 if (hwnd == taskbar) break;
