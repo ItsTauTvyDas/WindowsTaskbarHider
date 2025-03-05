@@ -24,10 +24,13 @@ public:
     static int opacityWhenShownInternal;
     static int opacityWhenHoveredInternal;
     static int languageCode;
-    static std::wstring I_TaskbarWindowClassNameStarts;
-    static std::wstring I_TaskbarWindowClassNameEnds;
     static std::vector<std::wstring> ignoredWindows;
     static std::vector<std::wstring> exceptionalWindows;
+
+    // Internal
+    static std::wstring I_TaskbarWindowClassNameStarts;
+    static std::wstring I_TaskbarWindowClassNameEnds;
+    static std::vector<std::wstring> I_ExceptionalWindows;
 
     static bool load();
     static void save(bool exposeInternalKeys);
