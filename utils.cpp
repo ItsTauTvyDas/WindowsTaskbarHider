@@ -31,7 +31,7 @@ bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
         do {
             if (currentPid == pe.th32ProcessID)
                 continue;
-            if (wcschr(pe.szExeFile, *processName) == nullptr) {
+            if (wcschr(pe.szExeFile, *processName) != nullptr) {
                 if (HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID)) {
                     TerminateProcess(hProcess, 0);
                     CloseHandle(hProcess);
@@ -52,7 +52,7 @@ void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName) {
         return;
     }
 
-    wchar_t processName[MAX_PATH] = {0};
+    wchar_t processName[MAX_PATH] = {};
     if (GetModuleBaseNameW(hProcess, nullptr, processName, MAX_PATH) == 0)
     {
         CloseHandle(hProcess);
@@ -68,7 +68,8 @@ bool utils::processArguments(const int argc, const LPWSTR *argv, LPWSTR commandL
         messageBox(MSG_ARGS_PARSE_FAILED, MB_ICONERROR | MB_OK, { std::wstring(commandLine) });
         return false;
     }
-    globals::exe = std::wstring(argv[0]);
+    const auto processExeName = std::wstring(argv[0]);
+    globals::exe = processExeName.substr(processExeName.find_last_of(L"/\\") + 1);
     if (argc < 2) return true;
     auto arg = std::wstring(argv[1]);
 
