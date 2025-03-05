@@ -11,11 +11,11 @@
 #include "utils.h"
 
 std::mutex taskbarMutex;
-std::unordered_map<HMONITOR, HWND> taskbarHandles;
 bool errorState = false;
 
 std::vector<taskbar::WindowInfo> taskbar::windows;
 std::unordered_map<HMONITOR, bool> taskbar::taskbarForcedVisibilityStates;
+std::unordered_map<HMONITOR, HWND> taskbar::taskbarHandles;
 bool taskbar::collectWindowsInfo = false;
 bool taskbar::forceToCollect = false;
 

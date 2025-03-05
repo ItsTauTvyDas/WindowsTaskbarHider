@@ -49,6 +49,7 @@ public:
 
     static std::vector<WindowInfo> windows;
     static std::unordered_map<HMONITOR, bool> taskbarForcedVisibilityStates;
+    static std::unordered_map<HMONITOR, HWND> taskbarHandles;
     static bool collectWindowsInfo;
     static bool forceToCollect;
 
