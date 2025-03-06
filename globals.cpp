@@ -3,8 +3,9 @@
 #include "taskbar.h"
 
 std::wstring globals::exe;
-std::wstring globals::args = L"";
+std::wstring globals::args;
 HWND globals::hWnd = nullptr;
 HINSTANCE globals::hIns = nullptr;
-bool globals::noConfigFile = false;
+bool globals::noConfigFile;
 bool globals::taskbarLoopRunState = true;
+bool globals::sessionLocked;

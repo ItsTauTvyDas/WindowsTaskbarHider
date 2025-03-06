@@ -12,6 +12,7 @@ public:
     static HINSTANCE hIns;
     static bool noConfigFile;
     static bool taskbarLoopRunState;
+    static bool sessionLocked;
 };
 
 #endif //GLOBALS_H
