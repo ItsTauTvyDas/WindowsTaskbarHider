@@ -265,7 +265,7 @@ inline void g_drawScrollBars(HDC hdc) {
     DeleteObject(brushClicked);
 }
 
-inline HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
+HDC g_doubleBuffering(HWND hwnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
     static HBITMAP memBitmap;
     static HGDIOBJ oldBitmap;
     static HDC mHdc, hdc;
@@ -342,7 +342,7 @@ inline void g_drawCheckBox(HDC mHdc, bool pState, const RECT oRect, const LPCWST
     SetTextColor(mHdc, oldTextColor);
 }
 
-inline int g_calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font) {
+int g_calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font) {
     HGDIOBJ oldFont = nullptr;
     if (font)
         oldFont = SelectObject(hdc, font);
@@ -357,11 +357,6 @@ inline void g_redrawLowerArea(HWND hwnd) {
     RECT rect { 0, WSC_HEADER, windowWidth, windowClientHeight };
     InvalidateRect(hwnd, &rect, TRUE);
     rect = utils::rect(windowClientWidth - g_lastUpdatedTimeTextWidth - 10, 45, g_lastUpdatedTimeTextWidth, 30);
-    InvalidateRect(hwnd, &rect, TRUE);
-}
-
-inline void g_redrawHeader(HWND hwnd) {
-    const RECT rect { 0, 0, windowWidth, WSC_HEADER };
     InvalidateRect(hwnd, &rect, TRUE);
 }
 
@@ -429,7 +424,7 @@ inline void g_calculateDefaultWidths(HDC hdc) {
     }
 }
 
-inline std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
+std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
     std::wstring value;
     switch (col) {
         case 0: { // Status
@@ -971,6 +966,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             updateScrollBarsInfo();
             break;
         }
+        case WM_WTSSESSION_CHANGE: {
+            if (wParam == WTS_SESSION_LOCK) {
+                // Stop taskbar loop when user locks the session
+                globals::taskbarLoopRunState = false;
+                globals::sessionLocked = true;
+            } else if (wParam == WTS_SESSION_UNLOCK) {
+                // Continue taskbar loop when user log-ins into the same session where the application was originally ran from
+                globals::taskbarLoopRunState = true;
+                globals::sessionLocked = false;
+            }
+            break;
+        }
+        case WM_POWERBROADCAST: {
+            if (globals::sessionLocked)
+                break;
+            if (wParam == PBT_APMSUSPEND) {
+                globals::taskbarLoopRunState = false;
+            } else if (wParam == PBT_APMRESUMESUSPEND || wParam == PBT_APMRESUMEAUTOMATIC) {
+                globals::taskbarLoopRunState = true;
+            }
+            break;
+        }
         case WM_COMMAND:
         {
             const auto lwParam = LOWORD(wParam);
@@ -1252,8 +1269,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
 
     int argc;
     LPWSTR commandLine = GetCommandLineW();
-    if (const LPWSTR *argv = CommandLineToArgvW(commandLine, &argc); !utils::processArguments(argc, argv, commandLine))
+    LPWSTR *argv = CommandLineToArgvW(commandLine, &argc);
+    if (!utils::processArguments(argc, argv, commandLine)) {
+        LocalFree(argv);
         return 0;
+    }
+    LocalFree(argv);
 
     config::darkMode = utils::isUserUsingDarkTheme();
 
@@ -1274,13 +1295,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     }
 
     // In case when mutex fails
+    // We don't want multiple applications running at the same time
     if (utils::killProcessByName(globals::exe.c_str(), GetCurrentProcessId())) {
         if (utils::messageBox(MSG_APP_ALREADY_RUNNING_BUT_KILLED, MB_ICONQUESTION | MB_YESNO) == 7)
             exit(0);
     }
 
     // Load icon
-    HICON hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
+    HICON hIcon = LoadIcon(globals::hIns, MAKEINTRESOURCE(IDI_APP_ICON));
     if (!hIcon) {
         utils::showExceptionMessageBox([](std::wstringstream& crashInfo) {
             crashInfo << utils::message(MSG_WINDOW_ICON_FAILED);
