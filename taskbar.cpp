@@ -82,7 +82,7 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                 if (const int index = std::stoi(value); index >= 0 && index < sizeof(monitors::indexedMonitors) && monitors::indexedMonitors[index] == wInfo.hMonitor)
                     succeededTags++;
             } else if (key == L"maximized" || key == L"m") {
-                if (wp.showCmd == SW_MAXIMIZE == stoi(value))
+                if ((wp.showCmd == SW_MAXIMIZE) == stoi(value))
                     succeededTags++;
             } else if (key == L"left" || key == L"right" || key == L"top" || key == L"bottom") {
                 if (!wInfo.wasRectModified) {
@@ -225,8 +225,16 @@ bool taskbar::isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos) {
     return false;
 }
 
-void taskbar::setTaskbarVisibility(HWND taskbar, const bool visible, const bool hoveredOver) {
+void taskbar::setTaskbarVisibility(HWND taskbar, bool visible, bool hoveredOver) {
     const LONG_PTR style = GetWindowLongPtr(taskbar, GWL_EXSTYLE);
+    // Force taskbar to be visible when it's paused.
+    // Since findAllMaximizedWindows() can take some time to process, while it's being processed, user could pause it or switch sessions,
+    // so in any case, make it visible
+    if (!globals::taskbarLoopRunState) {
+        visible = true;
+        hoveredOver = false;
+    }
+
     if (visible) {
         int opacity = config::opacityWhenShownInternal;
         if (hoveredOver)
