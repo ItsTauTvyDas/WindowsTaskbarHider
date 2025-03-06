@@ -47,12 +47,12 @@ add_executable(${PROJECT_NAME} WIN32
         globals.h
         monitors.cpp
         monitors.h
-        assets/app.rc
+        resources/app.rc
         resources.h
         "${CMAKE_CURRENT_BINARY_DIR}/language.h"
         "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"
-        assets/language/language.en.2057.ini
-        assets/language/language.uk.1058.ini
+        resources/language/language.en.2057.ini
+        resources/language/language.uk.1058.ini
 )
 
 configure_file(resources.h.in "${CMAKE_CURRENT_BINARY_DIR}/resources.h" @ONLY)
