@@ -17,7 +17,7 @@ set(VERSION_PRODUCT_BUILD    0)
 set(VERSION_PRODUCT_REVISION 0)
 
 # Create std::wstring array for supported languages
-file(GLOB language_files "${CMAKE_SOURCE_DIR}/assets/language/language.*.*.ini")
+file(GLOB language_files "${CMAKE_SOURCE_DIR}/resources/language/language.*.*.ini")
 set(DEFAULT_SUPPORTED_LANGUAGES "{")
 foreach(file_path ${language_files})
     get_filename_component(filename ${file_path} NAME)

@@ -71,7 +71,7 @@ you can provide an absolute path to the mentioned executables, but don't forget 
 ```bash
 "C:\path\to\cmake.exe" ... -DCMAKE_MAKE_PROGRAM="C:\path\to\ninja.exe" -G ...
 ```
-### Updating language keys (language.h.in and assets/language/language.\*.ini files)
+### Updating language keys (language.h.in and resources/language/language.\*.ini files)
 Make sure to clean CMake project before building, otherwise CMake won't notice those changes
 ```bash
 cmake.exe --build <source>\cmake-build-debug --target clean -j 6
