@@ -1237,7 +1237,7 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
                 if (taskbarRect.left < windowRect.right &&
                     taskbarRect.right > windowRect.left &&
                     taskbarRect.top < windowRect.bottom &&
-                    taskbarRect.bottom > windowRect.top)
+                    taskbarRect.bottom > windowRect.top) // Check if two rects overlaps each other
                     taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = event == EVENT_OBJECT_SHOW;
             }
         }
@@ -1262,7 +1262,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
 
     HANDLE hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
     if (!hMutex)
-        utils::messageBox(MSG_MUTEX_FAILED, MB_ICONWARNING | MB_OK, {utils::NTStatusMessageToText(GetLastError())});
+        utils::messageBox(MSG_MUTEX_FAILED, MB_ICONWARNING | MB_OK, { utils::NTStatusMessageToText(GetLastError()) });
 
     if (hMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
         if (utils::messageBox(MSG_APP_ALREADY_RUNNING, MB_ICONQUESTION | MB_YESNO) == 6) {
