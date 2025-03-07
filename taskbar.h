@@ -58,6 +58,8 @@ public:
     static void resetTaskbar();
     static void updateTaskbarState();
     static void clearErrorState();
+    static void clearForcedVisibilityStates();
+
 private:
     static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows();
     static bool isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos);

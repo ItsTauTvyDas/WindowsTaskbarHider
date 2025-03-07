@@ -293,3 +293,8 @@ void taskbar::checkForAutoCollect() {
         lastTick = currentTick;
     }
 }
+
+void taskbar::clearForcedVisibilityStates() {
+    for (auto monitor : monitors::indexedMonitors)
+        taskbarForcedVisibilityStates[monitor] = false;
+}
