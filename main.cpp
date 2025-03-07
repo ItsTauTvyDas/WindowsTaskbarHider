@@ -1168,6 +1168,7 @@ void signalHandler(const int signum) {
 }
 
 LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
+    signal(SIGSEGV, signalHandler);
     globals::hWnd = nullptr;
     utils::showExceptionMessageBox([pException](std::wstringstream& crashInfo) {
         const EXCEPTION_RECORD* record = pException->ExceptionRecord;
