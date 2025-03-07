@@ -39,7 +39,7 @@ std::vector<std::wstring> config::I_ExceptionalWindows = {
     L"explorer.exe=TaskListOverlayWnd",                    // Same as above
     L"explorer.exe=NotifyIconOverflowWindow",              // More tray icons arrow window
     L"explorer.exe=CiceroUIWndFrame",                      // Language chooser window
-    L"ShellExperienceHost.exe=Windows.UI.Core.CoreWindow", // Wireless/Ethernet, sound, time windows
+    L"shellexperiencehost.exe=Windows.UI.Core.CoreWindow", // Wireless/Ethernet, sound, time windows
 };
 
 std::vector<std::wstring> config::ignoredWindows = {L"title:", L"process:ApplicationFrameHost.exe"};
@@ -87,6 +87,7 @@ void config::save(const bool exposeInternalKeys) {
     file << "; Some of the processes seems to have maximized windows, even though they are not visible" << std::endl;
     file << "; We don't have a way to distinguish between that invisible window," << std::endl;
     file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
+    file << "; Tag 'process' (or 'p') is case insensitive" << std::endl;
     file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
     file << "ExceptionalWindows = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
     if (exposeInternalKeys) {
@@ -95,6 +96,7 @@ void config::save(const bool exposeInternalKeys) {
         file << "; ONLY CHANGE VALUES BELOW IF YOU KNOW WHAT YOU'RE DOING" << std::endl;
         file << "___TaskbarWindowClassNameStarts = " << I_TaskbarWindowClassNameStarts << std::endl;
         file << "___TaskbarWindowClassNameEnds = " << I_TaskbarWindowClassNameEnds << std::endl;
+        file << "; Executable names must be lowercase" << std::endl;
         file << "___TaskbarExceptionalWindows = " << utils::joinString(I_ExceptionalWindows, L",") << std::endl;
     }
     file.flush();

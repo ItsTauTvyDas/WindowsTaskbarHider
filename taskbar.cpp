@@ -57,7 +57,10 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
             if (key == L"process" || key == L"p") {
                 if (wInfo.procFilename.empty())
                     utils::getProcessInfo(wInfo.hwnd, wInfo.procFilename);
-                if (wInfo.procFilename == value)
+                std::wstring process = wInfo.procFilename;
+                std::transform(process.begin(), process.end(), process.begin(), tolower);
+                std::transform(value.begin(), value.end(), value.begin(), tolower);
+                if (process == value)
                     succeededTags++;
             } else if (key == L"title" || key == L"t") {
                 if (wInfo.title[0] == L'\0')
