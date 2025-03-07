@@ -127,11 +127,11 @@ void taskbar::WindowInfo::updateMonitor() {
 
 void taskbar::WindowInfo::updateValues(HWND hwnd) {
     WINDOWINFO wi; wi.cbSize = sizeof(WINDOWINFO); GetWindowInfo(hwnd, &wi);
-    focused = wi.dwWindowStatus;                              // Focus status (0 or 1)
-    utils::getProcessInfo(hwnd, procFilename);             // Process filename
-    GetWindowText(hwnd, title, sizeof(title));      // Title
+    focused = wi.dwWindowStatus; // Focus status (0 or 1)
+    utils::getProcessInfo(hwnd, procFilename); // Process filename
+    GetWindowText(hwnd, title, sizeof(title)); // Title
     GetClassName(hwnd, wndClass, sizeof(wndClass)); // Class
-    GetWindowRect(hwnd, &rect);                               // Rect
+    GetWindowRect(hwnd, &rect); // Rect
 }
 
 std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
