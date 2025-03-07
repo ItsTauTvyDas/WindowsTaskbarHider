@@ -200,7 +200,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
     // ReSharper disable once CppDFAConstantConditions
     if (collectWindowsInfo && canCollect) {
         if (previousWindows != windows || forceToCollect) {
-            SendMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
+            PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
             previousWindows = windows;
             forceToCollect = false;
         }
