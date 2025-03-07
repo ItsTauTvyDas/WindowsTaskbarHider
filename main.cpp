@@ -1240,7 +1240,7 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
         }
         case EVENT_OBJECT_SHOW:
         case EVENT_OBJECT_HIDE: {
-            utils::getProcessInfo(hwnd, proc);
+            utils::getProcessInfo(hwnd, proc, true);
             if (std::ranges::find(config::I_ExceptionalWindows, proc + L"=" + className) != config::I_ExceptionalWindows.end()) {
                 wInfo.hwnd = hwnd;
                 wInfo.updateMonitor();

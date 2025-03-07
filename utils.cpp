@@ -43,7 +43,7 @@ bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
     return success;
 }
 
-void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName) {
+void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName, const bool lowercase) {
     DWORD pid;
     GetWindowThreadProcessId(hwnd, &pid);
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
@@ -61,6 +61,8 @@ void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName) {
     }
     CloseHandle(hProcess);
     processExeName = std::wstring(processName);
+    if (lowercase)
+        std::transform(processExeName.begin(), processExeName.end(), processExeName.begin(), tolower);
 }
 
 bool utils::processArguments(const int argc, const LPWSTR *argv, LPWSTR commandLine) {
