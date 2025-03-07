@@ -1111,7 +1111,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_MOUSEWHEEL:
         {
-            scrollPosition = GetKeyState(VK_SHIFT) & 0x8000 ? &g_windowScrollXPos : &g_windowScrollYPos;
+            scrollPosition = GetKeyState(VK_SHIFT) & KF_UP ? &g_windowScrollXPos : &g_windowScrollYPos;
             const int oldPos = *scrollPosition;
             *scrollPosition += -(GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA * (WSC_SCROLL_ROWS * g_tableRowHeight));
             updateScrollBarsInfo();
@@ -1162,7 +1162,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
     return 0;
 }
 
+void signalHandler(const int signum) {
+    MessageBox(nullptr, L"CRITICAL: Segmentation fault (SIGSEGV) occurred!", VER_FILEDESCRIPTION_STR, MB_OK | MB_ICONERROR);
+    exit(signum);
+}
+
 LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
+    signal(SIGSEGV, signalHandler);
     utils::showExceptionMessageBox([pException](std::wstringstream& crashInfo) {
         const EXCEPTION_RECORD* record = pException->ExceptionRecord;
         LPWSTR lpwstr = utils::NTStatusMessageToText(record->ExceptionCode);
@@ -1205,11 +1211,6 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
     }, true);
     taskbar::resetTaskbar();
     return EXCEPTION_EXECUTE_HANDLER;
-}
-
-void signalHandler(const int signum) {
-    MessageBox(nullptr, L"CRITICAL: Segmentation fault (SIGSEGV) occurred!", VER_FILEDESCRIPTION_STR, MB_OK | MB_ICONERROR);
-    exit(signum);
 }
 
 void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject, LONG, DWORD, DWORD)
@@ -1263,7 +1264,6 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) {
-    signal(SIGSEGV, signalHandler);
     globals::hIns = hInstance;
     SetUnhandledExceptionFilter(reinterpret_cast<LPTOP_LEVEL_EXCEPTION_FILTER>(CrashHandler));
 
@@ -1276,6 +1276,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     }
     LocalFree(argv);
 
+    // Check user's preferences
     config::darkMode = utils::isUserUsingDarkTheme();
 
     if (!globals::noConfigFile)

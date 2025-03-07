@@ -115,7 +115,7 @@ void utils::showExceptionMessageBox(const std::function<void(std::wstringstream&
     if (messageBox(replaceLastErrorPlaceholder(crashInfo.str()), MB_ICONERROR | MB_RETRYCANCEL) == 4) {
         WCHAR path[MAX_PATH];
         if (GetModuleFileName(nullptr, path, MAX_PATH) == 0) {
-            messageBox(MSG_UNCAUGHT_EXCEPTION_RETRY_FAILED, MB_ICONERROR | MB_OK, {NTStatusMessageToText(GetLastError())});
+            messageBox(MSG_UNCAUGHT_EXCEPTION_RETRY_FAILED, MB_ICONERROR | MB_OK, { NTStatusMessageToText(GetLastError()) });
             return;
         }
         ShellExecute(nullptr, L"open", path, globals::args.c_str(), nullptr, SW_SHOWNORMAL);
@@ -321,7 +321,7 @@ bool utils::mouseInRect(const RECT *rect, int vKey) {
     POINT pt;
     GetCursorPos(&pt);
     ScreenToClient(globals::hWnd, &pt);
-    return PtInRect(rect, pt) && GetAsyncKeyState(vKey) & 0x8000;
+    return PtInRect(rect, pt) && GetAsyncKeyState(vKey) & KF_UP;
 }
 
 
