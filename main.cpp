@@ -1168,7 +1168,7 @@ void signalHandler(const int signum) {
 }
 
 LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
-    signal(SIGSEGV, signalHandler);
+    globals::hWnd = nullptr;
     utils::showExceptionMessageBox([pException](std::wstringstream& crashInfo) {
         const EXCEPTION_RECORD* record = pException->ExceptionRecord;
         LPWSTR lpwstr = utils::NTStatusMessageToText(record->ExceptionCode);
@@ -1186,9 +1186,9 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
                     break;
             }
             lpwstr = utils::replaceCharacterWithText(lpwstr, 's', operation, 1);
-            if (record->NumberParameters > 1)
+            if (record->NumberParameters > 0)
                 lpwstr = utils::replaceCharacterWithText(lpwstr, 'p', std::to_wstring(record->ExceptionInformation[1]));
-            if (record->NumberParameters > 2)
+            if (record->NumberParameters > 1)
                 lpwstr = utils::replaceCharacterWithText(lpwstr, 'p', std::to_wstring(record->ExceptionInformation[2]));
         } else if (record->ExceptionCode == EXCEPTION_IN_PAGE_ERROR) {
             // I hope these are correct
