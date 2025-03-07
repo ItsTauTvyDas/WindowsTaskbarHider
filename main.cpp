@@ -1006,12 +1006,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     SendMessage(hwnd, WM_TRAY_ICON, 0, WM_CONTEXTMENU);
                     break;
                 }
-                case ID_CHECKBOX_SHOW_ALL_WINDOWS: {
-                    taskbar::forceToCollect = true;
-                    // No need to break
-                }
+                case ID_CHECKBOX_SHOW_ALL_WINDOWS:
                 case ID_BUTTON_UPDATE:
                 {
+                    taskbar::clearForcedVisibilityStates();
+                    taskbar::forceToCollect = true;
                     taskbar::collectWindowsInfo = true;
                     break;
                 }
@@ -1220,8 +1219,7 @@ LRESULT CALLBACK KeyboardEventProc(const int nCode, const WPARAM wParam, const L
     if (nCode == HC_ACTION) {
         const auto pKeyboard = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
         if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) && pKeyboard->vkCode == VK_ESCAPE) {
-            for (auto monitor : monitors::indexedMonitors)
-                taskbar::taskbarForcedVisibilityStates[monitor] = false;
+            taskbar::clearForcedVisibilityStates();
         }
     }
     return CallNextHookEx(g_hKeyboardHook, nCode, wParam, lParam);
