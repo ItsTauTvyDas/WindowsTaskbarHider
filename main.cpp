@@ -1233,7 +1233,7 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
                     wInfo.updateMonitor();
                     DWORD cloaked = 0;
                     if (const HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr))
-                        taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = cloaked == 0; // 0 when closed
+                        taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = cloaked == 0; // 0 when opened
                 }
             }
             break;
