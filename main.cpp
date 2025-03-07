@@ -1214,6 +1214,19 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
+HHOOK g_hKeyboardHook = nullptr;
+
+LRESULT CALLBACK KeyboardEventProc(const int nCode, const WPARAM wParam, const LPARAM lParam) {
+    if (nCode == HC_ACTION) {
+        const auto pKeyboard = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+        if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) && pKeyboard->vkCode == VK_ESCAPE) {
+            for (auto monitor : monitors::indexedMonitors)
+                taskbar::taskbarForcedVisibilityStates[monitor] = false;
+        }
+    }
+    return CallNextHookEx(g_hKeyboardHook, nCode, wParam, lParam);
+}
+
 void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject, LONG, DWORD, DWORD)
 {
     if (idObject != OBJID_WINDOW)
@@ -1291,8 +1304,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         if (utils::messageBox(MSG_APP_ALREADY_RUNNING, MB_ICONQUESTION | MB_YESNO) == 6) {
             utils::killProcessByName(globals::exe.c_str(), GetCurrentProcessId());
             taskbar::resetTaskbar();
+            CloseHandle(hMutex);
             return 0;
         }
+        CloseHandle(hMutex);
         return 1;
     }
 
@@ -1309,6 +1324,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         utils::showExceptionMessageBox([](std::wstringstream& crashInfo) {
             crashInfo << utils::message(MSG_WINDOW_ICON_FAILED);
         }, true);
+        CloseHandle(hMutex);
         return 1;
     }
 
@@ -1326,6 +1342,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         utils::showExceptionMessageBox([](std::wstringstream& crashInfo) {
             crashInfo << utils::message(MSG_WINDOW_REGISTER_FAILED);
         }, true);
+        CloseHandle(hMutex);
+        DestroyIcon(hIcon);
         return 1;
     }
 
@@ -1347,6 +1365,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         utils::showExceptionMessageBox([](std::wstringstream& crashInfo) {
             crashInfo << utils::message(MSG_WINDOW_CREATION_FAILED);
         }, true);
+        CloseHandle(hMutex);
+        DestroyIcon(hIcon);
         return 1;
     }
 
@@ -1356,6 +1376,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     monitors::indexMonitors();
     taskbar::findTaskbarHandles();
     auto taskbarLoopThread = std::thread(taskbarLoop);
+
+    // Hood global keyboard listener
+    g_hKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardEventProc, nullptr, 0);
 
     ShowWindow(globals::hWnd, !config::openOnStart ? SW_HIDE : nShowCmd);
     UpdateWindow(globals::hWnd);
@@ -1372,6 +1395,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     quitting = true;
     if (taskbarLoopThread.joinable())
         taskbarLoopThread.join();
+
+    if (g_hKeyboardHook)
+        UnhookWindowsHookEx(g_hKeyboardHook);
 
     taskbar::resetTaskbar();
     DestroyIcon(hIcon);
