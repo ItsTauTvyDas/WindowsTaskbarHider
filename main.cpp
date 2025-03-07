@@ -1175,7 +1175,7 @@ LONG WINAPI CrashHandler(const EXCEPTION_POINTERS* pException) {
         LPWSTR lpwstr = utils::NTStatusMessageToText(record->ExceptionCode);
         // A workaround, EXCEPTION_ACCESS_VIOLATION returns this message:
         // "The instruction at 0xp referenced memory at 0xp. The memory could not be s."
-        // There are missing %, but p and s letters are not being used in any words, so we can just replace them
+        // There are missing %, but p and s letters are not being used in many words, so we can just replace them (by skipping few first letters)
         if (record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
             std::wstring operation;
             switch (record->ExceptionInformation[0]) {
