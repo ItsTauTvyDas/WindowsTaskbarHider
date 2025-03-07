@@ -87,7 +87,7 @@ void config::save(const bool exposeInternalKeys) {
     file << "; Some of the processes seems to have maximized windows, even though they are not visible" << std::endl;
     file << "; We don't have a way to distinguish between that invisible window," << std::endl;
     file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
-    file << "; Tag 'process' (or 'p') is case insensitive" << std::endl;
+    file << "; Tag 'process' (or 'p') is case-insensitive" << std::endl;
     file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
     file << "ExceptionalWindows = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
     if (exposeInternalKeys) {
