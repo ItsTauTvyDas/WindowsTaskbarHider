@@ -134,20 +134,22 @@ void taskbar::WindowInfo::updateValues(HWND hwnd) {
     GetWindowRect(hwnd, &rect); // Rect
 }
 
-std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
+std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows(bool &collectWindowsInfo, bool &ignorePreviousWindowsCheck) {
     checkForAutoCollect();
     static std::vector<WindowInfo> previousWindows;
-    static bool canCollect = false;
 
-    if (collectWindowsInfo) {
-        // Since collectWindowsInfo can get updated inside EnumWindows (by main thread), let's ensure whenever it can start collecting
-        canCollect = true;
+    if (collectWindowsInfo)
         windows.clear();
-    }
-    // TODO implement caching
-    std::unordered_map<HMONITOR, WindowInfo> maximizedWindows = {};
+
+    std::unordered_map<HMONITOR, WindowInfo> maximizedWindows;
+    EnumWindowParam ewp = {};
+    ewp.maximizedWindows = &maximizedWindows;
+    ewp.collectWindowsInfo = collectWindowsInfo;
+    ewp.ignorePreviousWindowsCheck = ignorePreviousWindowsCheck;
     try {
         EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
+            EnumWindowParam ewp = *reinterpret_cast<EnumWindowParam*>(lParam);
+
             WINDOWPLACEMENT wp;
             wp.length = sizeof(WINDOWPLACEMENT);
 
@@ -156,7 +158,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
 
             WindowInfo wInfo = {};
             if (config::alwaysIgnoreWhenNotMaximized && wp.showCmd != SW_MAXIMIZE) {
-                if (collectWindowsInfo && canCollect)
+                if (ewp.collectWindowsInfo)
                     wInfo.initiallyIgnored = true;
                 else
                     return TRUE;
@@ -168,7 +170,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
             wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
 
             std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
-            if (collectWindowsInfo && canCollect)
+            if (ewp.collectWindowsInfo)
                 wInfo.updateValues(hwnd);
 
             if (!wInfo.initiallyIgnored) {
@@ -179,34 +181,29 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
                 wInfo.detected = (wInfo.wasExceptional || !wInfo.detected) && !wInfo.initiallyIgnored;
             }
 
-            if (collectWindowsInfo && canCollect) {
+            if (ewp.collectWindowsInfo) {
                 wInfo.fault = wInfo.wasExceptional ? succeededExceptionTagGroup : succeededIgnoreTagGroup;
                 wInfo.hwnd = nullptr;
                 windows.push_back(wInfo);
             }
 
             if (wInfo.detected) {
-                auto &map = *reinterpret_cast<std::unordered_map<HMONITOR, WindowInfo>*>(lParam);
-                map[wInfo.hMonitor] = wInfo;
-                return config::showAllWindows || map.size() != monitors::monitorCount;
+                (*ewp.maximizedWindows)[wInfo.hMonitor] = wInfo;
+                return config::showAllWindows || ewp.maximizedWindows->size() != monitors::monitorCount;
             }
             return TRUE;
-        }, reinterpret_cast<LPARAM>(&maximizedWindows));
+        }, reinterpret_cast<LPARAM>(&ewp));
     } catch (std::exception &ex) {
         if (!errorState)
             PostMessage(globals::hWnd, WM_TASKBAR_THREAD_ERROR, 0, reinterpret_cast<LPARAM>(new std::string(ex.what())));
         errorState = true;
     }
-    // ReSharper disable once CppDFAConstantConditions
-    if (collectWindowsInfo && canCollect) {
-        if (previousWindows != windows || forceToCollect) {
-            PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
-            previousWindows = windows;
-            forceToCollect = false;
-        }
-        collectWindowsInfo = false;
-        canCollect = false;
+    if (previousWindows != windows || ignorePreviousWindowsCheck) {
+        PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
+        previousWindows = windows;
+        ignorePreviousWindowsCheck = false;
     }
+    collectWindowsInfo = false;
     return maximizedWindows;
 }
 
@@ -258,7 +255,7 @@ void taskbar::resetTaskbar() {
     for (HWND hwnd : taskbarHandles | std::views::values) {
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
         SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
-        ShowWindow(hwnd, SW_SHOW);
+        ShowWindowAsync(hwnd, SW_SHOW);
     }
 }
 
@@ -277,7 +274,7 @@ void taskbar::updateTaskbarState() {
         setTaskbarVisibility(hoveredTaskbar, true, true);
         return;
     }
-    const auto windows = findAllMaximizedWindows();
+    const auto windows = findAllMaximizedWindows(collectWindowsInfo, forceToCollect);
     std::lock_guard lock(taskbarMutex);
     for (auto &[hMonitor, taskbar] : taskbarHandles)
         setTaskbarVisibility(taskbar, windows.contains(hMonitor), false);
