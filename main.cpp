@@ -466,7 +466,7 @@ std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
             }
             break;
         }
-        case 7: { // Title
+        case 7: { // Focused
             if (wInfo.focused == 1)
                 value = utils::message(MSG_WND_YES);
             else if (wInfo.focused == 0)
