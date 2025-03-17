@@ -61,7 +61,13 @@ public:
     static void clearForcedVisibilityStates();
 
 private:
-    static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows();
+    struct EnumWindowParam {
+        std::unordered_map<HMONITOR, WindowInfo> *maximizedWindows;
+        bool collectWindowsInfo;
+        bool ignorePreviousWindowsCheck;
+    };
+
+    static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows(bool &collectWindowsInfo, bool &ignorePreviousWindowsCheck);
     static bool isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos);
     static void checkForAutoCollect();
 };
