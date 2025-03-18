@@ -81,6 +81,7 @@ bool quitting                = false,
 RECT g_trackableCheckBoxes[W_GRID_MAX_COLUMNS] = {};
 HWND   g_hYScrollBar       = nullptr,
        g_hXScrollBar       = nullptr,
+       g_hInstallButton    = nullptr,
        g_hSettingsButton   = nullptr;
 HFONT  g_hDefaultFont      = nullptr,
        g_hDefaultFontBold  = nullptr,
@@ -563,6 +564,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
 
     const bool createWindows = g_childWindows.empty();
 
+    // Update button
     std::wstring text = utils::message(MSG_WND_HEADER_TABLE_UPDATE);
     int lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2;
     RECT rect = { 10, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
@@ -582,6 +584,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
         i++;
     }
 
+    // Actions button
     text = utils::message(MSG_WND_HEADER_ACTIONS);
     rect = { 0, 0, g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2, WSC_BUTTON_DEFAULT_H };
     if (createWindows) {
@@ -599,9 +602,31 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
         MoveWindow(g_childWindows[i], windowWidth - rect.right - 10, 10, rect.right, rect.bottom, TRUE);
         i++;
     }
-
     int lastX = 10 + lastWidth + WSC_CHECKBOX_SPACING;
 
+    // Install button
+    text = utils::message(MSG_WND_HEADER_INSTALL);
+    rect = { 0, 0, g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2, WSC_BUTTON_DEFAULT_H };
+    if (createWindows) {
+        g_hInstallButton = CreateWindow(
+            WMC_BUTTON, text.c_str(),
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+            rect.left, rect.top, rect.right, rect.bottom,
+            hwnd, reinterpret_cast<HMENU>(ID_BUTTON_INSTALL), create->hInstance, nullptr);
+        SendMessage(g_hInstallButton, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
+        SendMessage(g_hInstallButton, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+        SetClassLongPtr(g_hInstallButton, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
+        g_childWindows.push_back(g_hInstallButton);
+    } else {
+        SetWindowText(g_childWindows[i], text.c_str());
+        RECT sRect;
+        GetWindowRect(g_hSettingsButton, &sRect);
+        MoveWindow(g_childWindows[i], windowWidth - rect.right - 20 - (sRect.right - sRect.left), 10, rect.right, rect.bottom, TRUE);
+        i++;
+    }
+    lastX = 10 + lastWidth + WSC_CHECKBOX_SPACING;
+
+    // Auto update check box
     text = utils::message(MSG_WND_HEADER_AUTO_UPDATE);
     lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
     rect = { lastX, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
@@ -623,6 +648,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
     }
     lastX += lastWidth + WSC_CHECKBOX_SPACING;
 
+    // Dark mode check box
     text = utils::message(MSG_WND_HEADER_DARK_MODE);
     lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
     rect = { lastX, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
@@ -644,6 +670,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
     }
     lastX += lastWidth + WSC_CHECKBOX_SPACING;
 
+    // Show all windows check box
     text = utils::message(MSG_WND_HEADER_SHOW_ALL_WINDOWS);
     lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
     rect = { lastX, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
@@ -766,7 +793,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 MoveWindow(g_hXScrollBar, 0, windowHeight - WSC_SCROLLBAR_WIDTH, windowWidth - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, TRUE);
                 RECT rect;
                 GetWindowRect(g_hSettingsButton, &rect);
-                MoveWindow(g_hSettingsButton, windowWidth - (rect.right - rect.left) - 10, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
+                int width = rect.right - rect.left;
+                MoveWindow(g_hSettingsButton, windowWidth - width - 10, 10, width, rect.bottom - rect.top, TRUE);
+                GetWindowRect(g_hInstallButton, &rect);
+                MoveWindow(g_hInstallButton, windowWidth - (rect.right - rect.left) - 20 - width, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
 
                 GetClientRect(hwnd, &rect);
                 windowClientHeight = rect.bottom - rect.top;
@@ -806,6 +836,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             PAINTSTRUCT ps;
             switch (draw->CtlID) {
                 case ID_BUTTON_ACTIONS:
+                case ID_BUTTON_INSTALL:
                 case ID_BUTTON_UPDATE:
                 {
                     HDC mHdc = g_doubleBuffering(hwnd, ps, draw->hDC, true);
@@ -1025,7 +1056,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     g_redrawWindow(hwnd);
                     break;
                 }
-                // Next ones are for system tray
+                // Next ones are for system tray and actions button menu
                 case ID_TRAY_EXIT:
                 {
                     DestroyWindow(hwnd);
@@ -1036,7 +1067,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     config::open();
                     break;
                 }
-                case ID_TRAY_EXPOSE_INTERNALS: {
+                case ID_TRAY_EXPOSE_INTERNALS:
+                {
                     config::save(true);
                     // No need for break
                 }
@@ -1126,6 +1158,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_DISPLAYCHANGE: {
             monitors::indexMonitors();
             taskbar::findTaskbarHandles();
+            taskbar::clearForcedVisibilityStates();
             break;
         }
         case WM_CLOSE: {
