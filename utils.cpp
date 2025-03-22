@@ -265,6 +265,22 @@ std::wstring utils::createShortcutLinkPath() {
     return std::wstring(std::wstring(startupPath) + L"\\" + name + L".lnk");
 }
 
+bool GetWorkingDirectory(LPWSTR* pDirectory) {
+    if (pDirectory == nullptr) {
+        return false;
+    }
+    const DWORD requiredSize = GetCurrentDirectoryW(0, nullptr);
+    if (requiredSize == 0)
+        return false;
+    const auto buffer = new wchar_t[requiredSize];
+    if (const DWORD length = GetCurrentDirectoryW(requiredSize, buffer); length == 0 || length >= requiredSize) {
+        delete[] buffer;
+        return false;
+    }
+    *pDirectory = buffer;
+    return true;
+}
+
 bool utils::doesAutoStart() {
     return fileExists(createShortcutLinkPath().c_str());
 }
@@ -292,8 +308,12 @@ void utils::toggleStartup() {
         {
             IPersistFile* ppf;
 
+            LPWSTR pszDir;
+            GetWorkingDirectory(&pszDir);
+
             psl->SetPath(appPath);
             psl->SetArguments(L"");
+            psl->SetWorkingDirectory(pszDir);
             psl->SetDescription(VER_FILEDESCRIPTION_STR);
 
             result = psl->QueryInterface(IID_PPV_ARGS(&ppf));
