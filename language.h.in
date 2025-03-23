@@ -53,6 +53,7 @@
 #define MSG_WND_HEADER_AUTO_UPDATE                @LANG_ID_COUNTER@
 #define MSG_WND_HEADER_DARK_MODE                  @LANG_ID_COUNTER@
 #define MSG_WND_HEADER_SHOW_ALL_WINDOWS           @LANG_ID_COUNTER@
+#define MSG_WND_HEADER_INSTALL                    @LANG_ID_COUNTER@
 #define MSG_WND_HEADER_ACTIONS                    @LANG_ID_COUNTER@
 #define MSG_WND_HEADER_TEXT                       @LANG_ID_COUNTER@
 #define MSG_WND_DEBUG_TABLE_HEADER_TEXT           @LANG_ID_COUNTER@
@@ -90,6 +91,9 @@
 #define MSG_TRAY_CONFIG_RELOAD                    @LANG_ID_COUNTER@
 #define MSG_TRAY_CONFIG_OPEN                      @LANG_ID_COUNTER@
 #define MSG_TRAY_CONFIG_EXPOSE_INTERNALS          @LANG_ID_COUNTER@
+
+#define MSG_FAILED_TO_EXPORT_LANGUAGES            @LANG_ID_COUNTER@
+#define MSG_FAILED_TO_READ_LANGUAGE_FILE          @LANG_ID_COUNTER@
 
 class language {
 public:
