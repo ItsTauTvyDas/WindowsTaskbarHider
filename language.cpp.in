@@ -2,6 +2,6 @@
 #include <string>
 #include <unordered_map>
 
-std::unordered_map<unsigned int, std::wstring> language::messageTypeMap = {
+const std::unordered_map<unsigned int, std::wstring> language::messageTypeMap = {
 @LANGUAGE_MAPPING_ENTRIES@
 };
