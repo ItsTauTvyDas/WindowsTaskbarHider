@@ -403,9 +403,7 @@ bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, s
     if (line.rfind('[', 0) == 0) {
         if (!prefix)
             return false;
-        *prefix = line.substr(1, line.size() - 2);
-        std::ranges::replace(*prefix, ' ', '_');
-        *prefix += '.';
+        *prefix = line.substr(1, line.size() - 2) + L".";
         return false;
     }
 
