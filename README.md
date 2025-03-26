@@ -6,7 +6,7 @@ The initial idea was to show a cleaner desktop with desktop icons disabled.
 This can work perfectly with **TranslucentTB** to make the desktop look even more cleaner.
 **Keep in mind that the taskbar still pertains its area, it doesn't extend your desktop.**
 
-***The application was not yet tested on Windows 11***
+***The application has not been yet tested on Windows 11!***
 
 ## How it works?
 The application loops over all visible, non-iconic windows and checks specified tags in the configuration.
@@ -22,6 +22,9 @@ it triggers the taskbar to open and that is really annoying!
 2. Sometimes taskbar goes behind maximized window.
 
 This application doesn't hide the taskbar completely like Windows does, it only hides itself when there are no maximized windows.
+
+## Seems like an over-kill for such simple thing as hiding a taskbar
+You are indeed right, but to be honest, I did all this just for fun and for better understanding how C++ and Windows (internally) works.
 
 ## Features
 * WIN32 API based UI window for debugging (overworked idea)
