@@ -85,7 +85,7 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                 if (const int index = std::stoi(value); index >= 0 && index < sizeof(monitors::indexedMonitors) && monitors::indexedMonitors[index] == wInfo.hMonitor)
                     succeededTags++;
             } else if (key == L"maximized" || key == L"m") {
-                if ((wp.showCmd == SW_MAXIMIZE) == stoi(value))
+                if (wp.showCmd == SW_MAXIMIZE == stoi(value))
                     succeededTags++;
             } else if (key == L"left" || key == L"right" || key == L"top" || key == L"bottom") {
                 if (!wInfo.wasRectModified) {
