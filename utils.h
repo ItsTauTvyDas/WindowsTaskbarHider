@@ -4,6 +4,7 @@
 #include <dwmapi.h>
 #include <functional>
 #include <string>
+#include <map>
 
 class utils {
 public:
@@ -21,23 +22,40 @@ public:
     static void rtrim(std::wstring &s);
     static void trim(std::wstring &s);
     static std::vector<std::wstring> splitToGroups(const std::wstring& s, unsigned int length);
-    static bool fileExists(const wchar_t *path);
+    static bool showTrayNotification(const std::wstring &message);
+    static bool fileExists(const wchar_t *path, bool dir = false);
     static bool doesAutoStart();
     static void toggleStartup();
     static RECT rect(int x, int y, int width, int height);
     static bool mouseInRect(const RECT *rect, int vKey);
     static std::wstring getFormattedTime();
-    static bool processIniFileLine(const std::wstring& line, std::wstring *prefix, std::wstring &key, std::wstring &value);
-    static void logcLangString(unsigned int mType, std::wstring *string);
+    static bool updateLanguageFile();
+    static void exportLanguageFiles();
+    static void loadIfNeededAndGetCachedLanguageString(unsigned int mType, std::wstring *string);
     static std::wstring formatLangString(const std::wstring &rStr, const std::vector<std::wstring> &values);
     static int messageBox(unsigned int mType, unsigned int uType, const std::vector<std::wstring> &values = {});
     static int messageBox(const std::wstring &mText, unsigned int uType);
+    static int messageBoxRT(const std::wstring &mText, unsigned int uType);
     static std::wstring message(unsigned int mType, const std::vector<std::wstring> &values);
     static std::wstring message(unsigned int mType);
     static bool isUserUsingDarkTheme();
     static void toUnicode(LPCCH string, LPWSTR str);
+    static bool processIniFileLine(const std::wstring& line, std::wstring *prefix, std::wstring &key, std::wstring &value);
 private:
-    static std::wstring createShortcutLinkPath();
+    struct INILine {
+        std::wstring key;
+        std::wstring value;
+        bool isComment;
+
+        bool operator==(const INILine &other) const {
+            return key == other.key &&
+                   value == other.value &&
+                   isComment == other.isComment;
+        }
+    };
+    static bool loadInternalLanguageStringsIntoMap(std::map<int, INILine> &map);
+    static void mapIniContent(std::map<int, INILine> &map, std::wistream &stream);
+    static bool loadLanguageFromName(const std::wstring &shortName, std::wstringstream &wss);
 };
 
 #endif //UTILS_H

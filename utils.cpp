@@ -1,10 +1,14 @@
 #include "utils.h"
 
 #include <cmath>
+#include <codecvt>
 #include <format>
 #include <shlobj.h>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
+#include <map>
+#include <tchar.h>
 #include "windows.h"
 #include "resources.h"
 #include "config.h"
@@ -16,8 +20,10 @@
 #include <unordered_map>
 #include <mutex>
 #include <psapi.h>
+#include <ranges>
 #include <bits/ranges_algo.h>
 #include "language.h"
+#include <strsafe.h>
 
 bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -249,18 +255,32 @@ std::vector<std::wstring> utils::splitToGroups(const std::wstring& s, const unsi
     return result;
 }
 
-bool utils::fileExists(const wchar_t *path) {
+bool utils::showTrayNotification(const std::wstring &message)
+{
+    NOTIFYICONDATA nid = {};
+    nid.cbSize = sizeof(NOTIFYICONDATA);
+    nid.hWnd = globals::hWnd;
+    nid.uID = 1;
+    nid.uFlags = NIF_INFO;
+    StringCchCopy(nid.szInfo, std::size(nid.szInfo), message.c_str());
+    StringCchCopy(nid.szInfoTitle, std::size(nid.szInfoTitle), utils::message(MSG_APPLICATION_NAME).c_str());
+    nid.dwInfoFlags = NIIF_INFO;
+    return Shell_NotifyIcon(NIM_MODIFY, &nid) == TRUE;
+}
+
+bool utils::fileExists(const wchar_t *path, const bool dir) {
     struct _stat buffer = {};
-    return _wstat(path, &buffer) == 0;
+    return _wstat(path, &buffer) == 0 && (dir ? S_ISDIR(buffer.st_mode) : S_ISREG(buffer.st_mode));
 }
 
 void utils::toUnicode(const LPCCH string, LPWSTR str) {
     MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
 }
 
-std::wstring utils::createShortcutLinkPath() {
+std::wstring createShortcutLinkPath(const bool global) {
     WCHAR startupPath[260];
-    SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath);
+    if (FAILED(SHGetFolderPath(nullptr, global ? CSIDL_COMMON_STARTUP : CSIDL_STARTUP, nullptr, 0, startupPath)))
+        return L"";
     const std::wstring name = globals::exe.substr(0, globals::exe.find_last_of('.'));
     return std::wstring(std::wstring(startupPath) + L"\\" + name + L".lnk");
 }
@@ -281,14 +301,33 @@ bool GetWorkingDirectory(LPWSTR* pDirectory) {
     return true;
 }
 
+int isInProgramFiles(WCHAR appPath[MAX_PATH]) {
+    TCHAR programFilesPath[MAX_PATH] = {};
+    if (FAILED(SHGetFolderPath(nullptr, CSIDL_PROGRAM_FILES, nullptr, 0, programFilesPath)))
+        return -1;
+    if (appPath[0] == L'\0')
+        GetModuleFileName(nullptr, appPath, MAX_PATH);
+    return _tcsnicmp(appPath, programFilesPath, _tcslen(programFilesPath)) == 0 ? TRUE : FALSE;
+}
+
 bool utils::doesAutoStart() {
-    return fileExists(createShortcutLinkPath().c_str());
+    WCHAR appPath[MAX_PATH];
+    return fileExists(createShortcutLinkPath(isInProgramFiles(appPath)).c_str());
 }
 
 void utils::toggleStartup() {
     WCHAR appPath[260];
     GetModuleFileName(nullptr, appPath, MAX_PATH);
-    const std::wstring shortcutPath = createShortcutLinkPath();
+    const int inProgramFiles = isInProgramFiles(appPath);
+    if (inProgramFiles == -1) {
+        messageBox(MSG_SHORTCUT_CREATION_FAILED, MB_ICONERROR | MB_OK);
+        return;
+    }
+    const std::wstring shortcutPath = createShortcutLinkPath(inProgramFiles == TRUE);
+    if (shortcutPath.empty()) {
+        messageBox(MSG_SHORTCUT_CREATION_FAILED, MB_ICONERROR | MB_OK);
+        return;
+    }
     const wchar_t *shortcutPathC = shortcutPath.c_str();
     if (fileExists(shortcutPathC)) {
         if (messageBox(MSG_SHORTCUT_REMOVE_VERIFY, MB_ICONQUESTION | MB_YESNO) == 6)
@@ -302,12 +341,10 @@ void utils::toggleStartup() {
     if (std::wofstream shortcut((shortcutPath.data())); shortcut.is_open()) {
         CoInitialize(nullptr);
 
-        IShellLinkW* psl;
+        IShellLinkW *psl;
         HRESULT result = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&psl));
         if (SUCCEEDED(result))
         {
-            IPersistFile* ppf;
-
             LPWSTR pszDir;
             GetWorkingDirectory(&pszDir);
 
@@ -316,6 +353,7 @@ void utils::toggleStartup() {
             psl->SetWorkingDirectory(pszDir);
             psl->SetDescription(VER_FILEDESCRIPTION_STR);
 
+            IPersistFile *ppf;
             result = psl->QueryInterface(IID_PPV_ARGS(&ppf));
             if (SUCCEEDED(result))
             {
@@ -326,7 +364,7 @@ void utils::toggleStartup() {
         }
         CoUninitialize();
 
-        if (!SUCCEEDED(result)) {
+        if (FAILED(result)) {
             messageBox(MSG_SHORTCUT_CREATION_FAILED, MB_ICONERROR | MB_OK);
             _wremove(shortcutPathC);
         }
@@ -339,7 +377,7 @@ RECT utils::rect(const int x, const int y, const int width, const int height) {
     return { x, y, x + width, y + height };
 }
 
-bool utils::mouseInRect(const RECT *rect, int vKey) {
+bool utils::mouseInRect(const RECT *rect, const int vKey) {
     POINT pt;
     GetCursorPos(&pt);
     ScreenToClient(globals::hWnd, &pt);
@@ -385,46 +423,197 @@ bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, s
     return true;
 }
 
-// Load or get cached string
-void utils::logcLangString(const unsigned int mType, std::wstring *string) {
-    static std::unordered_map<unsigned int, std::wstring> messages;
-    static std::mutex mutex;
-    std::lock_guard lock(mutex);
-    if (messages.empty() || !config::languageLoaded) {
-        if (HRSRC hRes = FindResource(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
-            const HGLOBAL hData = LoadResource(globals::hIns, hRes);
+bool utils::updateLanguageFile() {
+    std::map<int, INILine> internalMessages = {};
+    loadInternalLanguageStringsIntoMap(internalMessages);
+
+    std::wstringstream wss;
+    loadLanguageFromName(config::customLanguage, wss);
+
+    std::map<int, INILine> modifiedMessages = {};
+    mapIniContent(modifiedMessages, wss);
+
+    bool needsModification = false;
+    for (const auto &ini: internalMessages | std::views::values) {
+        if (ini.isComment)
+            continue;
+        const auto exists = std::ranges::any_of(modifiedMessages, [&ini](const auto &pair) {
+            return !pair.second.isComment && pair.second.key == ini.key;
+        });
+        if (exists)
+            continue;
+        needsModification = true;
+        break;
+    }
+
+    if (needsModification) {
+        std::wofstream file(std::wstring(L"languages/language." + config::customLanguage + L".ini").c_str(), std::ios::out | std::ios::trunc);
+        if (!file.is_open()) {
+            messageBox(MSG_FAILED_TO_UPDATE_LANGUAGE_FILE, MB_ICONERROR | MB_OK);
+            return false;
+        }
+        for (const auto &ini: internalMessages | std::views::values) {
+            if (ini.isComment)
+                file << ini.value;
+            else {
+                const auto modified = std::ranges::find_if(modifiedMessages, [&ini](const auto &pair) {
+                    return pair.second.key == ini.key;
+                });
+                file << ini.key << "=" << (modified != std::ranges::end(modifiedMessages) ? modified->second.value : ini.value) << std::endl;
+            }
+        }
+    }
+    return needsModification;
+}
+
+bool utils::loadLanguageFromName(const std::wstring &shortName, std::wstringstream &wss) {
+    std::wifstream wif(std::wstring(L"languages/language." + shortName + L".ini").c_str());
+    if (!wif) {
+        // Fallback to default language
+        config::customLanguage = L"";
+        config::languageCode = IDR_INI_LANG_EN;
+        messageBoxRT(L"Failed to open/read languages/language." + shortName + L".ini file, using default language instead.", MB_ICONERROR | MB_OK);
+        return false;
+    }
+    wif.imbue(std::locale(std::locale(), new std::codecvt_utf8<wchar_t>));
+    wss << wif.rdbuf();
+    return true;
+}
+
+void utils::exportLanguageFiles() {
+    mkdir("languages");
+    bool success = true;
+    for (const std::unordered_map<std::wstring, int> languages = APP_DEFAULT_LANGUAGES; const auto &[language, languageCode]: languages) {
+        const std::wstring fileName = L"languages/language." + language + L".ini";
+        if (fileExists(fileName.c_str())) {
+            if (std::ifstream file(fileName.c_str(), std::ios::binary | std::ios::ate); file.tellg() != 0)
+                continue;
+        }
+
+        const auto hRes = FindResource(globals::hIns, MAKEINTRESOURCE(languageCode), L"INI");
+        if (!hRes) {
+            success = false;
+            continue;
+        }
+
+        const auto hData = LoadResource(globals::hIns, hRes);
+        if (!hData) {
+            success = false;
+            continue;
+        }
+
+        const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
+        const auto content = static_cast<const char*>(LockResource(hData));
+        if (!content) {
+            success = false;
+            continue;
+        }
+
+        const int wCharsCount = MultiByteToWideChar(CP_UTF8, 0, content, dataSize, nullptr, 0);
+        if (wCharsCount <= 0) {
+            success = false;
+            continue;
+        }
+
+        std::wstring languageContent(wCharsCount, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, content, dataSize, &languageContent[0], wCharsCount);
+
+        std::wofstream file(fileName.c_str(), std::ios::out | std::ios::trunc | std::ios::binary);
+        if (!file || !file.is_open()) {
+            success = false;
+            continue;
+        }
+        file.imbue(std::locale(std::locale(), new std::codecvt_utf8<wchar_t>));
+        file << languageContent;
+    }
+    if (!success)
+        messageBox(MSG_FAILED_TO_EXPORT_LANGUAGES, MB_ICONERROR | MB_OK);
+}
+
+bool utils::loadInternalLanguageStringsIntoMap(std::map<int, INILine> &map) {
+    if (const auto hRes = FindResource(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
+        if (const HGLOBAL hData = LoadResource(globals::hIns, hRes)) {
             const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
             const auto content = static_cast<const char*>(LockResource(hData));
             if (const int wCharsCount = MultiByteToWideChar(CP_UTF8, 0, content, dataSize, nullptr, 0); wCharsCount > 0) {
                 std::wstring winiContent(wCharsCount, L'\0');
                 MultiByteToWideChar(CP_UTF8, 0, content, dataSize, &winiContent[0], wCharsCount);
-                std::wistringstream input(winiContent);
-                std::wstring line;
-                while (std::getline(input, line)) {
-                    std::wstring key, value;
-                    if (!processIniFileLine(line, nullptr, key, value))
-                        continue;
-                    const auto mId = std::ranges::find_if(language::messageTypeMap, [&key](const auto &pair) {
-                        return pair.second == key;
-                    });
-                    if (mId != language::messageTypeMap.end()) {
-                        messages[mId->first].clear();
-                        messages[mId->first].reserve(value.size());
-                        for (size_t i = 0; i < value.size(); ++i) {
-                            if (value[i] == L'\\' && i + 1 < value.size() && value[i + 1] == L'n') {
-                                messages[mId->first].push_back(L'\n');
-                                ++i;
-                            } else
-                                messages[mId->first].push_back(value[i]);
-                        }
+                std::wstringstream input;
+                input << winiContent;
+                mapIniContent(map, input);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void utils::mapIniContent(std::map<int, INILine> &map, std::wistream &stream) {
+    std::wstring line;
+    int i = 0;
+    while (std::getline(stream, line)) {
+        std::wstring key, value;
+        if (!processIniFileLine(line, nullptr, key, value)) {
+            map[i] = { L"", line, true };
+            i++;
+            continue;
+        }
+        map[i] = { key, value, false };
+        i++;
+    }
+}
+
+void utils::loadIfNeededAndGetCachedLanguageString(const unsigned int mType, std::wstring *string) {
+    static std::unordered_map<unsigned int, std::wstring> cachedMessages;
+    if (cachedMessages.empty() || mType == 0) {
+        static std::mutex mutex;
+        std::lock_guard lock(mutex); // Thread safety
+        cachedMessages.clear(); // Clear just in case
+        std::wstringstream input;
+        if (!config::customLanguage.empty())
+            loadLanguageFromName(config::customLanguage, input);
+
+        if (input.str().empty()) {
+            if (const auto hRes = FindResource(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
+                if (const HGLOBAL hData = LoadResource(globals::hIns, hRes)) {
+                    const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
+                    const auto content = static_cast<const char*>(LockResource(hData));
+                    if (const int wCharsCount = MultiByteToWideChar(CP_UTF8, 0, content, dataSize, nullptr, 0); wCharsCount > 0) {
+                        std::wstring winiContent(wCharsCount, L'\0');
+                        MultiByteToWideChar(CP_UTF8, 0, content, dataSize, &winiContent[0], wCharsCount);
+                        input << winiContent;
+                    }
+                }
+            }
+        }
+
+        if (!input.str().empty()) {
+            std::wstring line;
+            while (std::getline(input, line)) {
+                std::wstring key, value;
+                if (!processIniFileLine(line, nullptr, key, value))
+                    continue;
+                const auto mId = std::ranges::find_if(language::messageTypeMap, [&key](const auto &pair) {
+                    return pair.second == key;
+                });
+                if (mId != language::messageTypeMap.end()) {
+                    cachedMessages[mId->first].clear();
+                    cachedMessages[mId->first].reserve(value.size());
+                    for (size_t i = 0; i < value.size(); ++i) {
+                        if (value[i] == L'\\' && i + 1 < value.size() && value[i + 1] == L'n') {
+                            cachedMessages[mId->first].push_back(L'\n');
+                            ++i;
+                        } else
+                            cachedMessages[mId->first].push_back(value[i]);
                     }
                 }
             }
         }
     }
     if (!string) return;
-    *string = messages[mType];
-    if (string->empty())
+    if (cachedMessages.contains(mType))
+        *string = cachedMessages[mType];
+    else
         *string = L"<untranslated>";
 }
 
@@ -455,7 +644,7 @@ std::wstring utils::formatLangString(const std::wstring& rStr, const std::vector
             }
         }
         if (isNumber) {
-            if (size_t index = std::stoul(indexStr); index < values.size()) {
+            if (const size_t index = std::stoul(indexStr); index < values.size()) {
                 result.append(values[index]);
             } else {
                 result.append(rStr, openBrace, closeBrace - openBrace + 1);
@@ -476,9 +665,13 @@ int utils::messageBox(const std::wstring &mText, const unsigned int uType) {
     return MessageBox(globals::hWnd, mText.c_str(), message(MSG_APPLICATION_NAME).c_str(), uType);
 }
 
+int utils::messageBoxRT(const std::wstring &mText, const unsigned int uType) {
+    return MessageBox(globals::hWnd, mText.c_str(), PROJECT_NAME, uType);
+}
+
 std::wstring utils::message(const unsigned int mType, const std::vector<std::wstring> &values) {
     std::wstring s;
-    logcLangString(mType, &s);
+    loadIfNeededAndGetCachedLanguageString(mType, &s);
     s = formatLangString(s, values);
     return s;
 }
