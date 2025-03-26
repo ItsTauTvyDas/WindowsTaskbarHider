@@ -15,7 +15,6 @@ public:
     static bool closeConfirmMessage;
     static bool alwaysIgnoreWhenNotMaximized;
     static bool disableAutoUpdateWhenUnfocused;
-    static bool languageLoaded;
     static int taskbarUpdateInterval;
     static int opacityWhenHidden;
     static int opacityWhenShown;
@@ -24,8 +23,12 @@ public:
     static int opacityWhenShownInternal;
     static int opacityWhenHoveredInternal;
     static int languageCode;
+    static bool animationsEnabled;
+    static int animationStepDelay;
+    static int animationOpacityStep;
     static std::vector<std::wstring> ignoredWindows;
     static std::vector<std::wstring> exceptionalWindows;
+    static std::wstring customLanguage;
 
     // Internal
     static std::wstring I_TaskbarWindowClassNameStarts;
@@ -33,12 +36,12 @@ public:
     static std::vector<std::wstring> I_ExceptionalWindows;
 
     static bool load();
-    static void save(bool exposeInternalKeys);
+    static bool save(bool exposeInternalKeys);
     static void open();
     static bool processSingle(const std::wstring &key, const std::wstring &value);
 
 private:
-    static void ensureConfigurationExists();
+    static bool ensureConfigurationExists();
 };
 
 #endif //CONFIG_H

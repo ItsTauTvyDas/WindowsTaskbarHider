@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 #include <algorithm>
+#include <codecvt>
 #include <ranges>
 #include "globals.h"
 #include "language.h"
@@ -21,7 +22,6 @@ bool config::closeToTray;
 bool config::minimizeToTray = true;
 bool config::closeConfirmMessage = true;
 bool config::disableAutoUpdateWhenUnfocused = true;
-bool config::languageLoaded;
 
 int config::taskbarUpdateInterval = 10;
 int config::opacityWhenHidden;
@@ -31,6 +31,11 @@ int config::opacityWhenHiddenInternal;
 int config::opacityWhenShownInternal;
 int config::opacityWhenHoveredInternal;
 int config::languageCode = IDR_INI_LANG_EN;
+std::wstring config::customLanguage;
+
+bool config::animationsEnabled;
+int config::animationStepDelay = 3;
+int config::animationOpacityStep = 1;
 
 std::wstring config::I_TaskbarWindowClassNameStarts = L"Shell_";
 std::wstring config::I_TaskbarWindowClassNameEnds = L"TrayWnd";
@@ -45,27 +50,28 @@ std::vector<std::wstring> config::I_ExceptionalWindows = {
 std::vector<std::wstring> config::ignoredWindows = {L"title:", L"process:ApplicationFrameHost.exe"};
 std::vector<std::wstring> config::exceptionalWindows = {};
 
-void config::save(const bool exposeInternalKeys) {
+bool config::save(const bool exposeInternalKeys) {
     std::wofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
         utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
-        return;
+        return false;
     }
     file << "[General]" << std::endl;
     file << "Language = en" << std::endl;
-    file << "" << std::endl;
+    file << std::endl;
     file << "[Window]" << std::endl;
     file << "; Default values for checkboxes in the window display" << std::endl;
     file << "DarkMode = " << darkMode << std::endl;
     file << "AutoUpdate = " << autoUpdate << std::endl;
     file << "ShowAllWindows = " << showAllWindows << std::endl;
+    file << std::endl;
     file << "[Window Behaviour]" << std::endl;
     file << "OpenOnStart = " << openOnStart << std::endl;
     file << "CloseToTray = " << closeToTray << std::endl;
     file << "MinimizeToTray = " << minimizeToTray << std::endl;
     file << "; Only works if CloseToTray is disabled" << std::endl;
     file << "CloseConfirmMessage = " << closeConfirmMessage << std::endl;
-    file << "" << std::endl;
+    file << std::endl;
     file << "[Taskbar]" << std::endl;
     file << "; Taskbar update loop interval in milliseconds" << std::endl;
     file << "UpdateInterval = " << taskbarUpdateInterval << std::endl;
@@ -75,7 +81,13 @@ void config::save(const bool exposeInternalKeys) {
     file << "OpacityWhenShown = " << opacityWhenShown << std::endl;
     file << "OpacityWhenHoveredOver = " << opacityWhenHovered << std::endl;
     file << "DisableAutoUpdateWhenUnfocused = " << disableAutoUpdateWhenUnfocused << std::endl;
-    file << "" << std::endl;
+    file << std::endl;
+    file << "[Taskbar Hover Animation]" << std::endl;
+    file << "; Animation between OpacityWhenShown/OpacityWhenHidden and OpacityWhenHoveredOver" << std::endl;
+    file << "; If changed while application is running, restart is required!" << std::endl;
+    file << "Enabled = " << animationsEnabled << std::endl;
+    file << "AnimationStepDelay = " << animationStepDelay << std::endl;
+    file << "AnimationOpacityStep = " << animationOpacityStep << std::endl;
     file << "[Ignored Windows]" << std::endl;
     file << "; Setting this to false (0) could slow down the application with debug mode on" << std::endl;
     file << "AlwaysIgnoreWhenNotMaximized = " << alwaysIgnoreWhenNotMaximized << std::endl;
@@ -91,7 +103,7 @@ void config::save(const bool exposeInternalKeys) {
     file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
     file << "ExceptionalWindows = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
     if (exposeInternalKeys) {
-        file << "" << std::endl;
+        file << std::endl;
         file << "[Internal]" << std::endl;
         file << "; ONLY CHANGE VALUES BELOW IF YOU KNOW WHAT YOU'RE DOING" << std::endl;
         file << "___TaskbarWindowClassNameStarts = " << I_TaskbarWindowClassNameStarts << std::endl;
@@ -99,13 +111,13 @@ void config::save(const bool exposeInternalKeys) {
         file << "; Executable names must be lowercase" << std::endl;
         file << "___TaskbarExceptionalWindows = " << utils::joinString(I_ExceptionalWindows, L",") << std::endl;
     }
-    file.flush();
-    file.close();
+    return true;
 }
 
-void config::ensureConfigurationExists() {
+bool config::ensureConfigurationExists() {
     if (!utils::fileExists(CONFIG_FILENAME))
-        save(false);
+        return save(false);
+    return true;
 }
 
 void config::open() {
@@ -172,29 +184,37 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
                 checkForInvalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000, noErrors);
         } else if (key == L"General.Language") {
             auto languages = std::unordered_map<std::wstring, int>(APP_DEFAULT_LANGUAGES);
-            if (!languages.contains(value)) {
-                auto keysView = std::views::keys(languages);
-                const std::vector languagesVector(keysView.begin(), keysView.end());
-                utils::messageBox(MSG_CONFIG_INVALID_LANGUAGE, MB_ICONWARNING | MB_OK, {utils::joinString(languagesVector, L", ")});
-                return false;
+            if (utils::fileExists(std::wstring(L"languages/language." + value + L".ini").c_str())) {
+                languageCode = IDR_INI_LANG_CUSTOM;
+                customLanguage = value;
+                if (languages.contains(value)) {
+                    languageCode = languages[value];
+                    utils::updateLanguageFile();
+                }
+            } else {
+                if (!languages.contains(value)) {
+                    auto keysView = std::views::keys(languages);
+                    const std::vector languagesVector(keysView.begin(), keysView.end());
+                    utils::messageBox(MSG_CONFIG_INVALID_LANGUAGE, MB_ICONWARNING | MB_OK, {utils::joinString(languagesVector, L", ")});
+                    return false;
+                }
+                languageCode = languages[value];
+                customLanguage = L"";
             }
-            languageLoaded = false;
-            languageCode = languages[value];
-            utils::logcLangString(0, nullptr); // Trigger language cache to update
-            languageLoaded = true;
+            utils::loadIfNeededAndGetCachedLanguageString(0, nullptr); // Trigger language cache to update
         } else if (key == L"Window.DarkMode") {
             checkBoolValidation(formattedKey, value, darkMode, darkMode, noErrors);
         } else if (key == L"Window.AutoUpdate") {
             checkBoolValidation(formattedKey, value, autoUpdate, autoUpdate, noErrors);
         } else if (key == L"Window.ShowAllWindows") {
             checkBoolValidation(formattedKey, value, showAllWindows, showAllWindows, noErrors);
-        } else if (key == L"Window_Behaviour.OpenOnStart") {
+        } else if (key == L"Window Behaviour.OpenOnStart") {
             checkBoolValidation(formattedKey, value, openOnStart, openOnStart, noErrors);
-        } else if (key == L"Window_Behaviour.CloseToTray") {
+        } else if (key == L"Window Behaviour.CloseToTray") {
             checkBoolValidation(formattedKey, value, closeToTray, closeToTray, noErrors);
-        } else if (key == L"Window_Behaviour.CloseConfirmMessage") {
+        } else if (key == L"Window Behaviour.CloseConfirmMessage") {
             checkBoolValidation(formattedKey, value, closeConfirmMessage, closeConfirmMessage, noErrors);
-        } else if (key == L"Window_Behaviour.MinimizeToTray") {
+        } else if (key == L"Window Behaviour.MinimizeToTray") {
             checkBoolValidation(formattedKey, value, minimizeToTray, minimizeToTray, noErrors);
         } else if (key == L"Taskbar.OpacityWhenHidden") {
             if (checkForEmptyValueI(formattedKey, value, opacityWhenHidden, opacityWhenHidden, noErrors))
@@ -210,12 +230,28 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             if (checkForEmptyValueI(formattedKey, value, opacityWhenHovered, opacityWhenHovered, noErrors))
                 checkForInvalidIntegerValue(formattedKey, opacityWhenHovered, 1, 100, noErrors);
             opacityWhenHoveredInternal = 255 * opacityWhenHovered / 100;
-        } else if (key == L"Ignored_Windows.IgnoredWindows") {
+        } else if (key == L"Ignored Windows.IgnoredWindows") {
             ignoredWindows = utils::splitString(value, '|');
-        } else if (key == L"Ignored_Windows.ExceptionalWindows") {
+        } else if (key == L"Ignored Windows.ExceptionalWindows") {
             exceptionalWindows = utils::splitString(value, '|');
-        } else if (key == L"Ignored_Windows.AlwaysIgnoreWhenNotMaximized") {
+        } else if (key == L"Ignored Windows.AlwaysIgnoreWhenNotMaximized") {
             checkBoolValidation(formattedKey, value, alwaysIgnoreWhenNotMaximized, alwaysIgnoreWhenNotMaximized, noErrors);
+        } else if (key == L"Taskbar Hover Animation.Enabled") {
+            checkBoolValidation(formattedKey, value, animationsEnabled, animationsEnabled, noErrors);
+        } else if (key == L"Taskbar Hover Animation.AnimationStepDelay") {
+            if (checkForEmptyValueI(formattedKey, value, animationStepDelay, animationStepDelay, noErrors))
+                checkForInvalidIntegerValue(formattedKey, animationStepDelay, 1, 100, noErrors);
+        } else if (key == L"Taskbar Hover Animation.AnimationOpacityStep") {
+            if (checkForEmptyValueI(formattedKey, value, animationOpacityStep, animationOpacityStep, noErrors))
+                checkForInvalidIntegerValue(formattedKey, animationOpacityStep, 1, 255, noErrors);
+        } else if (key == L"Taskbar Hover Animation.Enabled") {
+            checkBoolValidation(formattedKey, value, animationsEnabled, animationsEnabled, noErrors);
+        } else if (key == L"Taskbar Hover Animation.AnimationStepDelay") {
+            if (checkForEmptyValueI(formattedKey, value, animationStepDelay, animationStepDelay, noErrors))
+                checkForInvalidIntegerValue(formattedKey, animationStepDelay, 1, 500, noErrors);
+        } else if (key == L"Taskbar Hover Animation.AnimationOpacityStep") {
+            if (checkForEmptyValueI(formattedKey, value, animationOpacityStep, animationOpacityStep, noErrors))
+                checkForInvalidIntegerValue(formattedKey, animationOpacityStep, 1, 255, noErrors);
         } else if (key == L"Internal.___TaskbarWindowClassNameStarts") {
             checkForEmptyValueS(formattedKey, value, I_TaskbarWindowClassNameStarts, noErrors);
         } else if (key == L"Internal.___TaskbarWindowClassNameEnds") {
@@ -239,11 +275,20 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
 }
 
 bool config::load() {
-    ensureConfigurationExists();
+    if (!ensureConfigurationExists())
+        return false;
 
     std::wifstream file(CONFIG_FILENAME);
+    if (!file) {
+        utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
+        return false;
+    }
+
+    file.imbue(std::locale(std::locale(), new std::codecvt_utf8<wchar_t>));
+
     std::wstring line;
     std::wstring prefix;
+
     bool noErrors = true;
 
     int lineNum = 0;
