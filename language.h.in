@@ -93,11 +93,13 @@
 #define MSG_TRAY_CONFIG_EXPOSE_INTERNALS          @LANG_ID_COUNTER@
 
 #define MSG_FAILED_TO_EXPORT_LANGUAGES            @LANG_ID_COUNTER@
-#define MSG_FAILED_TO_READ_LANGUAGE_FILE          @LANG_ID_COUNTER@
+#define MSG_FAILED_TO_UPDATE_LANGUAGE_FILE        @LANG_ID_COUNTER@
+
+#define MSG_MINIMIZED_TO_TRAY                     @LANG_ID_COUNTER@
 
 class language {
 public:
-    static std::unordered_map<unsigned int, std::wstring> messageTypeMap;
+    static const std::unordered_map<unsigned int, std::wstring> messageTypeMap;
 };
 
 #endif //LANGUAGE_H
