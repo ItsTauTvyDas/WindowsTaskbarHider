@@ -14,8 +14,6 @@
 
 #pragma comment(lib, "Dwmapi.lib")
 
-#define WM_TRAY_ICON              (WM_USER + 1)
-
 #define WCP_BASE_COLOR            config::darkMode ? darkColorPalette [0] : lightColorPalette[0]
 #define WCP_FOREGROUND            config::darkMode ? darkColorPalette [1] : lightColorPalette[1]
 #define WCP_BACKGROUND            config::darkMode ? darkColorPalette [2] : lightColorPalette[2]
@@ -176,13 +174,13 @@ inline void updateScrollBarsInfo() {
     updateXScrollBarInfo();
 }
 
-inline void resizeChildWindows(HWND hwnd, LPCREATESTRUCT create);
+inline void resizeChildWindows(HWND hwnd);
 
 inline void updateLanguage(HWND hwnd) {
     for (auto i = 0; i < W_GRID_MAX_COLUMNS; i++)
         g_tableHeaders[i] = utils::message(MSG_WND_DEBUG_TABLE_STATUS + i);
     if (hwnd) {
-        resizeChildWindows(hwnd, nullptr);
+        resizeChildWindows(hwnd);
         SetWindowText(hwnd, utils::message(MSG_APPLICATION_NAME).c_str());
     }
 }
@@ -557,7 +555,7 @@ inline void g_updateTable(HDC hdc, const bool onlyPaintGrid) {
     updateScrollBarsInfo();
 }
 
-inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
+inline void resizeChildWindows(HWND hwnd) {
     HCURSOR lPtrHandCursor = LoadCursor(nullptr, IDC_HAND);
     const auto hdc = GetDC(hwnd);
     int i = 0;
@@ -573,7 +571,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
             WMC_BUTTON, text.c_str(),
             WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
             rect.left, rect.top, rect.right, rect.bottom,
-            hwnd, reinterpret_cast<HMENU>(ID_BUTTON_UPDATE), create->hInstance, nullptr);
+            hwnd, reinterpret_cast<HMENU>(ID_BUTTON_UPDATE), globals::hIns, nullptr);
         SendMessage(hButtonUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(hButtonUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(hButtonUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
@@ -592,7 +590,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
             WMC_BUTTON, text.c_str(),
             WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
             rect.left, rect.top, rect.right, rect.bottom,
-            hwnd, reinterpret_cast<HMENU>(ID_BUTTON_ACTIONS), create->hInstance, nullptr);
+            hwnd, reinterpret_cast<HMENU>(ID_BUTTON_ACTIONS), globals::hIns, nullptr);
         SendMessage(g_hSettingsButton, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(g_hSettingsButton, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(g_hSettingsButton, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
@@ -602,7 +600,6 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
         MoveWindow(g_childWindows[i], windowWidth - rect.right - 10, 10, rect.right, rect.bottom, TRUE);
         i++;
     }
-    int lastX = 10 + lastWidth + WSC_CHECKBOX_SPACING;
 
     // Install button
     text = utils::message(MSG_WND_HEADER_INSTALL);
@@ -612,7 +609,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
             WMC_BUTTON, text.c_str(),
             WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
             rect.left, rect.top, rect.right, rect.bottom,
-            hwnd, reinterpret_cast<HMENU>(ID_BUTTON_INSTALL), create->hInstance, nullptr);
+            hwnd, reinterpret_cast<HMENU>(ID_BUTTON_INSTALL), globals::hIns, nullptr);
         SendMessage(g_hInstallButton, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(g_hInstallButton, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(g_hInstallButton, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
@@ -624,7 +621,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
         MoveWindow(g_childWindows[i], windowWidth - rect.right - 20 - (sRect.right - sRect.left), 10, rect.right, rect.bottom, TRUE);
         i++;
     }
-    lastX = 10 + lastWidth + WSC_CHECKBOX_SPACING;
+    int lastX = 10 + lastWidth + WSC_CHECKBOX_SPACING;
 
     // Auto update check box
     text = utils::message(MSG_WND_HEADER_AUTO_UPDATE);
@@ -635,7 +632,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
             WMC_BUTTON, text.c_str(),
             WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
             rect.left, rect.top, rect.right, rect.bottom,
-            hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_AUTO_UPDATE), create->hInstance, nullptr);
+            hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_AUTO_UPDATE), globals::hIns, nullptr);
         SendMessage(hCheckBoxAutoUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(hCheckBoxAutoUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
@@ -657,7 +654,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
             WMC_BUTTON, text.c_str(),
             WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
             rect.left, rect.top, rect.right, rect.bottom,
-            hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_DARK_MODE), create->hInstance, nullptr);
+            hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_DARK_MODE), globals::hIns, nullptr);
         SendMessage(hCheckboxDarkMode, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(hCheckboxDarkMode, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(hCheckboxDarkMode, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
@@ -679,7 +676,7 @@ inline void resizeChildWindows(HWND hwnd, const LPCREATESTRUCT create) {
             WMC_BUTTON, text.c_str(),
             WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
             rect.left, rect.top, rect.right, rect.bottom,
-            hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_SHOW_ALL_WINDOWS), create->hInstance, nullptr);
+            hwnd, reinterpret_cast<HMENU>(ID_CHECKBOX_SHOW_ALL_WINDOWS), globals::hIns, nullptr);
         SendMessage(hCheckBoxShowAllWindows, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(hCheckBoxShowAllWindows, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(hCheckBoxShowAllWindows, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
@@ -752,7 +749,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             lf.lfWeight = FW_BOLD;
             g_hTableFontBold = CreateFontIndirect(&lf);
 
-            resizeChildWindows(hwnd, create);
+            resizeChildWindows(hwnd);
 
             g_hYScrollBar = CreateWindowEx(
                 WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
@@ -781,9 +778,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_SIZE:
         {
             if (wParam == SIZE_MINIMIZED) {
-                if (config::minimizeToTray)
+                if (config::minimizeToTray) {
                     ShowWindow(hwnd, SW_HIDE);
-                else
+                    utils::showTrayNotification(utils::message(MSG_MINIMIZED_TO_TRAY));
+                } else
                     return DefWindowProc(hwnd, uMsg, wParam, lParam);
             } else {
                 windowWidth = LOWORD(lParam);
@@ -967,7 +965,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     AppendMenu(hMenu, MF_STRING, ID_TRAY_EXIT, utils::message(MSG_TRAY_EXIT).c_str());
                 }
                 POINT p;
-                GetCursorPos(&p);
+                if (lParam == WM_CONTEXTMENU) {
+                    RECT rect;
+                    GetWindowRect(g_hSettingsButton, &rect);
+                    p.x = rect.left;
+                    p.y = rect.top + WSC_BUTTON_DEFAULT_H;
+                } else {
+                    GetCursorPos(&p);
+                }
                 SetForegroundWindow(hwnd);
                 TrackPopupMenu(hMenu, TPM_RIGHTBUTTON, p.x, p.y, 0, hwnd, nullptr);
                 DestroyMenu(hMenu);
@@ -1039,8 +1044,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 case ID_BUTTON_UPDATE:
                 {
                     taskbar::clearForcedVisibilityStates();
-                    taskbar::forceToCollect = true;
                     taskbar::collectWindowsInfo = true;
+                    taskbar::forceToCollect = true;
+                    break;
+                }
+                case ID_BUTTON_INSTALL:
+                {
                     break;
                 }
                 case ID_CHECKBOX_AUTO_UPDATE:
@@ -1167,6 +1176,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     break;
             } else if (config::closeToTray) {
                 ShowWindow(hwnd, SW_HIDE);
+                utils::showTrayNotification(utils::message(MSG_MINIMIZED_TO_TRAY));
                 break;
             }
             DestroyWindow(hwnd);
@@ -1184,12 +1194,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             break;
         }
         case WM_ERASEBKGND: {
-            return 0;
+            return 1;
         }
         default:
             return DefWindowProc(hwnd, uMsg, wParam, lParam);
     }
-    return 0;
+    return 1;
 }
 
 void signalHandler(const int signum) {
@@ -1327,6 +1337,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     if (!globals::noConfigFile)
         config::load();
 
+    // Export language files
+    utils::exportLanguageFiles();
+
     HANDLE hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
     if (!hMutex)
         utils::messageBox(MSG_MUTEX_FAILED, MB_ICONWARNING | MB_OK, { utils::NTStatusMessageToText(GetLastError()) });
@@ -1401,8 +1414,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         return 1;
     }
 
-    HWINEVENTHOOK startMenuEventHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-    HWINEVENTHOOK windowPreviewsEventHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+    const auto startMenuEventHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+    const auto windowPreviewsEventHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
     monitors::indexMonitors();
     taskbar::findTaskbarHandles();
