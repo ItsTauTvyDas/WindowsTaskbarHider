@@ -79,7 +79,9 @@ bool quitting                = false,
 RECT g_trackableCheckBoxes[W_GRID_MAX_COLUMNS] = {};
 HWND   g_hYScrollBar       = nullptr,
        g_hXScrollBar       = nullptr,
+#if IS_PORTABLE
        g_hInstallButton    = nullptr,
+#endif
        g_hSettingsButton   = nullptr;
 HFONT  g_hDefaultFont      = nullptr,
        g_hDefaultFontBold  = nullptr,
@@ -601,6 +603,7 @@ inline void resizeChildWindows(HWND hwnd) {
         i++;
     }
 
+#if IS_PORTABLE
     // Install button
     text = utils::message(MSG_WND_HEADER_INSTALL);
     rect = { 0, 0, g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2, WSC_BUTTON_DEFAULT_H };
@@ -621,6 +624,7 @@ inline void resizeChildWindows(HWND hwnd) {
         MoveWindow(g_childWindows[i], windowWidth - rect.right - 20 - (sRect.right - sRect.left), 10, rect.right, rect.bottom, TRUE);
         i++;
     }
+#endif
     int lastX = 10 + lastWidth + WSC_CHECKBOX_SPACING;
 
     // Auto update check box
@@ -734,18 +738,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
 
             LOGFONT lf;
             // Re-create default font but bold
-            GetObject(g_hDefaultFont, sizeof(lf), &lf);
+            GetObject(g_hDefaultFont, sizeof(LOGFONT), &lf);
             lf.lfWeight = FW_BOLD;
             g_hDefaultFontBold = CreateFontIndirect(&lf);
 
             // Re-create default font for table but with different face name
-            GetObject(g_hDefaultFont, sizeof(lf), &lf);
+            GetObject(g_hDefaultFont, sizeof(LOGFONT), &lf);
             // By doing this character widths might be incorrect, but for now I didn't notice anything (yet)
             wcscpy_s(lf.lfFaceName, LF_FACESIZE, L"Consolas");
             g_hTableFont = CreateFontIndirect(&lf);
 
             // Re-create table font but bold
-            GetObject(g_hTableFont, sizeof(lf), &lf);
+            GetObject(g_hTableFont, sizeof(LOGFONT), &lf);
             lf.lfWeight = FW_BOLD;
             g_hTableFontBold = CreateFontIndirect(&lf);
 
@@ -793,8 +797,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 GetWindowRect(g_hSettingsButton, &rect);
                 int width = rect.right - rect.left;
                 MoveWindow(g_hSettingsButton, windowWidth - width - 10, 10, width, rect.bottom - rect.top, TRUE);
+#if IS_PORTABLE
                 GetWindowRect(g_hInstallButton, &rect);
                 MoveWindow(g_hInstallButton, windowWidth - (rect.right - rect.left) - 20 - width, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
+#endif
 
                 GetClientRect(hwnd, &rect);
                 windowClientHeight = rect.bottom - rect.top;
@@ -834,7 +840,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             PAINTSTRUCT ps;
             switch (draw->CtlID) {
                 case ID_BUTTON_ACTIONS:
+#if IS_PORTABLE
                 case ID_BUTTON_INSTALL:
+#endif
                 case ID_BUTTON_UPDATE:
                 {
                     HDC mHdc = g_doubleBuffering(hwnd, ps, draw->hDC, true);
@@ -1048,10 +1056,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     taskbar::forceToCollect = true;
                     break;
                 }
+#if IS_PORTABLE
                 case ID_BUTTON_INSTALL:
                 {
                     break;
                 }
+#endif
                 case ID_CHECKBOX_AUTO_UPDATE:
                 {
                     g_windowScrollXPos = 0;
@@ -1336,9 +1346,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
 
     if (!globals::noConfigFile)
         config::load();
-
+#if IS_PORTABLE == 0
     // Export language files
     utils::exportLanguageFiles();
+#endif
 
     HANDLE hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
     if (!hMutex)

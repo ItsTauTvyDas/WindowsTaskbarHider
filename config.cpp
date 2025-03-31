@@ -57,7 +57,7 @@ bool config::save(const bool exposeInternalKeys) {
         return false;
     }
     file << "[General]" << std::endl;
-    file << "Language = en" << std::endl;
+    file << "Language = " << (customLanguage.empty() ? L"en" : customLanguage) << std::endl;
     file << std::endl;
     file << "[Window]" << std::endl;
     file << "; Default values for checkboxes in the window display" << std::endl;
@@ -115,9 +115,13 @@ bool config::save(const bool exposeInternalKeys) {
 }
 
 bool config::ensureConfigurationExists() {
+#if IS_PORTABLE
+    return utils::fileExists(CONFIG_FILENAME);
+#else
     if (!utils::fileExists(CONFIG_FILENAME))
         return save(false);
     return true;
+#endif
 }
 
 void config::open() {
