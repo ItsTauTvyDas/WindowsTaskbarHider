@@ -35,7 +35,9 @@ add_custom_command(
         COMMENT "Generating language files (language.h and language.cpp)"
 )
 
-add_executable(${PROJECT_NAME} WIN32
+configure_file(resources.h.in "${CMAKE_CURRENT_BINARY_DIR}/resources.h" @ONLY)
+
+set(EXECUTABLE_SOURCES
         main.cpp
         utils.cpp
         utils.h
@@ -55,16 +57,29 @@ add_executable(${PROJECT_NAME} WIN32
         resources/language/language.uk.1058.ini
 )
 
-configure_file(resources.h.in "${CMAKE_CURRENT_BINARY_DIR}/resources.h" @ONLY)
-target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+# Installable version
+add_executable(WindowsTaskbarHider WIN32 ${EXECUTABLE_SOURCES})
+target_include_directories(WindowsTaskbarHider PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_options(WindowsTaskbarHider PRIVATE -municode -mwindows)
+target_link_options(WindowsTaskbarHider PRIVATE -municode -mwindows)
+target_compile_definitions(WindowsTaskbarHider PRIVATE UNICODE _UNICODE IS_PORTABLE=0)
+target_link_libraries(WindowsTaskbarHider PRIVATE Dwmapi)
 
-target_compile_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
-target_link_options(${PROJECT_NAME} PRIVATE -municode -mwindows)
-target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
-target_link_libraries(${PROJECT_NAME} PRIVATE Dwmapi)
+# Portable version
+add_executable(WindowsTaskbarHiderPortable WIN32 ${EXECUTABLE_SOURCES})
+target_include_directories(WindowsTaskbarHiderPortable PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_options(WindowsTaskbarHiderPortable PRIVATE -municode -mwindows)
+target_link_options(WindowsTaskbarHiderPortable PRIVATE -municode -mwindows)
+target_compile_definitions(WindowsTaskbarHiderPortable PRIVATE UNICODE _UNICODE IS_PORTABLE=1)
+target_link_libraries(WindowsTaskbarHiderPortable PRIVATE Dwmapi)
 
 # PowerShell command to forcefully kill any existing processes of the application (I was too lazy to close it every time lol)
 add_custom_command(
-        TARGET ${PROJECT_NAME} PRE_BUILD
-        COMMAND powershell -NoProfile -Command "Stop-Process -Name ${PROJECT_NAME} -Force -ErrorAction SilentlyContinue; exit 0"
+        TARGET WindowsTaskbarHider PRE_BUILD
+        COMMAND powershell -NoProfile -Command "Stop-Process -Name WindowsTaskbarHider -Force -ErrorAction SilentlyContinue; exit 0"
+)
+
+add_custom_command(
+        TARGET WindowsTaskbarHiderPortable PRE_BUILD
+        COMMAND powershell -NoProfile -Command "Stop-Process -Name WindowsTaskbarHider -Force -ErrorAction SilentlyContinue; exit 0"
 )
