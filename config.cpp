@@ -57,7 +57,11 @@ bool config::save(const bool exposeInternalKeys) {
         return false;
     }
     file << "[General]" << std::endl;
+#if IS_PORTABLE
     file << "Language = " << (customLanguage.empty() ? L"en" : customLanguage) << std::endl;
+#else
+    file << "Language = " << (customLanguage.empty() ? L"en" : customLanguage) << std::endl;
+#endif
     file << std::endl;
     file << "[Window]" << std::endl;
     file << "; Default values for checkboxes in the window display" << std::endl;
@@ -178,16 +182,14 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
     std::wstring formattedKey;
     try {
         const size_t pos = key.find('.');
-        std::wstring category = key.substr(0, pos);
-        std::ranges::replace(category, '_', ' ');
-        const std::wstring readableKey = key.substr(pos + 1);
-        formattedKey = category + L" > " + readableKey;
+        formattedKey = key.substr(0, pos) + L" > " + key.substr(pos + 1);
 
         if (key == L"Taskbar.UpdateInterval") {
             if (checkForEmptyValueI(formattedKey, value, taskbarUpdateInterval, taskbarUpdateInterval, noErrors))
                 checkForInvalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000, noErrors);
         } else if (key == L"General.Language") {
             auto languages = std::unordered_map<std::wstring, int>(APP_DEFAULT_LANGUAGES);
+#if IS_PORTABLE == 0
             if (utils::fileExists(std::wstring(L"languages/language." + value + L".ini").c_str())) {
                 languageCode = IDR_INI_LANG_CUSTOM;
                 customLanguage = value;
@@ -196,15 +198,18 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
                     utils::updateLanguageFile();
                 }
             } else {
+#endif
                 if (!languages.contains(value)) {
                     auto keysView = std::views::keys(languages);
                     const std::vector languagesVector(keysView.begin(), keysView.end());
-                    utils::messageBox(MSG_CONFIG_INVALID_LANGUAGE, MB_ICONWARNING | MB_OK, {utils::joinString(languagesVector, L", ")});
+                    utils::messageBox(MSG_CONFIG_INVALID_LANGUAGE, MB_ICONWARNING | MB_OK, { utils::joinString(languagesVector, L", ") });
                     return false;
                 }
                 languageCode = languages[value];
                 customLanguage = L"";
+#if IS_PORTABLE == 0
             }
+#endif
             utils::loadIfNeededAndGetCachedLanguageString(0, nullptr); // Trigger language cache to update
         } else if (key == L"Window.DarkMode") {
             checkBoolValidation(formattedKey, value, darkMode, darkMode, noErrors);

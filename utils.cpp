@@ -421,6 +421,7 @@ bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, s
     return true;
 }
 
+#if IS_PORTABLE == 0
 bool utils::updateLanguageFile() {
     std::map<int, INILine> internalMessages = {};
     loadInternalLanguageStringsIntoMap(internalMessages);
@@ -550,26 +551,26 @@ void utils::mapIniContent(std::map<int, INILine> &map, std::wistream &stream) {
     std::wstring line;
     int i = 0;
     while (std::getline(stream, line)) {
-        std::wstring key, value;
-        if (!processIniFileLine(line, nullptr, key, value)) {
+        if (std::wstring key, value; !processIniFileLine(line, nullptr, key, value))
             map[i] = { L"", line, true };
-            i++;
-            continue;
-        }
-        map[i] = { key, value, false };
+        else
+            map[i] = { key, value, false };
         i++;
     }
 }
+#endif
 
 void utils::loadIfNeededAndGetCachedLanguageString(const unsigned int mType, std::wstring *string) {
     static std::unordered_map<unsigned int, std::wstring> cachedMessages;
     if (cachedMessages.empty() || mType == 0) {
         static std::mutex mutex;
         std::lock_guard lock(mutex); // Thread safety
-        cachedMessages.clear(); // Clear just in case
+        cachedMessages.clear(); // Clear cached messages
         std::wstringstream input;
+#if IS_PORTABLE == 0
         if (!config::customLanguage.empty())
             loadLanguageFromName(config::customLanguage, input);
+#endif
 
         if (input.str().empty()) {
             if (const auto hRes = FindResource(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
@@ -600,7 +601,7 @@ void utils::loadIfNeededAndGetCachedLanguageString(const unsigned int mType, std
                     for (size_t i = 0; i < value.size(); ++i) {
                         if (value[i] == L'\\' && i + 1 < value.size() && value[i + 1] == L'n') {
                             cachedMessages[mId->first].push_back(L'\n');
-                            ++i;
+                            i++;
                         } else
                             cachedMessages[mId->first].push_back(value[i]);
                     }
