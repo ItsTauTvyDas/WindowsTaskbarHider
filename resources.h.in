@@ -6,6 +6,8 @@
 #define PROJECT_NAME                  L"@PROJECT_NAME@"
 #define TRAY_TITLE                    PROJECT_NAME L" " VER_FILEVERSION_STR
 
+#define GITHUB_RELEASES_LINK          L"https://github.com/@PRODUCT_COMPANY@/@PROJECT_NAME@/releases"
+
 #define IDI_APP_ICON                  100
 
 #define APP_DEFAULT_LANGUAGES         @DEFAULT_SUPPORTED_LANGUAGES@

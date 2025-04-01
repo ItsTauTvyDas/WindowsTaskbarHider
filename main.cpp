@@ -1059,6 +1059,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
 #if IS_PORTABLE
                 case ID_BUTTON_INSTALL:
                 {
+                    ShellExecute(nullptr, L"open", GITHUB_RELEASES_LINK, nullptr, nullptr, SW_SHOWNORMAL);
                     break;
                 }
 #endif
