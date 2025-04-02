@@ -97,6 +97,8 @@
 
 #define MSG_MINIMIZED_TO_TRAY                     @LANG_ID_COUNTER@
 
+#define MSG_NOT_SUPPORTED                         @LANG_ID_COUNTER@
+
 class language {
 public:
     static const std::unordered_map<unsigned int, std::wstring> messageTypeMap;
