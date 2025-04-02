@@ -277,6 +277,7 @@ void utils::toUnicode(const LPCCH string, LPWSTR str) {
     MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
 }
 
+#if IS_PORTABLE == 0
 std::wstring createShortcutLinkPath(const bool global) {
     WCHAR startupPath[260];
     if (FAILED(SHGetFolderPath(nullptr, global ? CSIDL_COMMON_STARTUP : CSIDL_STARTUP, nullptr, 0, startupPath)))
@@ -372,6 +373,7 @@ void utils::toggleStartup() {
         messageBox(MSG_OUTPUT_STREAM_FAILED, MB_ICONERROR | MB_OK);
     }
 }
+#endif
 
 RECT utils::rect(const int x, const int y, const int width, const int height) {
     return { x, y, x + width, y + height };
@@ -427,7 +429,7 @@ bool utils::updateLanguageFile() {
     loadInternalLanguageStringsIntoMap(internalMessages);
 
     std::wstringstream wss;
-    loadLanguageFromName(config::customLanguage, wss);
+    loadLanguageFromName(config::languageShortName, wss);
 
     std::map<int, INILine> modifiedMessages = {};
     mapIniContent(modifiedMessages, wss);
@@ -446,7 +448,7 @@ bool utils::updateLanguageFile() {
     }
 
     if (needsModification) {
-        std::wofstream file(std::wstring(L"languages/language." + config::customLanguage + L".ini").c_str(), std::ios::out | std::ios::trunc);
+        std::wofstream file(std::wstring(L"languages/language." + config::languageShortName + L".ini").c_str(), std::ios::out | std::ios::trunc);
         if (!file.is_open()) {
             messageBox(MSG_FAILED_TO_UPDATE_LANGUAGE_FILE, MB_ICONERROR | MB_OK);
             return false;
@@ -469,7 +471,7 @@ bool utils::loadLanguageFromName(const std::wstring &shortName, std::wstringstre
     std::wifstream wif(std::wstring(L"languages/language." + shortName + L".ini").c_str());
     if (!wif) {
         // Fallback to default language
-        config::customLanguage = L"";
+        config::languageShortName = L"en";
         config::languageCode = IDR_INI_LANG_EN;
         messageBoxRT(L"Failed to open/read languages/language." + shortName + L".ini file, using default language instead.", MB_ICONERROR | MB_OK);
         return false;
@@ -568,8 +570,8 @@ void utils::loadIfNeededAndGetCachedLanguageString(const unsigned int mType, std
         cachedMessages.clear(); // Clear cached messages
         std::wstringstream input;
 #if IS_PORTABLE == 0
-        if (!config::customLanguage.empty())
-            loadLanguageFromName(config::customLanguage, input);
+        if (config::languageCode == IDR_INI_LANG_CUSTOM)
+            loadLanguageFromName(config::languageShortName, input);
 #endif
 
         if (input.str().empty()) {

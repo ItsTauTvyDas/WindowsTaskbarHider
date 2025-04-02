@@ -694,6 +694,8 @@ inline void resizeChildWindows(HWND hwnd) {
     DeleteObject(hdc);
 }
 
+bool minimizedNotifShowed = false;
+
 LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
     static NOTIFYICONDATA nid = {};
     int *scrollPosition;
@@ -784,7 +786,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             if (wParam == SIZE_MINIMIZED) {
                 if (config::minimizeToTray) {
                     ShowWindow(hwnd, SW_HIDE);
-                    utils::showTrayNotification(utils::message(MSG_MINIMIZED_TO_TRAY));
+                    if (!minimizedNotifShowed) {
+                        utils::showTrayNotification(utils::message(MSG_MINIMIZED_TO_TRAY));
+                        minimizedNotifShowed = true;
+                    }
                 } else
                     return DefWindowProc(hwnd, uMsg, wParam, lParam);
             } else {
@@ -957,15 +962,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 HMENU hMenu = CreatePopupMenu();
                 if (lParam != WM_CONTEXTMENU)
                     AppendMenu(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, TRAY_TITLE);
-                AppendMenu(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, utils::message(MSG_TRAY_CONFIG_OPEN).c_str());
+                AppendMenu(hMenu, MF_STRING | (config::exists() ? 0 : MF_DISABLED), ID_TRAY_OPEN_CONFIG, utils::message(MSG_TRAY_CONFIG_OPEN).c_str());
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, utils::message(MSG_TRAY_CONFIG_RELOAD).c_str());
-                if (lParam == WM_CONTEXTMENU) {
-                    AppendMenu(hMenu, MF_STRING, ID_TRAY_EXPOSE_INTERNALS, utils::message(MSG_TRAY_CONFIG_EXPOSE_INTERNALS).c_str());
-                }
+                if (lParam == WM_CONTEXTMENU)
+                    AppendMenu(hMenu, MF_STRING | (config::exists() ? 0 : MF_DISABLED), ID_TRAY_EXPOSE_INTERNALS, utils::message(MSG_TRAY_CONFIG_EXPOSE_INTERNALS).c_str());
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_PAUSE_HIDER, utils::message(globals::taskbarLoopRunState ?  MSG_TRAY_TB_PAUSE : MSG_TRAY_TB_RESUME).c_str());
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+#if IS_PORTABLE
+                AppendMenu(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_ADD_REMOVE_STARTUP, std::wstring(utils::message(MSG_TRAY_ADD_STARTUP) + L" (" + utils::message(MSG_NOT_SUPPORTED) + L")").c_str());
+#else
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_ADD_REMOVE_STARTUP, utils::message(utils::doesAutoStart() ? MSG_TRAY_REM_STARTUP : MSG_TRAY_ADD_STARTUP).c_str());
+#endif
                 AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
                 AppendMenu(hMenu, MF_STRING, ID_TRAY_GITHUB, utils::message(MSG_TRAY_OPEN_GITHUB).c_str());
                 if (lParam != WM_CONTEXTMENU) {
@@ -1094,10 +1102,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 }
                 case ID_TRAY_RELOAD_CONFIG:
                 {
+#if IS_PORTABLE
+                    if (!config::exists()) {
+                        config::save(false);
+                        utils::messageBox(MSG_CONFIG_RELOADED, MB_ICONINFORMATION | MB_OK);
+                        break;
+                    }
+#endif
                     if (config::load())
                         utils::messageBox(MSG_CONFIG_RELOADED, MB_ICONINFORMATION | MB_OK);
                     else
                         utils::messageBox(MSG_CONFIG_RELOADED_WITH_ERRORS, MB_ICONWARNING | MB_OK);
+                    minimizedNotifShowed = false;
                     updateLanguage(hwnd);
                     g_redrawWindow(hwnd);
                     taskbar::resetTaskbar();
@@ -1109,11 +1125,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     globals::taskbarLoopRunState = !globals::taskbarLoopRunState;
                     break;
                 }
+#if IS_PORTABLE == 0
                 case ID_TRAY_ADD_REMOVE_STARTUP:
                 {
                     utils::toggleStartup();
                     break;
                 }
+#endif
                 case ID_TRAY_GITHUB:
                 {
                     ShellExecute(nullptr, L"open", PRODUCT_URL, nullptr, nullptr, SW_SHOWNORMAL);
@@ -1187,7 +1205,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     break;
             } else if (config::closeToTray) {
                 ShowWindow(hwnd, SW_HIDE);
-                utils::showTrayNotification(utils::message(MSG_MINIMIZED_TO_TRAY));
+                if (!minimizedNotifShowed) {
+                    utils::showTrayNotification(utils::message(MSG_MINIMIZED_TO_TRAY));
+                    minimizedNotifShowed = true;
+                }
                 break;
             }
             DestroyWindow(hwnd);
