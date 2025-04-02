@@ -28,7 +28,7 @@ public:
     static int animationOpacityStep;
     static std::vector<std::wstring> ignoredWindows;
     static std::vector<std::wstring> exceptionalWindows;
-    static std::wstring customLanguage;
+    static std::wstring languageShortName;
 
     // Internal
     static std::wstring I_TaskbarWindowClassNameStarts;
@@ -37,6 +37,7 @@ public:
 
     static bool load();
     static bool save(bool exposeInternalKeys);
+    static bool exists();
     static void open();
     static bool processSingle(const std::wstring &key, const std::wstring &value);
 

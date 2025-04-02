@@ -31,7 +31,7 @@ int config::opacityWhenHiddenInternal;
 int config::opacityWhenShownInternal;
 int config::opacityWhenHoveredInternal;
 int config::languageCode = IDR_INI_LANG_EN;
-std::wstring config::customLanguage;
+std::wstring config::languageShortName = L"en";
 
 bool config::animationsEnabled;
 int config::animationStepDelay = 3;
@@ -57,11 +57,7 @@ bool config::save(const bool exposeInternalKeys) {
         return false;
     }
     file << "[General]" << std::endl;
-#if IS_PORTABLE
-    file << "Language = " << (customLanguage.empty() ? L"en" : customLanguage) << std::endl;
-#else
-    file << "Language = " << (customLanguage.empty() ? L"en" : customLanguage) << std::endl;
-#endif
+    file << "Language = " << languageShortName << std::endl;
     file << std::endl;
     file << "[Window]" << std::endl;
     file << "; Default values for checkboxes in the window display" << std::endl;
@@ -118,11 +114,15 @@ bool config::save(const bool exposeInternalKeys) {
     return true;
 }
 
+bool config::exists() {
+    return utils::fileExists(CONFIG_FILENAME);
+}
+
 bool config::ensureConfigurationExists() {
 #if IS_PORTABLE
-    return utils::fileExists(CONFIG_FILENAME);
+    return exists();
 #else
-    if (!utils::fileExists(CONFIG_FILENAME))
+    if (!exists())
         return save(false);
     return true;
 #endif
@@ -192,7 +192,7 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
 #if IS_PORTABLE == 0
             if (utils::fileExists(std::wstring(L"languages/language." + value + L".ini").c_str())) {
                 languageCode = IDR_INI_LANG_CUSTOM;
-                customLanguage = value;
+                languageShortName = value;
                 if (languages.contains(value)) {
                     languageCode = languages[value];
                     utils::updateLanguageFile();
@@ -205,8 +205,8 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
                     utils::messageBox(MSG_CONFIG_INVALID_LANGUAGE, MB_ICONWARNING | MB_OK, { utils::joinString(languagesVector, L", ") });
                     return false;
                 }
+                languageShortName = value;
                 languageCode = languages[value];
-                customLanguage = L"";
 #if IS_PORTABLE == 0
             }
 #endif
