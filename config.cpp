@@ -56,6 +56,15 @@ bool config::save(const bool exposeInternalKeys) {
         utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
         return false;
     }
+    file << "; Github: " << PRODUCT_URL << std::endl;
+    file << std::endl;
+    file << ";  _    _ _           _                 _____         _    _                _   _ _     _" << std::endl;
+    file << "; | |  | (_)         | |               |_   _|       | |  | |              | | | (_)   | |" << std::endl;
+    file << "; | |  | |_ _ __   __| | _____      _____| | __ _ ___| | _| |__   __ _ _ __| |_| |_  __| | ___ _ __" << std::endl;
+    file << "; | |/\\| | | '_ \\ / _` |/ _ \\ \\ /\\ / / __| |/ _` / __| |/ / '_ \\ / _` | '__|  _  | |/ _` |/ _ \\ '__|" << std::endl;
+    file << "; \\  /\\  / | | | | (_| | (_) \\ V  V /\\__ \\ | (_| \\__ \\   <| |_) | (_| | |  | | | | | (_| |  __/ |" << std::endl;
+    file << ";  \\/  \\/|_|_| |_|\\__,_|\\___/ \\_/\\_/ |___|_/\\__,_|___/_|\\_\\_.__/ \\__,_|_|  \\_| |_/_|\\__,_|\\___|_|" << std::endl;
+    file << std::endl;
     file << "[General]" << std::endl;
     file << "Language = " << languageShortName << std::endl;
     file << std::endl;
@@ -75,12 +84,13 @@ bool config::save(const bool exposeInternalKeys) {
     file << "[Taskbar]" << std::endl;
     file << "; Taskbar update loop interval in milliseconds" << std::endl;
     file << "UpdateInterval = " << taskbarUpdateInterval << std::endl;
+    file << "; Disable automatic updates to the GUI when program gets unfocused" << std::endl;
+    file << "DisableAutoUpdateWhenUnfocused = " << disableAutoUpdateWhenUnfocused << std::endl;
     file << "; Opacity level from 0 to 100" << std::endl;
     file << "OpacityWhenHidden = " << opacityWhenHidden << std::endl;
     file << "; Bellow limit changes from 1 to 100, 0 causes the taskbar to lose interactivity" << std::endl;
     file << "OpacityWhenShown = " << opacityWhenShown << std::endl;
     file << "OpacityWhenHoveredOver = " << opacityWhenHovered << std::endl;
-    file << "DisableAutoUpdateWhenUnfocused = " << disableAutoUpdateWhenUnfocused << std::endl;
     file << std::endl;
     file << "[Taskbar Hover Animation]" << std::endl;
     file << "; Animation between OpacityWhenShown/OpacityWhenHidden and OpacityWhenHoveredOver" << std::endl;
