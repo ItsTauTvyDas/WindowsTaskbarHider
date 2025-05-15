@@ -11,6 +11,7 @@
 #include <numeric>
 #include "language.h"
 #include "monitors.h"
+#include "taskbar_animation.h"
 
 #pragma comment(lib, "Dwmapi.lib")
 
@@ -72,8 +73,7 @@ constexpr bool g_tableCollapsableHeaders[] = {
     false, true, true, true, true, false, false, false, true
 };
 
-bool quitting                = false,
-     focused                 = false,
+bool focused                 = false,
      g_tableSizesInitialized = false,
      g_tableHeaderCheckboxCollapseStates[W_GRID_MAX_COLUMNS] = {};
 RECT g_trackableCheckBoxes[W_GRID_MAX_COLUMNS] = {};
@@ -104,7 +104,7 @@ std::wstring g_lastTableUpdateTime = L"00:00:00.000";
 void taskbarLoop() {
     bool called = false;
     while (true) {
-        if (quitting)
+        if (globals::isShuttingDown)
             return;
         if (!globals::taskbarLoopRunState) {
             if (!called) {
@@ -1009,9 +1009,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_UPDATE_GRID_REQUEST:
         {
+            g_lastTableUpdateTime = utils::getFormattedTime();
             if (!IsWindowVisible(hwnd) || (config::autoUpdate && !focused && config::disableAutoUpdateWhenUnfocused))
                 break;
-            g_lastTableUpdateTime = utils::getFormattedTime();
             g_redrawLowerArea(hwnd);
             updateScrollBarsInfo();
             break;
@@ -1453,6 +1453,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     monitors::indexMonitors();
     taskbar::findTaskbarHandles();
     auto taskbarLoopThread = std::thread(taskbarLoop);
+    taskbar_animation::initThread();
 
     // Hood global keyboard listener
     g_hKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardEventProc, nullptr, 0);
@@ -1469,9 +1470,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     UnhookWinEvent(startMenuEventHook);
     UnhookWinEvent(windowPreviewsEventHook);
 
-    quitting = true;
+    globals::isShuttingDown = true;
     if (taskbarLoopThread.joinable())
         taskbarLoopThread.join();
+
+    if (taskbar_animation::animationThread.joinable())
+        taskbar_animation::animationThread.join();
 
     if (g_hKeyboardHook)
         UnhookWindowsHookEx(g_hKeyboardHook);
