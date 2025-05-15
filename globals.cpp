@@ -9,3 +9,4 @@ HINSTANCE globals::hIns = nullptr;
 bool globals::noConfigFile;
 bool globals::taskbarLoopRunState = true;
 bool globals::sessionLocked;
+bool globals::isShuttingDown;

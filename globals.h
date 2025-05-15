@@ -13,6 +13,7 @@ public:
     static bool noConfigFile;
     static bool taskbarLoopRunState;
     static bool sessionLocked;
+    static bool isShuttingDown;
 };
 
 #endif //GLOBALS_H
