@@ -58,6 +58,15 @@ Extra configuration can be enabled by triggering "Expose internal configuration 
 (if you want to restore them to default, just delete that section from the file and reload the config).
 
 ```ini
+; Github: https://github.com/ItsTauTvyDas/WindowsTaskbarHider
+
+;  _    _ _           _                 _____         _    _                _   _ _     _
+; | |  | (_)         | |               |_   _|       | |  | |              | | | (_)   | |
+; | |  | |_ _ __   __| | _____      _____| | __ _ ___| | _| |__   __ _ _ __| |_| |_  __| | ___ _ __
+; | |/\| | | '_ \ / _` |/ _ \ \ /\ / / __| |/ _` / __| |/ / '_ \ / _` | '__|  _  | |/ _` |/ _ \ '__|
+; \  /\  / | | | | (_| | (_) \ V  V /\__ \ | (_| \__ \   <| |_) | (_| | |  | | | | | (_| |  __/ |
+;  \/  \/|_|_| |_|\__,_|\___/ \_/\_/ |___|_/\__,_|___/_|\_\_.__/ \__,_|_|  \_| |_/_|\__,_|\___|_|
+
 [General]
 Language = en
 
@@ -77,19 +86,20 @@ CloseConfirmMessage = 1
 [Taskbar]
 ; Taskbar update loop interval in milliseconds
 UpdateInterval = 10
+; Disable automatic updates to the GUI when program gets unfocused
+DisableAutoUpdateWhenUnfocused = 1
 ; Opacity level from 0 to 100
 OpacityWhenHidden = 0
 ; Bellow limit changes from 1 to 100, 0 causes the taskbar to lose interactivity
-OpacityWhenShown = 100
+OpacityWhenShown = 90
 OpacityWhenHoveredOver = 100
-DisableAutoUpdateWhenUnfocused = 1
 
 [Taskbar Hover Animation]
 ; Animation between OpacityWhenShown/OpacityWhenHidden and OpacityWhenHoveredOver
 ; If changed while application is running, restart is required!
-Enabled = 1
-AnimationStepDelay = 10
-AnimationOpacityStep = 10
+Enabled = 0
+AnimationStepDelay = 3
+AnimationOpacityStep = 1
 [Ignored Windows]
 ; Setting this to false (0) could slow down the application with debug mode on
 AlwaysIgnoreWhenNotMaximized = 1
