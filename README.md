@@ -56,8 +56,6 @@ A file called config.ini is going to be created next to exe file (unless `--no-c
 ## TODO
 - [ ] Settings and other similar apps that uses ApplicationFrameHost.exe don't get detected
 - [ ] Show taskbar when any context menu from taskbar is opened (kinda works already but not for all popups)
-- [ ] Maybe add animations when taskbar is appearing/disappearing?
-- [ ] Allow custom languages
 
 ## Building
 This project was built using CMake (^3.10), MinGW (^11.0 w64), Ninja and CLion IDE.
