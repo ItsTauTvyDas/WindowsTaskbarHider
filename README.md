@@ -12,7 +12,8 @@ This can work perfectly with **TranslucentTB** to make the desktop look even mor
 The application loops over all visible, non-iconic windows and checks specified tags in the configuration.
 All of this is happening every 10ms (can be changed) + indeterminate loop processing time.
 
-Everything was made with "pure" C++, no libraries, only using WIN32 API. Not to mention this is my first real C++ project, so it was quite a fun suffering.
+Everything was made with "pure" and simple C++, no extra packages, only using WIN32 API.
+Not to mention this is my first real C++ project, so it was quite a fun suffering.
 
 ## Doesn't Windows already have this?
 Yes, it does, but it's really buggy, plus this application has extra features. It has two main problems:
@@ -40,8 +41,9 @@ You are indeed right, but to be honest, I did all this just for fun and for bett
 * Ignore specific windows with tags or make exceptions
 * Add/Remove from startup folder
 * Taskbar pausing
-* Taskbar opacity when it's hidden, being shown and when hovered over with mouse
-* Automatically notices display changes (e.g. another monitor got connected/disconnected)
+* Taskbar opacity when it's hidden, being shown (triggered by maximized window) and when hovered over with mouse
+* Animations
+* Portable and installable version
 
 ## Program's arguments
 | Argument          | Alias      |  Parameters  | Description                                     |
@@ -52,6 +54,57 @@ You are indeed right, but to be honest, I did all this just for fun and for bett
 
 ## Configuration
 A file called config.ini is going to be created next to exe file (unless `--no-config` argument specified).
+Extra configuration can be enabled by triggering "Expose internal configuration keys" button in GUI's actions select
+(if you want to restore them to default, just delete that section from the file and reload the config).
+
+```ini
+[General]
+Language = en
+
+[Window]
+; Default values for checkboxes in the window display
+DarkMode = 1
+AutoUpdate = 0
+ShowAllWindows = 0
+
+[Window Behaviour]
+OpenOnStart = 0
+CloseToTray = 0
+MinimizeToTray = 1
+; Only works if CloseToTray is disabled
+CloseConfirmMessage = 1
+
+[Taskbar]
+; Taskbar update loop interval in milliseconds
+UpdateInterval = 10
+; Opacity level from 0 to 100
+OpacityWhenHidden = 0
+; Bellow limit changes from 1 to 100, 0 causes the taskbar to lose interactivity
+OpacityWhenShown = 100
+OpacityWhenHoveredOver = 100
+DisableAutoUpdateWhenUnfocused = 1
+
+[Taskbar Hover Animation]
+; Animation between OpacityWhenShown/OpacityWhenHidden and OpacityWhenHoveredOver
+; If changed while application is running, restart is required!
+Enabled = 1
+AnimationStepDelay = 10
+AnimationOpacityStep = 10
+[Ignored Windows]
+; Setting this to false (0) could slow down the application with debug mode on
+AlwaysIgnoreWhenNotMaximized = 1
+; Available tags: process/p (text), title/t (text), class/c (text), focus/f (0 or 1), maximized/m (0 or 1), left (number), top (int), right (number), bottom (number), monitor/mon (number >= 0)
+; Separator: |
+;
+; Ignore UWP container window and windows with empty titles
+; ApplicationFrameHost.exe (UWP containers) is used by mostly by Windows applications
+; Some of the processes seems to have maximized windows, even though they are not visible
+; We don't have a way to distinguish between that invisible window,
+; so the taskbar is going to be still invisible when opening something like Settings
+; Tag 'process' (or 'p') is case-insensitive
+IgnoredWindows = title:|process:ApplicationFrameHost.exe
+ExceptionalWindows =
+```
 
 ## TODO
 - [ ] Settings and other similar apps that uses ApplicationFrameHost.exe don't get detected
@@ -87,4 +140,4 @@ cmake.exe --build <source>\cmake-build-debug --target clean -j 6
 
 ## Credits and appreciation!
 * Thanks to [SuperNeon4ik](https://github.com/SuperNeon4ik) for Ukrainian translations!
-* The icon was designed by [justicon (freepik.com)](https://www.freepik.com/icon/programming_1567754)
+* Program icon credits goes to [justicon (freepik.com)](https://www.freepik.com/icon/programming_1567754)
