@@ -51,6 +51,8 @@ set(EXECUTABLE_SOURCES
         monitors.h
         resources/app.rc
         resources.h
+        taskbar_animation.cpp
+        taskbar_animation.h
         "${CMAKE_CURRENT_BINARY_DIR}/language.h"
         "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"
         resources/language/language.en.2057.ini
