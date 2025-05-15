@@ -54,7 +54,7 @@ public:
     static bool forceToCollect;
 
     static void findTaskbarHandles();
-    static void setTaskbarVisibility(HWND hwnd, bool visible, bool hoveredOver);
+    static void setTaskbarVisibility(HWND hwnd, bool visible, bool hoveredOver, bool causedByMaximizedWindow);
     static void resetTaskbar();
     static void updateTaskbarState();
     static void clearErrorState();
