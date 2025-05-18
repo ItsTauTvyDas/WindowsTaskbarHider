@@ -315,9 +315,7 @@ bool config::load() {
 
         try {
             utf8line = utils::utf8ToWide(line);
-        }
-        catch (const std::exception&)
-        {
+        } catch (const std::exception&) {
             // my IDE is kinda stupid lol
             // ReSharper disable once CppDFAUnusedValue
             noErrors = false;
