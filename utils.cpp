@@ -420,7 +420,7 @@ bool utils::processIniFileLine(std::wstring &line, std::wstring *prefix, std::ws
     if (line.front() == L';' || line.front() == L'#')
         return false;
 
-    size_t pos = line.find(L'=');
+    const size_t pos = line.find(L'=');
     if (pos == std::string::npos)
         return false;
 
@@ -431,11 +431,6 @@ bool utils::processIniFileLine(std::wstring &line, std::wstring *prefix, std::ws
         return false;
 
     value = line.substr(pos + 1);
-
-    pos = value.find(L';'); // reuse pos
-    if (pos!=std::wstring_view::npos)
-        value = value.substr(0, pos);
-
     trim(value);
     return true;
 }
