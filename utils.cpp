@@ -397,7 +397,8 @@ std::wstring utils::getFormattedTime() {
     return oss.str();
 }
 
-bool utils::processIniFileLine(std::wstring &line, std::wstring *prefix, std::wstring &key, std::wstring &value) {
+bool utils::processIniFileLine(const std::wstring &orgLine, std::wstring *prefix, std::wstring &key, std::wstring &value) {
+    std::wstring line = orgLine;
     trim(line);
 
     if (line.empty())
@@ -442,7 +443,6 @@ bool utils::updateLanguageFile() {
 
     std::wstringstream wss;
     loadLanguageFromName(config::languageShortName, wss);
-
     std::map<int, INILine> modifiedMessages = {};
     mapIniContent(modifiedMessages, wss);
 
