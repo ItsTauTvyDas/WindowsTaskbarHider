@@ -116,8 +116,13 @@ IgnoredWindows = title:|process:ApplicationFrameHost.exe
 ExceptionalWindows =
 ```
 
+## Issues
+- Settings and other similar apps that uses ApplicationFrameHost.exe don't get detected (it's buggy)
+- Not every context menu popup from taskbar is supported (taskbar can still disappear)
+- Sometimes debug table can show random symbols (encoding issue), just update again if that happens
+
 ## TODO
-- [ ] Settings and other similar apps that uses ApplicationFrameHost.exe don't get detected
+- [ ] Find a way to fix issue with ApplicationFrameHost.exe
 - [ ] Show taskbar when any context menu from taskbar is opened (kinda works already but not for all popups)
 
 ## Building
@@ -141,6 +146,7 @@ Make sure to clean CMake project before building, otherwise CMake won't notice t
 ```bash
 cmake.exe --build <source>\cmake-build-debug --target clean -j 6
 ```
+
 ### CMake used flags (from CMakeLists.txt)
 | Build Type | Category            | Flags                                                                            |
 |------------|---------------------|----------------------------------------------------------------------------------|
