@@ -25,6 +25,7 @@
 #define MSG_CONFIG_RELOADED_WITH_ERRORS           @LANG_ID_COUNTER@
 #define MSG_CONFIG_RELOADED                       @LANG_ID_COUNTER@
 #define MSG_CONFIG_INVALID_LANGUAGE               @LANG_ID_COUNTER@
+#define MSG_CONFIG_ENCODING_ERROR                 @LANG_ID_COUNTER@
 
 #define MSG_ARGS_INVALID                          @LANG_ID_COUNTER@
 #define MSG_ARGS_PARSE_FAILED                     @LANG_ID_COUNTER@
