@@ -1,7 +1,6 @@
 #include "utils.h"
 
 #include <cmath>
-#include <codecvt>
 #include <format>
 #include <shlobj.h>
 #include <fstream>
