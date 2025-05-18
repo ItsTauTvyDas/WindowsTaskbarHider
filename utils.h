@@ -42,7 +42,10 @@ public:
     static std::wstring message(unsigned int mType);
     static bool isUserUsingDarkTheme();
     static void toUnicode(LPCCH string, LPWSTR str);
-    static bool processIniFileLine(const std::wstring& line, std::wstring *prefix, std::wstring &key, std::wstring &value);
+    static bool processIniFileLine(std::wstring &line, std::wstring *prefix, std::wstring &key, std::wstring &value);
+    static std::wstring utf8ToWide(const std::string& str);
+    static std::string wideToUtf8(const std::wstring& wstr);
+    static bool writeUtf8File(const std::wstring &fileName, const std::wstring &content, const int wCharsCount);
 private:
 #if IS_PORTABLE == 0
     struct INILine {

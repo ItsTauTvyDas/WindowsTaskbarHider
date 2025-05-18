@@ -9,7 +9,7 @@
 #include <iostream>
 #include <map>
 #include <tchar.h>
-#include "windows.h"
+#include <windows.h>
 #include "resources.h"
 #include "config.h"
 #include "taskbar.h"
@@ -398,27 +398,45 @@ std::wstring utils::getFormattedTime() {
     return oss.str();
 }
 
-bool utils::processIniFileLine(const std::wstring &line, std::wstring *prefix, std::wstring &key, std::wstring &value) {
+bool utils::processIniFileLine(std::wstring &line, std::wstring *prefix, std::wstring &key, std::wstring &value) {
+    trim(line);
+
     if (line.empty())
         return false;
 
-    if (line.rfind('[', 0) == 0) {
+    if (line.front() == '[') {
+        const size_t end = line.find(']');
+        if (end == std::wstring_view::npos)
+            return false;
+
         if (!prefix)
             return false;
-        *prefix = line.substr(1, line.size() - 2) + L".";
+
+        auto name = line.substr(1, end-1);
+        trim(name);
+        *prefix = std::wstring{name} + L".";
         return false;
     }
 
-    if (line.rfind(';', 0) == 0)
+    if (line.front() == L';' || line.front() == L'#')
         return false;
 
-    const size_t pos = line.find('=');
+    size_t pos = line.find(L'=');
     if (pos == std::string::npos)
         return false;
 
     key = line.substr(0, pos);
     trim(key);
+
+    if (key.empty())
+        return false;
+
     value = line.substr(pos + 1);
+
+    pos = value.find(L';'); // reuse pos
+    if (pos!=std::wstring_view::npos)
+        value = value.substr(0, pos);
+
     trim(value);
     return true;
 }
@@ -476,7 +494,6 @@ bool utils::loadLanguageFromName(const std::wstring &shortName, std::wstringstre
         messageBoxRT(L"Failed to open/read languages/language." + shortName + L".ini file, using default language instead.", MB_ICONERROR | MB_OK);
         return false;
     }
-    wif.imbue(std::locale(std::locale(), new std::codecvt_utf8<wchar_t>));
     wss << wif.rdbuf();
     return true;
 }
@@ -518,14 +535,7 @@ void utils::exportLanguageFiles() {
 
         std::wstring languageContent(wCharsCount, L'\0');
         MultiByteToWideChar(CP_UTF8, 0, content, dataSize, &languageContent[0], wCharsCount);
-
-        std::wofstream file(fileName.c_str(), std::ios::out | std::ios::trunc | std::ios::binary);
-        if (!file || !file.is_open()) {
-            success = false;
-            continue;
-        }
-        file.imbue(std::locale(std::locale(), new std::codecvt_utf8<wchar_t>));
-        file << languageContent;
+        writeUtf8File(fileName, languageContent, wCharsCount);
     }
     if (!success)
         messageBox(MSG_FAILED_TO_EXPORT_LANGUAGES, MB_ICONERROR | MB_OK);
@@ -697,4 +707,91 @@ bool utils::isUserUsingDarkTheme() {
         return false; // Default to false
 
     return (buffer[3] << 24 | buffer[2] << 16 | buffer[1] << 8 | buffer[0]) == 0;
+}
+
+std::wstring utils::utf8ToWide(const std::string& string) {
+    if (string.empty())
+        return {};
+
+    const int required = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        string.data(),
+        static_cast<int>(string.size()),
+        nullptr, 0
+    );
+
+    if (required == 0)
+        throw std::runtime_error("zero-size");
+
+    std::wstring result(required, L'\0');
+    int got = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        string.data(),
+        static_cast<int>(string.size()),
+        &result[0],
+        required
+    );
+
+    if (got == 0)
+        throw std::runtime_error("conversion");
+
+    return result;
+}
+
+std::string utils::wideToUtf8(const std::wstring& wString) {
+    const int len = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        wString.data(), static_cast<int>(wString.size()),
+        nullptr, 0,
+        nullptr, nullptr
+    );
+
+    if (len <= 0)
+        return {};
+
+    std::string out(len, '\0');
+    WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        wString.data(), static_cast<int>(wString.size()),
+        &out[0], len,
+        nullptr, nullptr
+    );
+    return out;
+}
+
+bool utils::writeUtf8File(const std::wstring &fileName, const std::wstring &content, const int wCharsCount) {
+    const int utf8Len = WideCharToMultiByte(
+        CP_UTF8, 0,
+        content.data(), wCharsCount,
+        nullptr, 0,
+        nullptr, nullptr
+    );
+
+    if (utf8Len <= 0)
+        return false;
+
+    std::string utf8Data(utf8Len, '\0');
+    WideCharToMultiByte(
+        CP_UTF8, 0,
+        content.data(), wCharsCount,
+        utf8Data.data(), utf8Len,
+        nullptr, nullptr
+    );
+
+    std::ofstream out(
+        fileName.c_str(),
+        std::ios::out | std::ios::trunc | std::ios::binary
+    );
+
+    if (!out.is_open())
+        return false;
+
+    static constexpr unsigned char bom[] = { 0xEF, 0xBB, 0xBF };
+    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
+    out.write(utf8Data.data(), utf8Data.size());
+    return true;
 }

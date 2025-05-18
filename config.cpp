@@ -3,7 +3,6 @@
 #include <fstream>
 #include <string>
 #include <algorithm>
-#include <codecvt>
 #include <ranges>
 #include "globals.h"
 #include "language.h"
@@ -35,7 +34,7 @@ std::wstring config::languageShortName = L"en";
 
 bool config::animationsEnabled;
 int config::animationStepDelay = 3;
-int config::animationOpacityStep = 1;
+int config::animationOpacityStep = 10;
 
 std::wstring config::I_TaskbarWindowClassNameStarts = L"Shell_";
 std::wstring config::I_TaskbarWindowClassNameEnds = L"TrayWnd";
@@ -297,28 +296,44 @@ bool config::load() {
     if (!ensureConfigurationExists())
         return false;
 
-    std::wifstream file(CONFIG_FILENAME);
+    std::ifstream file(CONFIG_FILENAME, std::ios::binary);
     if (!file) {
         utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
         return false;
     }
 
-    file.imbue(std::locale(std::locale(), new std::codecvt_utf8<wchar_t>));
-
-    std::wstring line;
+    std::string line;
+    std::wstring utf8line;
     std::wstring prefix;
 
     bool noErrors = true;
+    int encodingErrorCount = 0;
 
     int lineNum = 0;
     while (getline(file, line)) {
-        lineNum++;
+        ++lineNum;
+
+        try {
+            utf8line = utils::utf8ToWide(line);
+        }
+        catch (const std::exception&)
+        {
+            // my IDE is kinda stupid lol
+            // ReSharper disable once CppDFAUnusedValue
+            noErrors = false;
+            ++encodingErrorCount;
+            if (encodingErrorCount >= 3)
+                continue;
+            utils::messageBox(MSG_CONFIG_INVALID_SYNTAX, MB_ICONERROR | MB_OK, { std::to_wstring(lineNum), utils::message(MSG_CONFIG_ENCODING_ERROR) });
+            continue;
+        }
+
         std::wstring key, value;
-        if (!utils::processIniFileLine(line, &prefix, key, value))
+        if (!utils::processIniFileLine(utf8line, &prefix, key, value))
             continue;
 
         if (key.empty()) {
-            utils::messageBox(MSG_CONFIG_INVALID_SYNTAX, MB_ICONERROR | MB_OK, { std::to_wstring(lineNum), line });
+            utils::messageBox(MSG_CONFIG_INVALID_SYNTAX, MB_ICONERROR | MB_OK, { std::to_wstring(lineNum), utf8line });
             noErrors = false;
             continue;
         }
