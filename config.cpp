@@ -60,9 +60,9 @@ bool config::save(const bool exposeInternalKeys) {
     file << ";  _    _ _           _                 _____         _    _                _   _ _     _" << std::endl;
     file << "; | |  | (_)         | |               |_   _|       | |  | |              | | | (_)   | |" << std::endl;
     file << "; | |  | |_ _ __   __| | _____      _____| | __ _ ___| | _| |__   __ _ _ __| |_| |_  __| | ___ _ __" << std::endl;
-    file << "; | |/\\| | | '_ \\ / _` |/ _ \\ \\ /\\ / / __| |/ _` / __| |/ / '_ \\ / _` | '__|  _  | |/ _` |/ _ \\ '__|" << std::endl;
-    file << "; \\  /\\  / | | | | (_| | (_) \\ V  V /\\__ \\ | (_| \\__ \\   <| |_) | (_| | |  | | | | | (_| |  __/ |" << std::endl;
-    file << ";  \\/  \\/|_|_| |_|\\__,_|\\___/ \\_/\\_/ |___|_/\\__,_|___/_|\\_\\_.__/ \\__,_|_|  \\_| |_/_|\\__,_|\\___|_|" << std::endl;
+    file << R"(; | |/\| | | '_ \ / _` |/ _ \ \ /\ / / __| |/ _` / __| |/ / '_ \ / _` | '__|  _  | |/ _` |/ _ \ '__|)" << std::endl;
+    file << R"(; \  /\  / | | | | (_| | (_) \ V  V /\__ \ | (_| \__ \   <| |_) | (_| | |  | | | | | (_| |  __/ |)" << std::endl;
+    file << R"(;  \/  \/|_|_| |_|\__,_|\___/ \_/\_/ |___|_/\__,_|___/_|\_\_.__/ \__,_|_|  \_| |_/_|\__,_|\___|_|)" << std::endl;
     file << std::endl;
     file << "[General]" << std::endl;
     file << "Language = " << languageShortName << std::endl;
@@ -97,10 +97,21 @@ bool config::save(const bool exposeInternalKeys) {
     file << "Enabled = " << animationsEnabled << std::endl;
     file << "AnimationStepDelay = " << animationStepDelay << std::endl;
     file << "AnimationOpacityStep = " << animationOpacityStep << std::endl;
+    file << std::endl;
     file << "[Ignored Windows]" << std::endl;
     file << "; Setting this to false (0) could slow down the application with debug mode on" << std::endl;
     file << "AlwaysIgnoreWhenNotMaximized = " << alwaysIgnoreWhenNotMaximized << std::endl;
-    file << "; Available tags: process/p (text), title/t (text), class/c (text), focus/f (0 or 1), maximized/m (0 or 1), left (number), top (int), right (number), bottom (number), monitor/mon (number >= 0)" << std::endl;
+    file << "; Available tags: " << std::endl;
+    file << ";    process/p (text)" << std::endl;
+    file << ";    title/t (text)" << std::endl;
+    file << ";    class/c (text)" << std::endl;
+    file << ";    focus/f (0 or 1)" << std::endl;
+    file << ";    maximized/m (0 or 1)" << std::endl;
+    file << ";    left (number)" << std::endl;
+    file << ";    top (number)" << std::endl;
+    file << ";    right (number)" << std::endl;
+    file << ";    bottom (number)" << std::endl;
+    file << ";    monitor/mon (number >= 0)" << std::endl;
     file << "; Separator: |" << std::endl;
     file << ";" << std::endl;
     file << "; Ignore UWP container window and windows with empty titles" << std::endl;
@@ -256,15 +267,7 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             checkBoolValidation(formattedKey, value, animationsEnabled, animationsEnabled, noErrors);
         } else if (key == L"Taskbar Hover Animation.AnimationStepDelay") {
             if (checkForEmptyValueI(formattedKey, value, animationStepDelay, animationStepDelay, noErrors))
-                checkForInvalidIntegerValue(formattedKey, animationStepDelay, 1, 100, noErrors);
-        } else if (key == L"Taskbar Hover Animation.AnimationOpacityStep") {
-            if (checkForEmptyValueI(formattedKey, value, animationOpacityStep, animationOpacityStep, noErrors))
-                checkForInvalidIntegerValue(formattedKey, animationOpacityStep, 1, 255, noErrors);
-        } else if (key == L"Taskbar Hover Animation.Enabled") {
-            checkBoolValidation(formattedKey, value, animationsEnabled, animationsEnabled, noErrors);
-        } else if (key == L"Taskbar Hover Animation.AnimationStepDelay") {
-            if (checkForEmptyValueI(formattedKey, value, animationStepDelay, animationStepDelay, noErrors))
-                checkForInvalidIntegerValue(formattedKey, animationStepDelay, 1, 500, noErrors);
+                checkForInvalidIntegerValue(formattedKey, animationStepDelay, 1, 1000, noErrors);
         } else if (key == L"Taskbar Hover Animation.AnimationOpacityStep") {
             if (checkForEmptyValueI(formattedKey, value, animationOpacityStep, animationOpacityStep, noErrors))
                 checkForInvalidIntegerValue(formattedKey, animationOpacityStep, 1, 255, noErrors);
