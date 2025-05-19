@@ -14,14 +14,14 @@
 
 #pragma comment(lib, "Dwmapi.lib")
 
-#define WCP_BASE_COLOR            config::darkMode ? darkColorPalette [0] : lightColorPalette[0]
-#define WCP_FOREGROUND            config::darkMode ? darkColorPalette [1] : lightColorPalette[1]
-#define WCP_BACKGROUND            config::darkMode ? darkColorPalette [2] : lightColorPalette[2]
-#define WCP_BACKGROUND2           config::darkMode ? darkColorPalette [3] : lightColorPalette[3]
-#define WCP_BUTTON_BG             config::darkMode ? darkColorPalette [4] : lightColorPalette[4]
-#define WCP_BUTTON_BORDER         config::darkMode ? darkColorPalette [5] : lightColorPalette[5]
-#define WCP_BUTTON_CLICKED_BG     config::darkMode ? darkColorPalette [6] : lightColorPalette[6]
-#define WCP_SCROLLBAR_COLOR       config::darkMode ? darkColorPalette [7] : lightColorPalette[7]
+#define WCP_BASE_COLOR            config::darkMode ? darkColorPalette[0] : lightColorPalette[0]
+#define WCP_FOREGROUND            config::darkMode ? darkColorPalette[1] : lightColorPalette[1]
+#define WCP_BACKGROUND            config::darkMode ? darkColorPalette[2] : lightColorPalette[2]
+#define WCP_BACKGROUND2           config::darkMode ? darkColorPalette[3] : lightColorPalette[3]
+#define WCP_BUTTON_BG             config::darkMode ? darkColorPalette[4] : lightColorPalette[4]
+#define WCP_BUTTON_BORDER         config::darkMode ? darkColorPalette[5] : lightColorPalette[5]
+#define WCP_BUTTON_CLICKED_BG     config::darkMode ? darkColorPalette[6] : lightColorPalette[6]
+#define WCP_SCROLLBAR_COLOR       config::darkMode ? darkColorPalette[7] : lightColorPalette[7]
 
 #define WSC_BUTTON_DEFAULT_W      120
 #define WSC_BUTTON_DEFAULT_H      30
