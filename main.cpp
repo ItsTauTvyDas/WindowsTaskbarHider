@@ -7,7 +7,6 @@
 #include <windowsx.h>
 #include <iostream>
 #include <sstream>
-#include <thread>
 #include <numeric>
 #include "language.h"
 #include "monitors.h"
@@ -100,24 +99,6 @@ int windowWidth                = APP_WINDOW_MIN_WIDTH,
     g_tableRowHeight           = 30,
     g_lastUpdatedTimeTextWidth = 0;
 std::wstring g_lastTableUpdateTime = L"00:00:00.000";
-
-void taskbarLoop() {
-    bool called = false;
-    while (true) {
-        if (globals::isShuttingDown)
-            return;
-        if (!globals::taskbarLoopRunState) {
-            if (!called) {
-                taskbar::resetTaskbar();
-                called = true;
-            }
-            continue;
-        }
-        taskbar::updateTaskbarState();
-        Sleep(config::taskbarUpdateInterval);
-        called = false;
-    }
-}
 
 inline int getContentHeight() {
     // +1 for header row
@@ -1452,7 +1433,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
 
     monitors::indexMonitors();
     taskbar::findTaskbarHandles();
-    auto taskbarLoopThread = std::thread(taskbarLoop);
+    taskbar::initThread();
     taskbar_animation::initThread();
 
     // Hood global keyboard listener
@@ -1471,8 +1452,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     UnhookWinEvent(windowPreviewsEventHook);
 
     globals::isShuttingDown = true;
-    if (taskbarLoopThread.joinable())
-        taskbarLoopThread.join();
+    if (taskbar::updateThread.joinable())
+        taskbar::updateThread.join();
 
     if (taskbar_animation::animationThread.joinable())
         taskbar_animation::animationThread.join();

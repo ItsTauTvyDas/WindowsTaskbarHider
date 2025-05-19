@@ -3,6 +3,7 @@
 
 #include <dwmapi.h>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -52,7 +53,9 @@ public:
     static std::unordered_map<HMONITOR, HWND> taskbarHandles;
     static bool collectWindowsInfo;
     static bool forceToCollect;
+    static std::thread updateThread;
 
+    static void initThread();
     static void findTaskbarHandles();
     static void setTaskbarVisibility(HWND hwnd, bool visible, bool hoveredOver, bool causedByMaximizedWindow);
     static void resetTaskbar();

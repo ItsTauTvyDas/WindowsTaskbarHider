@@ -4,6 +4,8 @@
 #include <mutex>
 #include <windows.h>
 #include <ranges>
+#include <thread>
+
 #include "config.h"
 #include "globals.h"
 #include "monitors.h"
@@ -19,6 +21,32 @@ std::unordered_map<HMONITOR, bool> taskbar::taskbarForcedVisibilityStates;
 std::unordered_map<HMONITOR, HWND> taskbar::taskbarHandles;
 bool taskbar::collectWindowsInfo = false;
 bool taskbar::forceToCollect = false;
+std::thread taskbar::updateThread;
+
+void taskbarLoop() {
+    bool called = false;
+    while (true) {
+        if (globals::isShuttingDown)
+            return;
+        if (!globals::taskbarLoopRunState) {
+            if (!called) {
+                taskbar::resetTaskbar();
+                called = true;
+            }
+            continue;
+        }
+        taskbar::updateTaskbarState();
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(config::taskbarUpdateInterval));
+        called = false;
+    }
+}
+
+void taskbar::initThread() {
+    if (updateThread.joinable())
+        return;
+    updateThread = std::thread(taskbarLoop);
+}
 
 void taskbar::findTaskbarHandles() {
     std::lock_guard lock(taskbarMutex);
