@@ -32,7 +32,7 @@ int config::opacityWhenHoveredInternal;
 int config::languageCode = IDR_INI_LANG_EN;
 std::wstring config::languageShortName = L"en";
 
-bool config::animationsEnabled;
+bool config::animationsEnabled = true;
 int config::animationStepDelay = 3;
 int config::animationOpacityStep = 10;
 
@@ -202,10 +202,8 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             if (utils::fileExists(std::wstring(L"languages/language." + value + L".ini").c_str())) {
                 languageCode = IDR_INI_LANG_CUSTOM;
                 languageShortName = value;
-                if (languages.contains(value)) {
-                    languageCode = languages[value];
+                if (languages.contains(value))
                     utils::updateLanguageFile();
-                }
             } else {
 #endif
                 if (!languages.contains(value)) {
