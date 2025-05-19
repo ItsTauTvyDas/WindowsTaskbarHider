@@ -438,6 +438,8 @@ bool utils::processIniFileLine(const std::wstring &orgLine, std::wstring *prefix
 
 #if IS_PORTABLE == 0
 bool utils::updateLanguageFile() {
+    if (config::languageCode == IDR_INI_LANG_CUSTOM)
+        return true;
     std::map<int, INILine> internalMessages = {};
     loadInternalLanguageStringsIntoMap(internalMessages);
 
@@ -480,16 +482,45 @@ bool utils::updateLanguageFile() {
 }
 
 bool utils::loadLanguageFromName(const std::wstring &shortName, std::wstringstream &wss) {
-    std::wifstream wif(std::wstring(L"languages/language." + shortName + L".ini").c_str());
-    if (!wif) {
-        // Fallback to default language
-        config::languageShortName = L"en";
-        config::languageCode = IDR_INI_LANG_EN;
-        messageBoxRT(L"Failed to open/read languages/language." + shortName + L".ini file, using default language instead.", MB_ICONERROR | MB_OK);
-        return false;
+    if (FILE* f = _wfopen(std::wstring(L"languages/language." + shortName + L".ini").c_str(), L"rb")) {
+        if (fseek(f, 0, SEEK_END) == 0) {
+            if (const long size = ftell(f); size >= 0) {
+                rewind(f);
+                std::vector<char> buffer(static_cast<size_t>(size));
+                if (fread(buffer.data(), 1, buffer.size(), f) == buffer.size()) {
+                    // UTF-8 -> UTF16 (wchar_t)
+                    const int wideLen = MultiByteToWideChar(
+                        CP_UTF8, 0,
+                        buffer.data(), static_cast<int>(buffer.size()),
+                        nullptr, 0
+                    );
+                    if (wideLen > 0) {
+                        std::wstring wContent(wideLen, L'\0');
+                        MultiByteToWideChar(
+                            CP_UTF8, 0,
+                            buffer.data(), static_cast<int>(buffer.size()),
+                            &wContent[0], wideLen
+                        );
+                        // Strip UTF16 BOM
+                        if (!wContent.empty() && wContent[0] == 0xFEFF)
+                            wContent.erase(0, 1);
+                        wss.str(L"");
+                        wss.clear();
+                        wss << wContent;
+                        fclose(f);
+                        return true;
+                    }
+                }
+            }
+        }
+        fclose(f);
     }
-    wss << wif.rdbuf();
-    return true;
+
+    config::languageShortName = L"en";
+    config::languageCode = IDR_INI_LANG_EN;
+    // Can't be bothered to load internal messages again
+    messageBoxRT(L"Failed to open/read languages/language." + shortName + L".ini file, using default language instead.", MB_ICONERROR | MB_OK);
+    return false;
 }
 
 void utils::exportLanguageFiles() {
@@ -521,15 +552,14 @@ void utils::exportLanguageFiles() {
             continue;
         }
 
-        const int wCharsCount = MultiByteToWideChar(CP_UTF8, 0, content, dataSize, nullptr, 0);
-        if (wCharsCount <= 0) {
+        static constexpr unsigned char UTF8_BOM[] = { 0xEF, 0xBB, 0xBF };
+        if (FILE* out = _wfopen(fileName.c_str(), L"wb"); !out) {
             success = false;
-            continue;
+        } else {
+            fwrite(UTF8_BOM, sizeof(UTF8_BOM), 1, out);
+            fwrite(content, dataSize, 1, out);
+            fclose(out);
         }
-
-        std::wstring languageContent(wCharsCount, L'\0');
-        MultiByteToWideChar(CP_UTF8, 0, content, dataSize, &languageContent[0], wCharsCount);
-        writeUtf8File(fileName, languageContent, wCharsCount);
     }
     if (!success)
         messageBox(MSG_FAILED_TO_EXPORT_LANGUAGES, MB_ICONERROR | MB_OK);
@@ -732,60 +762,4 @@ std::wstring utils::utf8ToWide(const std::string& string) {
         throw std::runtime_error("conversion");
 
     return result;
-}
-
-std::string utils::wideToUtf8(const std::wstring& wString) {
-    const int len = WideCharToMultiByte(
-        CP_UTF8,
-        0,
-        wString.data(), static_cast<int>(wString.size()),
-        nullptr, 0,
-        nullptr, nullptr
-    );
-
-    if (len <= 0)
-        return {};
-
-    std::string out(len, '\0');
-    WideCharToMultiByte(
-        CP_UTF8,
-        0,
-        wString.data(), static_cast<int>(wString.size()),
-        &out[0], len,
-        nullptr, nullptr
-    );
-    return out;
-}
-
-bool utils::writeUtf8File(const std::wstring &fileName, const std::wstring &content, const int wCharsCount) {
-    const int utf8Len = WideCharToMultiByte(
-        CP_UTF8, 0,
-        content.data(), wCharsCount,
-        nullptr, 0,
-        nullptr, nullptr
-    );
-
-    if (utf8Len <= 0)
-        return false;
-
-    std::string utf8Data(utf8Len, '\0');
-    WideCharToMultiByte(
-        CP_UTF8, 0,
-        content.data(), wCharsCount,
-        utf8Data.data(), utf8Len,
-        nullptr, nullptr
-    );
-
-    std::ofstream out(
-        fileName.c_str(),
-        std::ios::out | std::ios::trunc | std::ios::binary
-    );
-
-    if (!out.is_open())
-        return false;
-
-    static constexpr unsigned char bom[] = { 0xEF, 0xBB, 0xBF };
-    out.write(reinterpret_cast<const char*>(bom), sizeof(bom));
-    out.write(utf8Data.data(), utf8Data.size());
-    return true;
 }
