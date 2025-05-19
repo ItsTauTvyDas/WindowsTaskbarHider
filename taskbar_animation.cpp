@@ -12,7 +12,7 @@ std::unordered_map<HWND, int> taskbar_animation::animatingState = {};
 std::thread taskbar_animation::animationThread;
 std::mutex animationMutex;
 
-void loop() {
+void animationLoop() {
     while (true) {
         {
             std::lock_guard lock(animationMutex);
@@ -54,7 +54,7 @@ void loop() {
 void taskbar_animation::initThread() {
     if (animationThread.joinable())
         return;
-    animationThread = std::thread(loop);
+    animationThread = std::thread(animationLoop);
 }
 
 bool taskbar_animation::isAnimating(HWND taskbar) {
