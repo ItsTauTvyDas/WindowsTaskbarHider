@@ -10,10 +10,10 @@ public:
     static std::wstring args;
     static HWND hWnd;
     static HINSTANCE hIns;
-    static bool noConfigFile;
-    static bool taskbarLoopRunState;
-    static bool sessionLocked;
-    static bool isShuttingDown;
+    static std::atomic<bool> noConfigFile;
+    static std::atomic<bool> taskbarLoopRunState;
+    static std::atomic<bool> sessionLocked;
+    static std::atomic<bool> isShuttingDown;
 };
 
 #endif //GLOBALS_H
