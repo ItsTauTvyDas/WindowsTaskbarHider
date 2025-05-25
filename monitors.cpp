@@ -3,11 +3,15 @@
 #include <algorithm>
 #include <vector>
 
+#include "taskbar.h"
+
 HMONITOR monitors::indexedMonitors[64];
 int monitors::monitorCount;
+std::mutex monitors::monitorsMutex;
 
 void monitors::indexMonitors() {
-    memset(indexedMonitors, 0, sizeof(monitors));
+    std::lock_guard lock(monitorsMutex);
+    memset(indexedMonitors, 0, sizeof(indexedMonitors));
     std::vector<MonitorRect> monitors;
     EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR hMonitor, HDC, LPRECT lpMonitorRect, LPARAM dwData) -> BOOL {
         reinterpret_cast<std::vector<MonitorRect>*>(dwData)->push_back({ hMonitor, *lpMonitorRect });
