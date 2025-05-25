@@ -3,7 +3,7 @@
 
 #include <mutex>
 #include <windows.h>
-#include <bits/std_thread.h>
+#include <thread>
 
 class taskbar_animation {
 public:
