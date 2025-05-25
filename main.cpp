@@ -100,9 +100,12 @@ int windowWidth                = APP_WINDOW_MIN_WIDTH,
     g_lastUpdatedTimeTextWidth = 0;
 std::wstring g_lastTableUpdateTime = L"00:00:00.000";
 
+std::vector<taskbar::WindowInfo> windowsCache;
+int windowsCacheSize = 0;
+
 inline int getContentHeight() {
     // +1 for header row
-    return (static_cast<int>(std::size(taskbar::windows)) + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET + (config::autoUpdate ? windowClientHeight : 0);
+    return (windowsCacheSize + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET + (config::autoUpdate ? windowClientHeight : 0);
 }
 
 inline int getContentWidth() {
@@ -369,7 +372,7 @@ inline void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
 
     // Draw horizontal lines
     for (int row = 0; row <= rows; row++) {
-        const bool detected = config::showAllWindows && row > 0 && row < rows ? taskbar::windows[row - 1].detected : false;
+        const bool detected = config::showAllWindows && row > 0 && row < rows ? windowsCache[row - 1].detected : false;
         hPen = CreatePen(PS_SOLID, 1, detected ? RGB(255, 0, 0) : WCP_FOREGROUND);
         hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
         int y = row * g_tableRowHeight + sy;
@@ -468,7 +471,7 @@ inline void g_calculateCurrentWidths(HDC hdc, const int rows) {
     for (auto row = 0; row < rows; row++) {
         taskbar::WindowInfo wInfo;
         if (row > 0)
-            wInfo = taskbar::windows[row - 1];
+            wInfo = windowsCache[row - 1];
         for (auto col = 0; col < W_GRID_MAX_COLUMNS; col++)
             if (const std::wstring value = row == 0 ? g_tableHeaders[col] : getWindowValue(wInfo, col); !value.empty()) {
                 int width = g_calculateTextWidth(hdc, value, g_hTableFont) + 2 * g_tableColumnXMargin;
@@ -493,7 +496,7 @@ inline void g_printDataToGrid(HDC hdc, const int sx, const int sy, const int row
         int x = sx;
         taskbar::WindowInfo wInfo;
         if (row > 0)
-            wInfo = taskbar::windows[row - 1];
+            wInfo = windowsCache[row - 1];
         for (auto col = 0; col < W_GRID_MAX_COLUMNS; col++) {
             constexpr int textLeftMargin = 10;
             std::wstring value;
@@ -525,7 +528,7 @@ inline void g_updateTable(HDC hdc, const bool onlyPaintGrid) {
         g_calculateDefaultWidths(hdc);
 
     const int y = WSC_GRID_Y - g_windowScrollYPos;
-    const int rows = static_cast<int>(std::size(taskbar::windows)) + 1; // +header
+    const int rows = windowsCacheSize + 1; // +header
 
     SelectObject(hdc, g_hTableFont);
     SetBkMode(hdc, TRANSPARENT);
@@ -759,7 +762,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             Shell_NotifyIcon(NIM_ADD, &nid);
 
             //Trigger table update
-            taskbar::collectWindowsInfo = true;
+            taskbar::collectWindowData(false);
             break;
         }
         case WM_SIZE:
@@ -787,7 +790,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 GetWindowRect(g_hInstallButton, &rect);
                 MoveWindow(g_hInstallButton, windowWidth - (rect.right - rect.left) - 20 - width, 10, rect.right - rect.left, rect.bottom - rect.top, TRUE);
 #endif
-
                 GetClientRect(hwnd, &rect);
                 windowClientHeight = rect.bottom - rect.top;
                 windowClientWidth = rect.right - rect.left;
@@ -990,9 +992,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_UPDATE_GRID_REQUEST:
         {
+            auto pWindows(reinterpret_cast<std::vector<taskbar::WindowInfo>*>(wParam));
+            if (!pWindows)
+                break;
             g_lastTableUpdateTime = utils::getFormattedTime();
             if (!IsWindowVisible(hwnd) || (config::autoUpdate && !focused && config::disableAutoUpdateWhenUnfocused))
                 break;
+            windowsCacheSize = static_cast<int>(lParam);
+            windowsCache = std::move(*pWindows);
             g_redrawLowerArea(hwnd);
             updateScrollBarsInfo();
             break;
@@ -1041,8 +1048,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 case ID_BUTTON_UPDATE:
                 {
                     taskbar::clearForcedVisibilityStates();
-                    taskbar::collectWindowsInfo = true;
-                    taskbar::forceToCollect = true;
+                    taskbar::collectWindowData(true);
                     break;
                 }
 #if IS_PORTABLE
@@ -1097,7 +1103,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     minimizedNotifShowed = false;
                     updateLanguage(hwnd);
                     g_redrawWindow(hwnd);
-                    taskbar::resetTaskbar();
+                    // taskbar::resetTaskbar();
                     taskbar::clearErrorState();
                     break;
                 }
@@ -1298,10 +1304,12 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
                 utils::getProcessInfo(hwnd, proc);
                 if (proc == L"StartMenuExperienceHost.exe" || proc == L"SearchApp.exe") {
                     wInfo.hwnd = hwnd;
-                    wInfo.updateMonitor();
+                    wInfo.updateMonitorUnsafe();
                     DWORD cloaked = 0;
-                    if (const HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr))
+                    if (const HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr)) {
+                        std::lock_guard lock(taskbar::taskbarMutex);
                         taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = cloaked == 0; // 0 when opened
+                    }
                 }
             }
             break;
@@ -1311,11 +1319,12 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
             utils::getProcessInfo(hwnd, proc, true);
             if (std::ranges::find(config::I_ExceptionalWindows, proc + L"=" + className) != config::I_ExceptionalWindows.end()) {
                 wInfo.hwnd = hwnd;
-                wInfo.updateMonitor();
+                wInfo.updateMonitorUnsafe();
+                std::lock_guard lock(taskbar::taskbarMutex);
                 taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = event == EVENT_OBJECT_SHOW;
             } else if (LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE); style & WS_POPUP || className == L"#32768") {
                 // #32768 class is mostly used for menus
-                wInfo.hwnd = hwnd; wInfo.updateMonitor();
+                wInfo.hwnd = hwnd; wInfo.updateMonitorUnsafe();
                 HWND taskbar = taskbar::taskbarHandles[wInfo.hMonitor];
                 if (hwnd == taskbar) break;
                 RECT taskbarRect; GetWindowRect(taskbar, &taskbarRect); // Get taskbar location
@@ -1323,8 +1332,10 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
                 if (taskbarRect.left < windowRect.right &&
                     taskbarRect.right > windowRect.left &&
                     taskbarRect.top < windowRect.bottom &&
-                    taskbarRect.bottom > windowRect.top) // Check if two rects overlaps each other
+                    taskbarRect.bottom > windowRect.top) { // Check if two rects overlaps each other
+                    std::lock_guard lock(taskbar::taskbarMutex);
                     taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = event == EVENT_OBJECT_SHOW;
+                }
             }
         }
         default: break;
@@ -1350,7 +1361,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     if (!globals::noConfigFile)
         config::load();
 #if IS_PORTABLE == 0
-    // Export language files
     utils::exportLanguageFiles();
 #endif
 
