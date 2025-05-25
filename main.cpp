@@ -442,7 +442,7 @@ std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
         case 5: value = utils::message(wInfo.maximized == 1 ? MSG_WND_DEBUG_TABLE_STATE_MAXIMIZED : MSG_WND_DEBUG_TABLE_STATE_MINIMIZED); break; // State
         case 6: { // Monitor
             for (auto i = 0; i < monitors::monitorCount; i++) {
-                if (wInfo.hMonitor == monitors::indexedMonitors[i]) {
+                if (wInfo.hMonitor == monitors::monitor(i)) {
                     value = std::to_wstring(i);
                     break;
                 }
@@ -1443,6 +1443,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
 
     monitors::indexMonitors();
     taskbar::findTaskbarHandles();
+
     taskbar::initThread();
     taskbar_animation::initThread();
 

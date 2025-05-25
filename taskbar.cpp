@@ -120,7 +120,7 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                 if (std::wstring(wInfo.wndClass) == value)
                     succeededTags++;
             } else if (key == L"monitor" || key == L"mon") {
-                if (const int index = std::stoi(value); index >= 0 && index < sizeof(monitors::indexedMonitors) && monitors::indexedMonitors[index] == wInfo.hMonitor)
+                if (const int index = std::stoi(value); index >= 0 && index < monitors::monitorCount && monitors::monitor(index) == wInfo.hMonitor)
                     succeededTags++;
             } else if (key == L"maximized" || key == L"m") {
                 if (wp.showCmd == SW_MAXIMIZE == stoi(value))
@@ -303,8 +303,8 @@ void taskbar::setTaskbarVisibility(HWND taskbar, bool visible, bool hoveredOver,
 void taskbar::resetTaskbar() {
     // std::lock_guard lock(taskbarMutex);
     for (HWND hwnd : taskbarHandles | std::views::values) {
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
         SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
         ShowWindowAsync(hwnd, SW_SHOW);
     }
 }
@@ -313,11 +313,10 @@ void taskbar::updateTaskbarState() {
     std::unordered_map<HMONITOR, HWND> _taskbarHandles;
     {
         std::unique_lock taskbarLock(taskbarMutex);
-        std::unique_lock monitorsLock(monitors::monitorsMutex);
         _taskbarHandles = taskbarHandles;
 
         for (auto i = 0; i < monitors::monitorCount; i++) {
-            const auto hMonitor = monitors::indexedMonitors[i];
+            const auto hMonitor = monitors::monitor(i);
             if (const auto state = taskbarForcedVisibilityStates.find(hMonitor); state != taskbarForcedVisibilityStates.end()) {
                 if (state->second) {
                     taskbarMutex.unlock();
@@ -354,6 +353,6 @@ void taskbar::checkForAutoCollect() {
 void taskbar::clearForcedVisibilityStates() {
     std::lock_guard lock1(taskbarMutex);
     std::lock_guard lock2(monitors::monitorsMutex);
-    for (auto monitor : monitors::indexedMonitors)
-        taskbarForcedVisibilityStates[monitor] = false;
+    for (int i = 0; i < monitors::monitorCount; i++)
+        taskbarForcedVisibilityStates[monitors::monitor(i)] = false;
 }

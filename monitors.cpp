@@ -5,13 +5,21 @@
 
 #include "taskbar.h"
 
-HMONITOR monitors::indexedMonitors[64];
-int monitors::monitorCount;
+HMONITOR indexedMonitorsUnsafe[64];
+
+std::atomic<int> monitors::monitorCount;
 std::mutex monitors::monitorsMutex;
+
+HMONITOR monitors::monitor(const int i) {
+    std::lock_guard lock(monitorsMutex);
+    if (i < monitorCount && i >= 0)
+        return indexedMonitorsUnsafe[i];
+    return nullptr;
+}
 
 void monitors::indexMonitors() {
     std::lock_guard lock(monitorsMutex);
-    memset(indexedMonitors, 0, sizeof(indexedMonitors));
+    memset(indexedMonitorsUnsafe, 0, sizeof(indexedMonitorsUnsafe));
     std::vector<MonitorRect> monitors;
     EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR hMonitor, HDC, LPRECT lpMonitorRect, LPARAM dwData) -> BOOL {
         reinterpret_cast<std::vector<MonitorRect>*>(dwData)->push_back({ hMonitor, *lpMonitorRect });
@@ -21,6 +29,6 @@ void monitors::indexMonitors() {
         return a.rect.left < b.rect.left;
     });
     for(auto i = 0; i < monitors.size(); i++)
-        indexedMonitors[i] = monitors[i].hMonitor;
+        indexedMonitorsUnsafe[i] = monitors[i].hMonitor;
     monitorCount = static_cast<int>(std::size(monitors));
 }
