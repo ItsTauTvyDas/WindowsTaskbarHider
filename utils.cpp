@@ -15,14 +15,15 @@
 #include <sstream>
 #include <tlhelp32.h>
 #include "globals.h"
-#include <sys/stat.h>
 #include <unordered_map>
 #include <mutex>
 #include <psapi.h>
-#include <ranges>
-#include <bits/ranges_algo.h>
 #include "language.h"
 #include <strsafe.h>
+#include <algorithm>
+#include <ranges>
+#include <vector>
+#include <filesystem>
 
 bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -274,8 +275,15 @@ bool utils::showTrayNotification(const std::wstring &message)
 }
 
 bool utils::fileExists(const wchar_t *path, const bool dir) {
-    struct _stat buffer = {};
-    return _wstat(path, &buffer) == 0 && (dir ? S_ISDIR(buffer.st_mode) : S_ISREG(buffer.st_mode));
+    std::error_code errC;
+    const std::filesystem::path fsPath(path);
+    return dir ? is_directory(fsPath, errC) : is_regular_file(fsPath, errC);
+}
+
+bool mkdir(const wchar_t* path) {
+    std::error_code errC;
+    std::filesystem::create_directory(path, errC);
+    return !errC || errC == std::errc::file_exists;
 }
 
 void utils::toUnicode(const LPCCH string, LPWSTR str) {
@@ -537,7 +545,7 @@ bool utils::loadLanguageFromName(const std::wstring &shortName, std::wstringstre
 }
 
 void utils::exportLanguageFiles() {
-    mkdir("languages");
+    mkdir(L"languages");
     bool success = true;
     for (const std::unordered_map<std::wstring, int> languages = APP_DEFAULT_LANGUAGES; const auto &[language, languageCode]: languages) {
         const std::wstring fileName = L"languages/language." + language + L".ini";
