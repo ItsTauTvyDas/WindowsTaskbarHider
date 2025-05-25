@@ -1,6 +1,7 @@
 #ifndef MONITORS_H
 #define MONITORS_H
 
+#include <mutex>
 #include <windows.h>
 
 class monitors {
@@ -12,6 +13,7 @@ public:
 
     static HMONITOR indexedMonitors[64];
     static int monitorCount;
+    static std::mutex monitorsMutex;
 
     static void indexMonitors();
 };
