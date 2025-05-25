@@ -447,6 +447,7 @@ std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
                     break;
                 }
             }
+            value = L"?";
             break;
         }
         case 7: { // Focused
