@@ -44,6 +44,7 @@ public:
     static void toUnicode(LPCCH string, LPWSTR str);
     static bool processIniFileLine(const std::wstring &orgLine, std::wstring *prefix, std::wstring &key, std::wstring &value);
     static std::wstring utf8ToWide(const std::string& str);
+    static bool mouseInWindow(HWND window);
 private:
 #if IS_PORTABLE == 0
     struct INILine {

@@ -26,24 +26,29 @@
 
 bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnap == INVALID_HANDLE_VALUE) return false;
+    if (hSnap == INVALID_HANDLE_VALUE)
+        return false;
 
     PROCESSENTRY32 pe;
     pe.dwSize = sizeof(PROCESSENTRY32);
-    bool success = false;
 
-    if (Process32First(hSnap, &pe))
-        do {
-            if (currentPid == pe.th32ProcessID)
-                continue;
-            if (wcschr(pe.szExeFile, *processName) != nullptr) {
-                if (HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID)) {
-                    TerminateProcess(hProcess, 0);
-                    CloseHandle(hProcess);
-                    success = true;
-                }
-            }
-        } while (Process32Next(hSnap, &pe));
+    if (Process32First(hSnap, &pe)) {
+        CloseHandle(hSnap);
+        return false;
+    }
+
+    bool success = false;
+    do {
+        if (currentPid == pe.th32ProcessID)
+            continue;
+        if (_wcsicmp(pe.szExeFile, processName) != 0)
+            continue;
+        if (HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID)) {
+            TerminateProcess(hProcess, 0);
+            CloseHandle(hProcess);
+            success = true;
+        }
+    } while (Process32Next(hSnap, &pe));
     CloseHandle(hSnap);
     return success;
 }
@@ -53,7 +58,7 @@ void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName, const bool l
     GetWindowThreadProcessId(hwnd, &pid);
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (!hProcess) {
-        processExeName = L"#_unknown";
+        processExeName = L"#_unknown(0)";
         return;
     }
 
@@ -61,13 +66,13 @@ void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName, const bool l
     if (GetModuleBaseNameW(hProcess, nullptr, processName, MAX_PATH) == 0)
     {
         CloseHandle(hProcess);
-        processExeName = L"#_unknown";
+        processExeName = L"#_unknown(1)";
         return;
     }
     CloseHandle(hProcess);
     processExeName = std::wstring(processName);
     if (lowercase)
-        std::transform(processExeName.begin(), processExeName.end(), processExeName.begin(), tolower);
+        std::ranges::transform(processExeName, processExeName.begin(), tolower);
 }
 
 bool utils::processArguments(const int argc, const LPWSTR *argv, LPWSTR commandLine) {
@@ -75,6 +80,7 @@ bool utils::processArguments(const int argc, const LPWSTR *argv, LPWSTR commandL
         messageBox(MSG_ARGS_PARSE_FAILED, MB_ICONERROR | MB_OK, { std::wstring(commandLine) });
         return false;
     }
+
     const auto processExeName = std::wstring(argv[0]);
     globals::exe = processExeName.substr(processExeName.find_last_of(L"/\\") + 1);
     if (argc < 2) return true;
@@ -385,6 +391,13 @@ bool utils::mouseInRect(const RECT *rect, const int vKey) {
     return PtInRect(rect, pt) && GetAsyncKeyState(vKey) & KF_UP;
 }
 
+bool utils::mouseInWindow(HWND window) {
+    POINT cursorPos;
+    RECT windowRect;
+    GetCursorPos(&cursorPos);
+    GetWindowRect(window, &windowRect);
+    return PtInRect(&windowRect, cursorPos);
+}
 
 std::wstring utils::getFormattedTime() {
     SYSTEMTIME st;
@@ -597,10 +610,10 @@ void utils::mapIniContent(std::map<int, INILine> &map, std::wistream &stream) {
 #endif
 
 void utils::loadIfNeededAndGetCachedLanguageString(const unsigned int mType, std::wstring *string) {
+    static std::mutex mutex;
     static std::unordered_map<unsigned int, std::wstring> cachedMessages;
+    std::lock_guard lock(mutex); // Thread safety
     if (cachedMessages.empty() || mType == 0) {
-        static std::mutex mutex;
-        std::lock_guard lock(mutex); // Thread safety
         cachedMessages.clear(); // Clear cached messages
         std::wstringstream input;
 #if IS_PORTABLE == 0
@@ -645,11 +658,10 @@ void utils::loadIfNeededAndGetCachedLanguageString(const unsigned int mType, std
             }
         }
     }
-    if (!string) return;
-    if (cachedMessages.contains(mType))
-        *string = cachedMessages[mType];
-    else
-        *string = L"<untranslated>";
+    if (string) {
+        const auto it = cachedMessages.find(mType);
+        *string = it != cachedMessages.end() ? it->second : L"<untranslated>";
+    }
 }
 
 // Format raw string
@@ -763,3 +775,4 @@ std::wstring utils::utf8ToWide(const std::string& string) {
 
     return result;
 }
+
