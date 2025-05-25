@@ -13,15 +13,15 @@
 #include "taskbar_animation.h"
 #include "utils.h"
 
-std::mutex taskbarMutex;
-bool errorState = false;
+std::atomic<bool> errorState;
+std::atomic<bool> collectWindowsInfo;
+std::atomic<bool> ignorePreviousWindowsCheck;
 
-std::vector<taskbar::WindowInfo> taskbar::windows;
 std::unordered_map<HMONITOR, bool> taskbar::taskbarForcedVisibilityStates;
 std::unordered_map<HMONITOR, HWND> taskbar::taskbarHandles;
-bool taskbar::collectWindowsInfo = false;
-bool taskbar::forceToCollect = false;
+
 std::thread taskbar::updateThread;
+std::mutex taskbar::taskbarMutex;
 
 void taskbarLoop() {
     bool called = false;
@@ -36,7 +36,6 @@ void taskbarLoop() {
             continue;
         }
         taskbar::updateTaskbarState();
-
         std::this_thread::sleep_for(std::chrono::milliseconds(config::taskbarUpdateInterval));
         called = false;
     }
@@ -48,9 +47,16 @@ void taskbar::initThread() {
     updateThread = std::thread(taskbarLoop);
 }
 
+void taskbar::collectWindowData(const bool force) {
+    collectWindowsInfo = true;
+    ignorePreviousWindowsCheck = force;
+}
+
 void taskbar::findTaskbarHandles() {
-    std::lock_guard lock(taskbarMutex);
-    taskbarHandles.clear();
+    {
+        std::lock_guard lock(taskbarMutex);
+        taskbarHandles.clear();
+    }
     EnumWindows([](HWND hwnd, const LPARAM) -> BOOL {
         std::wstring className(256, L'\0');
         if (const int len = GetClassNameW(hwnd, className.data(), static_cast<int>(className.size())); len > 0) {
@@ -61,7 +67,10 @@ void taskbar::findTaskbarHandles() {
                 return TRUE;
             if (className.size() >= suffix.size() && className.compare(className.size() - suffix.size(), suffix.size(), suffix) == 0) {
                 WindowInfo wInfo { hwnd };
-                wInfo.updateMonitor();
+                wInfo.updateMonitorUnsafe();
+                const LONG_PTR style = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+                SetWindowLongPtr(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED);
+                std::lock_guard lock(taskbarMutex);
                 taskbarHandles[wInfo.hMonitor] = hwnd;
             }
         }
@@ -150,7 +159,7 @@ taskbar::WindowInfo taskbar::WindowInfo::reset() const {
     return { hwnd, hMonitor };
 }
 
-void taskbar::WindowInfo::updateMonitor() {
+void taskbar::WindowInfo::updateMonitorUnsafe() {
     hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
 }
 
@@ -163,9 +172,10 @@ void taskbar::WindowInfo::updateValues(HWND hwnd) {
     GetWindowRect(hwnd, &rect); // Rect
 }
 
-std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows(bool &collectWindowsInfo, bool &ignorePreviousWindowsCheck) {
+std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
     checkForAutoCollect();
     static std::vector<WindowInfo> previousWindows;
+    static std::vector<WindowInfo> windows;
 
     if (collectWindowsInfo)
         windows.clear();
@@ -193,7 +203,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
                     return TRUE;
             }
             wInfo.hwnd = hwnd;
-            wInfo.updateMonitor();
+            wInfo.updateMonitorUnsafe();
             if (const auto taskbar = taskbarHandles.find(wInfo.hMonitor); taskbar != taskbarHandles.end() && taskbarHandles[wInfo.hMonitor] == hwnd)
                 return TRUE;
             wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
@@ -227,8 +237,10 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
             PostMessage(globals::hWnd, WM_TASKBAR_THREAD_ERROR, 0, reinterpret_cast<LPARAM>(new std::string(ex.what())));
         errorState = true;
     }
+
     if (previousWindows != windows || ignorePreviousWindowsCheck) {
-        PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, 0, 0);
+        auto windowsCopy = new std::vector(windows);
+        PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, reinterpret_cast<WPARAM>(windowsCopy), static_cast<LPARAM>(windows.size()));
         previousWindows = windows;
         ignorePreviousWindowsCheck = false;
     }
@@ -242,8 +254,12 @@ void taskbar::clearErrorState() {
 
 bool taskbar::isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos) {
     GetCursorPos(&cursorPos);
-    std::lock_guard lock(taskbarMutex);
-    for (const auto &taskbar : taskbarHandles | std::views::values) {
+    std::unordered_map<HMONITOR, HWND> _taskbarHandles;
+    {
+        std::lock_guard lock(taskbarMutex);
+        _taskbarHandles = taskbarHandles;
+    }
+    for (const auto &taskbar : _taskbarHandles | std::views::values) {
         RECT taskbarRect;
         GetWindowRect(taskbar, &taskbarRect);
         if (PtInRect(&taskbarRect, cursorPos)) {
@@ -255,7 +271,6 @@ bool taskbar::isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos) {
 }
 
 void taskbar::setTaskbarVisibility(HWND taskbar, bool visible, bool hoveredOver, const bool causedByMaximizedWindow) {
-    const LONG_PTR style = GetWindowLongPtr(taskbar, GWL_EXSTYLE);
     // Force taskbar to be visible when it's paused.
     // Since findAllMaximizedWindows() can take some time to process, while it's being processed, user could pause it or switch sessions,
     // so in any case, make it visible
@@ -268,11 +283,10 @@ void taskbar::setTaskbarVisibility(HWND taskbar, bool visible, bool hoveredOver,
         const int opacity = hoveredOver ? config::opacityWhenHoveredInternal : config::opacityWhenShownInternal;
         ShowWindow(taskbar, SW_SHOW);
 
-        if (hoveredOver && config::animationsEnabled) {
+        if (/*hoveredOver && */config::animationsEnabled) {
             taskbar_animation::animate(taskbar, causedByMaximizedWindow);
             return;
         }
-        SetWindowLongPtr(taskbar, GWL_EXSTYLE, opacity == 0 ? style & ~WS_EX_LAYERED : style | WS_EX_LAYERED);
         SetLayeredWindowAttributes(taskbar, 0, opacity, LWA_ALPHA);
         ShowWindow(taskbar, SW_SHOW);
     } else {
@@ -280,7 +294,6 @@ void taskbar::setTaskbarVisibility(HWND taskbar, bool visible, bool hoveredOver,
             taskbar_animation::animate(taskbar, causedByMaximizedWindow);
             return;
         }
-        SetWindowLongPtr(taskbar, GWL_EXSTYLE, style | WS_EX_LAYERED);
         SetLayeredWindowAttributes(taskbar, 0, config::opacityWhenHiddenInternal, LWA_ALPHA);
         if (config::opacityWhenHiddenInternal == 0)
             ShowWindow(taskbar, SW_HIDE);
@@ -288,7 +301,7 @@ void taskbar::setTaskbarVisibility(HWND taskbar, bool visible, bool hoveredOver,
 }
 
 void taskbar::resetTaskbar() {
-    std::lock_guard lock(taskbarMutex);
+    // std::lock_guard lock(taskbarMutex);
     for (HWND hwnd : taskbarHandles | std::views::values) {
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
         SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
@@ -297,23 +310,31 @@ void taskbar::resetTaskbar() {
 }
 
 void taskbar::updateTaskbarState() {
-    HWND hoveredTaskbar;
-    for (auto i = 0; i < monitors::monitorCount; i++) {
-        const auto hMonitor = monitors::indexedMonitors[i];
-        if (const auto state = taskbarForcedVisibilityStates.find(hMonitor); state != taskbarForcedVisibilityStates.end()) {
-            if (state->second) {
-                setTaskbarVisibility(taskbarHandles[hMonitor], true, false, true);
-                return;
+    std::unordered_map<HMONITOR, HWND> _taskbarHandles;
+    {
+        std::unique_lock taskbarLock(taskbarMutex);
+        std::unique_lock monitorsLock(monitors::monitorsMutex);
+        _taskbarHandles = taskbarHandles;
+
+        for (auto i = 0; i < monitors::monitorCount; i++) {
+            const auto hMonitor = monitors::indexedMonitors[i];
+            if (const auto state = taskbarForcedVisibilityStates.find(hMonitor); state != taskbarForcedVisibilityStates.end()) {
+                if (state->second) {
+                    taskbarMutex.unlock();
+                    monitors::monitorsMutex.unlock();
+                    setTaskbarVisibility(_taskbarHandles[hMonitor], true, false, true);
+                    return;
+                }
             }
         }
     }
+    HWND hoveredTaskbar;
     if (POINT cursorPos; isCursorOverTaskbar(hoveredTaskbar, cursorPos)) {
         setTaskbarVisibility(hoveredTaskbar, true, true, false);
         return;
     }
-    const auto windows = findAllMaximizedWindows(collectWindowsInfo, forceToCollect);
-    std::lock_guard lock(taskbarMutex);
-    for (auto &[hMonitor, taskbar] : taskbarHandles) {
+    const auto windows = findAllMaximizedWindows();
+    for (auto &[hMonitor, taskbar] : _taskbarHandles) {
         const bool contains = windows.contains(hMonitor);
         setTaskbarVisibility(taskbar, contains, false, contains);
     }
@@ -331,6 +352,8 @@ void taskbar::checkForAutoCollect() {
 }
 
 void taskbar::clearForcedVisibilityStates() {
+    std::lock_guard lock1(taskbarMutex);
+    std::lock_guard lock2(monitors::monitorsMutex);
     for (auto monitor : monitors::indexedMonitors)
         taskbarForcedVisibilityStates[monitor] = false;
 }

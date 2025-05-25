@@ -5,7 +5,6 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
-#include <vector>
 
 class taskbar {
 public:
@@ -25,7 +24,7 @@ public:
         std::wstring procFilename;
 
         [[nodiscard]] WindowInfo reset() const;
-        void updateMonitor();
+        void updateMonitorUnsafe();
         void updateValues(HWND hwnd);
 
         bool operator==(const WindowInfo& o) const {
@@ -48,11 +47,9 @@ public:
         }
     };
 
-    static std::vector<WindowInfo> windows;
+    static std::mutex taskbarMutex;
     static std::unordered_map<HMONITOR, bool> taskbarForcedVisibilityStates;
     static std::unordered_map<HMONITOR, HWND> taskbarHandles;
-    static bool collectWindowsInfo;
-    static bool forceToCollect;
     static std::thread updateThread;
 
     static void initThread();
@@ -62,6 +59,7 @@ public:
     static void updateTaskbarState();
     static void clearErrorState();
     static void clearForcedVisibilityStates();
+    static void collectWindowData(bool force);
 
 private:
     struct EnumWindowParam {
@@ -70,7 +68,7 @@ private:
         bool ignorePreviousWindowsCheck;
     };
 
-    static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows(bool &collectWindowsInfo, bool &ignorePreviousWindowsCheck);
+    static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows();
     static bool isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos);
     static void checkForAutoCollect();
 };
