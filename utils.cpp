@@ -55,25 +55,41 @@ bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
 }
 
 void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName, const bool lowercase) {
-    DWORD pid;
+    DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (pid == 0) {
+        processExeName = L"#_unknown(?)";
+        return;
+    }
+
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (!hProcess) {
         processExeName = L"#_unknown(0)";
         return;
     }
 
-    wchar_t processName[MAX_PATH] = {};
-    if (GetModuleBaseNameW(hProcess, nullptr, processName, MAX_PATH) == 0)
-    {
+    HMODULE hMod;
+    DWORD cbNeeded;
+    if (!EnumProcessModules(hProcess, &hMod, sizeof(HMODULE), &cbNeeded)) {
         CloseHandle(hProcess);
         processExeName = L"#_unknown(1)";
         return;
     }
+
+    wchar_t processName[MAX_PATH] = {};
+    if (GetModuleBaseNameW(hProcess, hMod, processName, MAX_PATH) == 0)
+    {
+        CloseHandle(hProcess);
+        processExeName = L"#_unknown(2)";
+        return;
+    }
+
     CloseHandle(hProcess);
     processExeName = std::wstring(processName);
     if (lowercase)
-        std::ranges::transform(processExeName, processExeName.begin(), tolower);
+        std::ranges::transform(processExeName,processExeName.begin(),[](const wchar_t c) {
+            return std::towlower(c);
+        });
 }
 
 bool utils::processArguments(const int argc, const LPWSTR *argv, LPWSTR commandLine) {
