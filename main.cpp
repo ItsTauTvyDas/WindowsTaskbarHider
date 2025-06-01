@@ -441,13 +441,13 @@ std::wstring getWindowValue(const taskbar::WindowInfo &wInfo, const int col) {
         }
         case 5: value = utils::message(wInfo.maximized == 1 ? MSG_WND_DEBUG_TABLE_STATE_MAXIMIZED : MSG_WND_DEBUG_TABLE_STATE_MINIMIZED); break; // State
         case 6: { // Monitor
+            value = L"?";
             for (auto i = 0; i < monitors::monitorCount; i++) {
                 if (wInfo.hMonitor == monitors::monitor(i)) {
                     value = std::to_wstring(i);
                     break;
                 }
             }
-            value = L"?";
             break;
         }
         case 7: { // Focused
@@ -679,10 +679,14 @@ inline void resizeChildWindows(HWND hwnd) {
     DeleteObject(hdc);
 }
 
-bool minimizedNotifShowed = false;
+inline void update() {
+    taskbar::clearForcedVisibilityStates();
+    taskbar::collectWindowData(true);
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
     static NOTIFYICONDATA nid = {};
+    static bool minimizedNotifShowed = false;
     int *scrollPosition;
 
     switch (uMsg) {
@@ -761,9 +765,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
 
             // Add icon
             Shell_NotifyIcon(NIM_ADD, &nid);
-
-            //Trigger table update
-            taskbar::collectWindowData(false);
             break;
         }
         case WM_SIZE:
@@ -994,11 +995,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_UPDATE_GRID_REQUEST:
         {
             auto pWindows(reinterpret_cast<std::vector<taskbar::WindowInfo>*>(wParam));
-            if (!pWindows)
+            if (!pWindows || !IsWindowVisible(hwnd) || (config::autoUpdate && !focused && config::disableAutoUpdateWhenUnfocused))
                 break;
             g_lastTableUpdateTime = utils::getFormattedTime();
-            if (!IsWindowVisible(hwnd) || (config::autoUpdate && !focused && config::disableAutoUpdateWhenUnfocused))
-                break;
             windowsCacheSize = static_cast<int>(lParam);
             windowsCache = std::move(*pWindows);
             g_redrawLowerArea(hwnd);
@@ -1007,7 +1006,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_WTSSESSION_CHANGE: {
             if (wParam == WTS_SESSION_LOCK) {
-                // Stop taskbar loop when user locks the session
+                // Pause taskbar loop when user locks the session
                 globals::taskbarLoopRunState = false;
                 globals::sessionLocked = true;
             } else if (wParam == WTS_SESSION_UNLOCK) {
@@ -1019,10 +1018,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_POWERBROADCAST: {
             if (globals::sessionLocked)
-                break;
+                break; // No need if session is locked
             if (wParam == PBT_APMSUSPEND) {
+                // Pause taskbar loop when computer is about to go to a suspend (sleep)
                 globals::taskbarLoopRunState = false;
             } else if (wParam == PBT_APMRESUMESUSPEND || wParam == PBT_APMRESUMEAUTOMATIC) {
+                // Continue taskbar loop when computer wakes up from normal suspend or due to timed/LAN wake up
                 globals::taskbarLoopRunState = true;
             }
             break;
@@ -1048,8 +1049,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 case ID_CHECKBOX_SHOW_ALL_WINDOWS:
                 case ID_BUTTON_UPDATE:
                 {
-                    taskbar::clearForcedVisibilityStates();
-                    taskbar::collectWindowData(true);
+                    update();
                     break;
                 }
 #if IS_PORTABLE
@@ -1182,6 +1182,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             break;
         }
         case WM_DISPLAYCHANGE: {
+            // When new display gets (dis)connected
             monitors::indexMonitors();
             taskbar::findTaskbarHandles();
             taskbar::clearForcedVisibilityStates();
