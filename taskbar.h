@@ -69,7 +69,7 @@ private:
     };
 
     static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows();
-    static bool isCursorOverTaskbar(HWND &taskbarWindow, POINT &cursorPos);
+    static bool isCursorOverTaskbar(HWND &taskbarWindow, const POINT &cursorPos);
     static void checkForAutoCollect();
 };
 
