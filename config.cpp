@@ -23,6 +23,7 @@ std::atomic<bool> config::closeConfirmMessage = true;
 std::atomic<bool> config::disableAutoUpdateWhenUnfocused = true;
 std::atomic<bool> config::useRealOpacityValues;
 std::atomic<bool> config::animationsEnabled = true;
+std::atomic<bool> config::autoUpdateOnOpen = true;
 
 std::atomic<int> config::taskbarUpdateInterval = 10;
 std::atomic<int> config::opacityWhenHidden;
@@ -47,7 +48,7 @@ std::vector<std::wstring> config::I_ExceptionalWindows = {
     L"explorer.exe=CiceroUIWndFrame",                      // Language chooser window
     L"shellexperiencehost.exe=Windows.UI.Core.CoreWindow", // Wireless/Ethernet, sound, time windows
 };
-std::vector<std::wstring> config::ignoredWindows = {L"title:", L"process:ApplicationFrameHost.exe"};
+std::vector<std::wstring> config::ignoredWindows = {L"process:ApplicationFrameHost.exe"};
 std::vector<std::wstring> config::exceptionalWindows = {};
 
 bool config::save(const bool exposeInternalKeys) {
@@ -65,69 +66,77 @@ bool config::save(const bool exposeInternalKeys) {
     file << R"(; \  /\  / | | | | (_| | (_) \ V  V /\__ \ | (_| \__ \   <| |_) | (_| | |  | | | | | (_| |  __/ |)" << std::endl;
     file << R"(;  \/  \/|_|_| |_|\__,_|\___/ \_/\_/ |___|_/\__,_|___/_|\_\_.__/ \__,_|_|  \_| |_/_|\__,_|\___|_|)" << std::endl;
     file << std::endl;
+
     file << "[General]" << std::endl;
     file << "Language = " << languageShortName << std::endl;
     file << std::endl;
+
     file << "[Window]" << std::endl;
-    file << "; Default values for checkboxes in the window display" << std::endl;
+    file << "; These are the default checkbox settings for the window display." << std::endl;
     file << "DarkMode = " << darkMode << std::endl;
     file << "AutoUpdate = " << autoUpdate << std::endl;
     file << "ShowAllWindows = " << showAllWindows << std::endl;
     file << std::endl;
+
     file << "[Window Behaviour]" << std::endl;
     file << "OpenOnStart = " << openOnStart << std::endl;
     file << "CloseToTray = " << closeToTray << std::endl;
     file << "MinimizeToTray = " << minimizeToTray << std::endl;
-    file << "; Only works if CloseToTray is disabled" << std::endl;
+    file << "; This setting applies only when CloseToTray is disabled" << std::endl;
     file << "CloseConfirmMessage = " << closeConfirmMessage << std::endl;
-    file << "; Disable automatic updates to the GUI when program gets unfocused" << std::endl;
+    file << "; Disable automatic debug table updates if enabled when the application loses focus." << std::endl;
     file << "DisableAutoUpdateWhenUnfocused = " << disableAutoUpdateWhenUnfocused << std::endl;
+    file << "; Automatically update the debug table on window open (e.g. tray icon click)" << std::endl;
+    file << "AutoUpdateOnOpen = " << autoUpdateOnOpen << std::endl;
     file << std::endl;
+
     file << "[Taskbar]" << std::endl;
-    file << "; Taskbar update loop interval in milliseconds (up to 1000)" << std::endl;
+    file << "; Interval for updating the taskbar, in milliseconds (maximum 1000)." << std::endl;
     file << "UpdateInterval = " << taskbarUpdateInterval << std::endl;
-    file << "; If enabled, opacity levels can be defined from up to 255" << std::endl;
+    file << "; When enabled, opacity values can range from 0 up to 255 (instead of 100)" << std::endl;
     file << "UseRealOpacityValues = " << useRealOpacityValues << std::endl;
-    file << "; Opacity level from 0 to 100 (or 255 if above is enabled)" << std::endl;
+    file << "; Opacity levels: 0-100/255" << std::endl;
     file << "OpacityWhenHidden = " << opacityWhenHidden << std::endl;
-    file << "; Bellow minimum opacity limits change to 1, because 0 causes the taskbar to lose interactivity" << std::endl;
+    file << "; Opacity levels 1 to 100/255, since 0 makes the taskbar non-interactive." << std::endl;
     file << "OpacityWhenShown = " << opacityWhenShown << std::endl;
     file << "OpacityWhenHoveredOver = " << opacityWhenHovered << std::endl;
     file << std::endl;
+
     file << "[Taskbar Hover Animation]" << std::endl;
-    file << "; Animation between OpacityWhenShown/OpacityWhenHidden and OpacityWhenHoveredOver" << std::endl;
-    file << "; If changed while application is running, restart is required!" << std::endl;
+    file << "; Controls animation between shown/hidden opacity and hovered opacity levels" << std::endl;
+    file << "; Changes here require restarting the application to take the effects." << std::endl;
     file << "Enabled = " << animationsEnabled << std::endl;
     file << "AnimationStepDelay = " << animationStepDelay << std::endl;
     file << "AnimationOpacityStep = " << animationOpacityStep << std::endl;
     file << std::endl;
+
     file << "[Ignored Windows]" << std::endl;
-    file << "; Setting this to false (0) could slow down the application with debug mode on" << std::endl;
+    file << "; Disabling this may slow the application when debug mode is active, but I believe very minimally." << std::endl;
     file << "AlwaysIgnoreWhenNotMaximized = " << alwaysIgnoreWhenNotMaximized << std::endl;
-    file << "; Available tags: " << std::endl;
-    file << ";    process/p (text)" << std::endl;
-    file << ";    title/t (text)" << std::endl;
-    file << ";    class/c (text)" << std::endl;
-    file << ";    focus/f (0 or 1)" << std::endl;
-    file << ";    maximized/m (0 or 1)" << std::endl;
-    file << ";    left (number)" << std::endl;
-    file << ";    top (number)" << std::endl;
-    file << ";    right (number)" << std::endl;
-    file << ";    bottom (number)" << std::endl;
-    file << ";    monitor/mon (number >= 0)" << std::endl;
+    file << "; Available filter tags:" << std::endl;
+    file << ";   - process (or p): process name (text), case-insensitive" << std::endl;
+    file << ";   - title (or t): window title (text)" << std::endl;
+    file << ";   - class (or c): window class (text)" << std::endl;
+    file << ";   - focus (or f): 0 or 1" << std::endl;
+    file << ";   - maximized (or m): 0 or 1" << std::endl;
+    file << ";   - left: left coordinate (number)" << std::endl;
+    file << ";   - top: top coordinate (number)" << std::endl;
+    file << ";   - right: right coordinate (number)" << std::endl;
+    file << ";   - bottom: bottom coordinate (number)" << std::endl;
+    file << ";   - monitor (or mon): monitor index (number >= 0)" << std::endl;
     file << ";" << std::endl;
-    file << "; Separators: | (acts as 'or'), & (acts as 'and')" << std::endl;
+    file << "; Separators: '|' acts as OR, '&' acts as AND." << std::endl;
     file << ";" << std::endl;
-    file << "; Ignore UWP container window and windows with empty titles" << std::endl;
+    file << "; Ignore UWP container windows" << std::endl;
     file << "; ApplicationFrameHost.exe (UWP containers) is used by mostly by Windows applications" << std::endl;
-    file << "; Some of the processes seems to have maximized windows, even though they are not visible" << std::endl;
+    file << "; Some of the processes seem to have maximized windows, even though they are not visible" << std::endl;
     file << "; We don't have a way to distinguish between that invisible window," << std::endl;
     file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
-    file << "; Tag 'process' (or 'p') is case-insensitive" << std::endl;
     file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
     file << "ExceptionalWindows = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
+    file << std::endl;
+
     if (exposeInternalKeys) {
-        file << std::endl;
         file << "[Internal]" << std::endl;
         file << "; ONLY CHANGE VALUES BELOW IF YOU KNOW WHAT YOU'RE DOING" << std::endl;
         file << "___TaskbarWindowClassNameStarts = " << I_TaskbarWindowClassNameStarts << std::endl;
@@ -168,38 +177,38 @@ void checkForInvalidIntegerValue(const std::wstring &key, auto &value, const int
     }
 }
 
-bool checkForEmptyValueI(const std::wstring &key, const std::wstring &value, std::atomic<int> &obj, const int defaultValue, bool &noErrors) {
+bool checkForEmptyValueI(const std::wstring &key, const std::wstring &value, std::atomic<int> &updatableObject, const int defaultValue, bool &noErrors) {
     if (value.empty()) {
-        obj.store(defaultValue);
+        updatableObject.store(defaultValue);
         utils::messageBox(MSG_CONFIG_NO_VALUE, MB_ICONWARNING | MB_OK, {key, std::to_wstring(defaultValue)});
         noErrors = false;
         return false;
     }
-    obj.store(std::stoi(value));
+    updatableObject.store(std::stoi(value));
     return true;
 }
 
-bool checkForEmptyValueS(const std::wstring &key, const std::wstring &value, std::wstring &obj, bool &noErrors) {
+bool checkForEmptyValueS(const std::wstring &key, const std::wstring &value, std::wstring &updatableObject, bool &noErrors) {
     if (value.empty()) {
-        utils::messageBox(MSG_CONFIG_NO_VALUE, MB_ICONWARNING | MB_OK, {key, obj});
+        utils::messageBox(MSG_CONFIG_NO_VALUE, MB_ICONWARNING | MB_OK, {key, updatableObject});
         noErrors = false;
         return false;
     }
     std::lock_guard lock(taskbar::taskbarMutex);
-    obj = value;
+    updatableObject = value;
     return true;
 }
 
-void checkBoolValidation(const std::wstring &key, const std::wstring &value, std::atomic<bool> &obj, const bool defaultValue, bool &noErrors) {
+void checkBoolValidation(const std::wstring &key, const std::wstring &value, std::atomic<bool> &updatableObject, const bool defaultValue, bool &noErrors) {
     if (value.empty()) {
-        obj.store(defaultValue);
+        updatableObject.store(defaultValue);
         utils::messageBox(MSG_CONFIG_NO_VALUE, MB_ICONWARNING | MB_OK, {key, std::to_wstring(defaultValue)});
         noErrors = false;
         return;
     }
     int bValue = std::stoi(value);
     checkForInvalidIntegerValue(key, bValue, 0, 1, noErrors);
-    obj.store(bValue);
+    updatableObject.store(bValue);
 }
 
 inline void setLanguage(const int code, const std::wstring &shortName) {
@@ -246,6 +255,8 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             checkBoolValidation(formattedKey, value, showAllWindows, showAllWindows, noErrors);
         } else if (key == L"Window Behaviour.DisableAutoUpdateWhenUnfocused") {
             checkBoolValidation(formattedKey, value, disableAutoUpdateWhenUnfocused, disableAutoUpdateWhenUnfocused, noErrors);
+        } else if (key == L"Window Behaviour.AutoUpdateOnOpen") {
+            checkBoolValidation(formattedKey, value, autoUpdateOnOpen, autoUpdateOnOpen, noErrors);
         } else if (key == L"Window Behaviour.OpenOnStart") {
             checkBoolValidation(formattedKey, value, openOnStart, openOnStart, noErrors);
         } else if (key == L"Window Behaviour.CloseToTray") {

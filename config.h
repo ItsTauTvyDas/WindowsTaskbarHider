@@ -18,6 +18,7 @@ public:
     static std::atomic<bool> disableAutoUpdateWhenUnfocused;
     static std::atomic<bool> useRealOpacityValues;
     static std::atomic<bool> animationsEnabled;
+    static std::atomic<bool> autoUpdateOnOpen;
 
     static std::atomic<int> taskbarUpdateInterval;
     static std::atomic<int> opacityWhenHidden;
