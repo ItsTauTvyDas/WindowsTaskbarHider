@@ -679,9 +679,9 @@ inline void resizeChildWindows(HWND hwnd) {
     DeleteObject(hdc);
 }
 
-inline void update() {
+inline void update(const bool ignorePreviousWindows, const bool ignoreGUIChecks) {
     taskbar::clearForcedVisibilityStates();
-    taskbar::collectWindowData(true);
+    taskbar::collectWindowData(ignorePreviousWindows, ignoreGUIChecks);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
@@ -765,6 +765,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
 
             // Add icon
             Shell_NotifyIcon(NIM_ADD, &nid);
+
+            update(true, true);
             break;
         }
         case WM_SIZE:
@@ -820,6 +822,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_ACTIVATE:
         {
             focused = LOWORD(wParam) != WA_INACTIVE;
+            break;
+        }
+        case WM_SHOWWINDOW:
+        {
+            if (!config::autoUpdateOnOpen)
+                break;
+            if (wParam && !(lParam & SW_PARENTCLOSING)) {
+                update(false, true);
+            }
             break;
         }
         case WM_DRAWITEM:
@@ -988,18 +999,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
             } else {
                 message = std::wstring(what->begin(), what->end());
             }
-            utils::messageBox(MSG_TASKBAR_THREAD_EXCEPTION_OCCURRED, MB_ICONERROR | MB_OK, { message });
             delete what;
+            utils::messageBox(MSG_TASKBAR_THREAD_EXCEPTION_OCCURRED, MB_ICONERROR | MB_OK, { message });
             break;
         }
         case WM_UPDATE_GRID_REQUEST:
         {
-            auto pWindows(reinterpret_cast<std::vector<taskbar::WindowInfo>*>(wParam));
-            if (!pWindows || !IsWindowVisible(hwnd) || (config::autoUpdate && !focused && config::disableAutoUpdateWhenUnfocused))
+            const auto unpackedLParam = static_cast<UINT_PTR>(lParam);
+            const bool ignoreChecks = unpackedLParam & 1u;
+            auto pWindows = reinterpret_cast<std::vector<taskbar::WindowInfo>*>(wParam);
+            if (!pWindows || (!ignoreChecks && (!IsWindowVisible(hwnd) || (config::autoUpdate && !focused && config::disableAutoUpdateWhenUnfocused)))) {
+                delete pWindows;
                 break;
+            }
             g_lastTableUpdateTime = utils::getFormattedTime();
-            windowsCacheSize = static_cast<int>(lParam);
+            windowsCacheSize = static_cast<int>(unpackedLParam) >> 1;
             windowsCache = std::move(*pWindows);
+            delete pWindows;
             g_redrawLowerArea(hwnd);
             updateScrollBarsInfo();
             break;
@@ -1049,7 +1065,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                 case ID_CHECKBOX_SHOW_ALL_WINDOWS:
                 case ID_BUTTON_UPDATE:
                 {
-                    update();
+                    update(true, true);
                     break;
                 }
 #if IS_PORTABLE
@@ -1297,7 +1313,6 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
     const int len = GetClassName(hwnd, className.data(), static_cast<int>(className.size()));
     className.resize(len);
     std::wstring proc;
-    taskbar::WindowInfo wInfo;
     switch (event) {
         // Detecting start menu via hide/show events won't work, it uses DWM attributes,
         // and it seems they trigger location change? (the location is always the same)
@@ -1305,12 +1320,11 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
             if (className == L"Windows.UI.Core.CoreWindow") {
                 utils::getProcessInfo(hwnd, proc);
                 if (proc == L"StartMenuExperienceHost.exe" || proc == L"SearchApp.exe") {
-                    wInfo.hwnd = hwnd;
-                    wInfo.updateMonitorUnsafe();
+                    HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
                     DWORD cloaked = 0;
                     if (const HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr)) {
                         std::lock_guard lock(taskbar::taskbarMutex);
-                        taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = cloaked == 0; // 0 when opened
+                        taskbar::taskbarForcedVisibilityStates[hMonitor] = cloaked == 0; // 0 when opened
                     }
                 }
             }
@@ -1319,15 +1333,22 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
         case EVENT_OBJECT_SHOW:
         case EVENT_OBJECT_HIDE: {
             utils::getProcessInfo(hwnd, proc, true);
-            if (std::ranges::find(config::I_ExceptionalWindows, proc + L"=" + className) != config::I_ExceptionalWindows.end()) {
-                wInfo.hwnd = hwnd;
-                wInfo.updateMonitorUnsafe();
+            // Fix Windows 10 app hover bug
+            if (event == EVENT_OBJECT_SHOW && proc == L"explorer.exe" && className == L"tooltips_class32") {
+                HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
                 std::lock_guard lock(taskbar::taskbarMutex);
-                taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = event == EVENT_OBJECT_SHOW;
+                if (!utils::mouseInWindow(taskbar::taskbarHandles[hMonitor]))
+                    ShowWindow(hwnd, SW_HIDE);
+                break;
+            }
+            if (std::ranges::find(config::I_ExceptionalWindows, proc + L"=" + className) != config::I_ExceptionalWindows.end()) {
+                HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                std::lock_guard lock(taskbar::taskbarMutex);
+                taskbar::taskbarForcedVisibilityStates[hMonitor] = event == EVENT_OBJECT_SHOW;
             } else if (LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE); style & WS_POPUP || className == L"#32768") {
                 // #32768 class is mostly used for menus
-                wInfo.hwnd = hwnd; wInfo.updateMonitorUnsafe();
-                HWND taskbar = taskbar::taskbarHandles[wInfo.hMonitor];
+                HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                HWND taskbar = taskbar::taskbarHandles[hMonitor];
                 if (hwnd == taskbar) break;
                 RECT taskbarRect; GetWindowRect(taskbar, &taskbarRect); // Get taskbar location
                 RECT windowRect; GetWindowRect(hwnd, &windowRect); // Get window location
@@ -1336,7 +1357,7 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
                     taskbarRect.top < windowRect.bottom &&
                     taskbarRect.bottom > windowRect.top) { // Check if two rects overlaps each other
                     std::lock_guard lock(taskbar::taskbarMutex);
-                    taskbar::taskbarForcedVisibilityStates[wInfo.hMonitor] = event == EVENT_OBJECT_SHOW;
+                    taskbar::taskbarForcedVisibilityStates[hMonitor] = event == EVENT_OBJECT_SHOW;
                 }
             }
         }
