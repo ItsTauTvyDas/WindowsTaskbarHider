@@ -16,6 +16,7 @@
 std::atomic<bool> errorState;
 std::atomic<bool> collectWindowsInfo;
 std::atomic<bool> ignorePreviousWindowsCheck;
+std::atomic<bool> ignoreGUIUpdateChecks;
 std::atomic<bool> clearForcedVisibilityStatesBool;
 
 std::unordered_map<HMONITOR, bool> taskbar::taskbarForcedVisibilityStates;
@@ -56,9 +57,10 @@ void taskbar::initThread() {
     updateThread = std::thread(taskbarLoop);
 }
 
-void taskbar::collectWindowData(const bool force) {
+void taskbar::collectWindowData(const bool _ignorePreviousWindowsCheck, const bool _ignoreGUIUpdateChecks) {
     collectWindowsInfo = true;
-    ignorePreviousWindowsCheck = force;
+    ignorePreviousWindowsCheck = _ignorePreviousWindowsCheck;
+    ignoreGUIUpdateChecks = _ignoreGUIUpdateChecks;
 }
 
 void taskbar::findTaskbarHandles() {
@@ -76,7 +78,7 @@ void taskbar::findTaskbarHandles() {
                 return TRUE;
             if (className.size() >= suffix.size() && className.compare(className.size() - suffix.size(), suffix.size(), suffix) == 0) {
                 WindowInfo wInfo { hwnd };
-                wInfo.updateMonitorUnsafe();
+                wInfo.updateMonitor();
                 const LONG_PTR style = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
                 SetWindowLongPtr(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED);
                 std::lock_guard lock(taskbarMutex);
@@ -168,7 +170,7 @@ taskbar::WindowInfo taskbar::WindowInfo::reset() const {
     return { hwnd, hMonitor };
 }
 
-void taskbar::WindowInfo::updateMonitorUnsafe() {
+void taskbar::WindowInfo::updateMonitor() {
     hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
 }
 
@@ -195,6 +197,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
     ewp.maximizedWindows = &maximizedWindows;
     ewp.collectWindowsInfo = collectWindowsInfo;
     ewp.ignorePreviousWindowsCheck = ignorePreviousWindowsCheck;
+    ewp.collectAllWindows = config::showAllWindows;
     try {
         EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
             EnumWindowParam ewp = *reinterpret_cast<EnumWindowParam*>(lParam);
@@ -213,7 +216,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
                     return TRUE;
             }
             wInfo.hwnd = hwnd;
-            wInfo.updateMonitorUnsafe();
+            wInfo.updateMonitor();
             if (const auto taskbar = taskbarHandles.find(wInfo.hMonitor); taskbar != taskbarHandles.end() && taskbarHandles[wInfo.hMonitor] == hwnd)
                 return TRUE;
             wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
@@ -238,7 +241,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
 
             if (wInfo.detected) {
                 (*ewp.maximizedWindows)[wInfo.hMonitor] = wInfo;
-                return config::showAllWindows || ewp.maximizedWindows->size() != monitors::monitorCount;
+                return ewp.collectAllWindows || ewp.maximizedWindows->size() != monitors::monitorCount;
             }
             return TRUE;
         }, reinterpret_cast<LPARAM>(&ewp));
@@ -248,11 +251,13 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
         errorState = true;
     }
 
-    if (previousWindows != windows || ignorePreviousWindowsCheck) {
+    if (previousWindows != windows || ewp.ignorePreviousWindowsCheck) {
         auto windowsCopy = new std::vector(windows);
-        PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, reinterpret_cast<WPARAM>(windowsCopy), static_cast<LPARAM>(windows.size()));
+        const auto lParam = windows.size() << 1 | static_cast<UINT_PTR>(ignoreGUIUpdateChecks);
+        PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, reinterpret_cast<WPARAM>(windowsCopy), static_cast<LPARAM>(lParam));
         previousWindows = windows;
         ignorePreviousWindowsCheck = false;
+        ignoreGUIUpdateChecks = false;
     }
     collectWindowsInfo = false;
     return maximizedWindows;

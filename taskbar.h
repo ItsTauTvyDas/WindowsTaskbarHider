@@ -24,7 +24,7 @@ public:
         std::wstring procFilename;
 
         [[nodiscard]] WindowInfo reset() const;
-        void updateMonitorUnsafe();
+        void updateMonitor();
         void updateValues(HWND hwnd);
 
         bool operator==(const WindowInfo& o) const {
@@ -59,13 +59,14 @@ public:
     static void updateTaskbarState();
     static void clearErrorState();
     static void clearForcedVisibilityStates();
-    static void collectWindowData(bool force);
+    static void collectWindowData(bool _ignorePreviousWindowsCheck, bool _ignoreGUIUpdateChecks);
 
 private:
     struct EnumWindowParam {
         std::unordered_map<HMONITOR, WindowInfo> *maximizedWindows;
         bool collectWindowsInfo;
         bool ignorePreviousWindowsCheck;
+        bool collectAllWindows;
     };
 
     static std::unordered_map<HMONITOR, WindowInfo> findAllMaximizedWindows();
