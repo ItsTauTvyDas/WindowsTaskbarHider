@@ -75,6 +75,14 @@ target_link_options(WindowsTaskbarHiderPortable PRIVATE -municode -mwindows)
 target_compile_definitions(WindowsTaskbarHiderPortable PRIVATE UNICODE _UNICODE IS_PORTABLE=1)
 target_link_libraries(WindowsTaskbarHiderPortable PRIVATE Dwmapi)
 
+# Test
+add_executable(WindowsTaskbarHiderTest WIN32 test/main.cpp)
+target_include_directories(WindowsTaskbarHiderTest PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_options(WindowsTaskbarHiderTest PRIVATE -municode -mwindows)
+target_link_options(WindowsTaskbarHiderTest PRIVATE -municode -mwindows)
+target_compile_definitions(WindowsTaskbarHiderTest PRIVATE UNICODE _UNICODE IS_PORTABLE=1)
+target_link_libraries(WindowsTaskbarHiderTest PRIVATE Dwmapi)
+
 # PowerShell command to forcefully kill any existing processes of the application (I was too lazy to close it every time lol)
 add_custom_command(
         TARGET WindowsTaskbarHider PRE_BUILD
