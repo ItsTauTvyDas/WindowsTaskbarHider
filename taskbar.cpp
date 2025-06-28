@@ -241,6 +241,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
 
             if (wInfo.detected) {
                 (*ewp.maximizedWindows)[wInfo.hMonitor] = wInfo;
+                // only continue cycling through windows if we are collecting them or if we didn't have collected enough windows (at least one per monitor)
                 return ewp.collectAllWindows || ewp.maximizedWindows->size() != monitors::monitorCount;
             }
             return TRUE;
@@ -251,15 +252,22 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
         errorState = true;
     }
 
+    if (ewp.collectWindowsInfo) {
+        const int size = ewp.maximizedWindows->size();
+        // some monitor can have none of the windows maximized, and it causes a bug where all windows are displayed in debug table
+        if (!windows.empty() && ewp.collectWindowsInfo && !ewp.collectAllWindows && size > 0 && size!= monitors::monitorCount)
+            while (!windows.empty() && !windows.back().detected)
+                windows.pop_back();
+        collectWindowsInfo = false;
+    }
     if (previousWindows != windows || ewp.ignorePreviousWindowsCheck) {
         auto windowsCopy = new std::vector(windows);
         const auto lParam = windows.size() << 1 | static_cast<UINT_PTR>(ignoreGUIUpdateChecks);
-        PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, reinterpret_cast<WPARAM>(windowsCopy), static_cast<LPARAM>(lParam));
         previousWindows = windows;
         ignorePreviousWindowsCheck = false;
         ignoreGUIUpdateChecks = false;
+        PostMessage(globals::hWnd, WM_UPDATE_GRID_REQUEST, reinterpret_cast<WPARAM>(windowsCopy), static_cast<LPARAM>(lParam));
     }
-    collectWindowsInfo = false;
     return maximizedWindows;
 }
 
@@ -334,18 +342,18 @@ void taskbar::updateTaskbarState() {
     {
         std::unique_lock taskbarLock(taskbarMutex);
         _taskbarHandles = taskbarHandles;
-
-        for (auto i = 0; i < monitors::monitorCount; i++) {
-            const auto hMonitor = monitors::monitor(i);
-            if (const auto state = taskbarForcedVisibilityStates.find(hMonitor); state != taskbarForcedVisibilityStates.end()) {
-                if (state->second) {
-                    taskbarMutex.unlock();
-                    monitors::monitorsMutex.unlock();
-                    setTaskbarVisibility(_taskbarHandles[hMonitor], true, false, true);
-                    return;
-                }
-            }
-        }
+        // TODO: needs a fix, that return is concerning me
+        // for (auto i = 0; i < monitors::monitorCount; i++) {
+        //     const auto hMonitor = monitors::monitor(i);
+        //     if (const auto state = taskbarForcedVisibilityStates.find(hMonitor); state != taskbarForcedVisibilityStates.end()) {
+        //         if (state->second) {
+        //             taskbarMutex.unlock();
+        //             setTaskbarVisibility(_taskbarHandles[hMonitor], true, false, true);
+        //             return;
+        //         }
+        //     }
+        // }
+        taskbarMutex.unlock();
     }
     POINT cursorPos;
     GetCursorPos(&cursorPos);

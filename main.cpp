@@ -14,6 +14,8 @@
 
 #pragma comment(lib, "Dwmapi.lib")
 
+#define C_RED                     RGB(255, 0, 0)
+
 #define WCP_BASE_COLOR            config::darkMode ? darkColorPalette[0] : lightColorPalette[0]
 #define WCP_FOREGROUND            config::darkMode ? darkColorPalette[1] : lightColorPalette[1]
 #define WCP_BACKGROUND            config::darkMode ? darkColorPalette[2] : lightColorPalette[2]
@@ -373,7 +375,7 @@ inline void g_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
     // Draw horizontal lines
     for (int row = 0; row <= rows; row++) {
         const bool detected = config::showAllWindows && row > 0 && row < rows ? windowsCache[row - 1].detected : false;
-        hPen = CreatePen(PS_SOLID, 1, detected ? RGB(255, 0, 0) : WCP_FOREGROUND);
+        hPen = CreatePen(PS_SOLID, 1, detected ? C_RED : WCP_FOREGROUND);
         hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
         int y = row * g_tableRowHeight + sy;
 
@@ -514,7 +516,13 @@ inline void g_printDataToGrid(HDC hdc, const int sx, const int sy, const int row
             } else {
                 value = getWindowValue(wInfo, col);
                 if (!value.empty()) {
-                    DrawText(hdc, value.c_str(), -1, &rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                    if (wInfo.detected) {
+                        const auto oldTextColor = SetTextColor(hdc, C_RED);
+                        DrawText(hdc, value.c_str(), -1, &rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                        SetTextColor(hdc, oldTextColor);
+                    } else {
+                        DrawText(hdc, value.c_str(), -1, &rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                    }
                 }
             }
             x += g_tableColumnWidths[col];
@@ -541,6 +549,20 @@ inline void g_updateTable(HDC hdc, const bool onlyPaintGrid) {
 
     updateScrollBarsInfo();
 }
+
+struct CheckboxData {
+    std::atomic<bool>* pState;
+    bool disabled;
+};
+
+inline LONG_PTR makeCheckboxData(std::atomic<bool> *pState, const bool disabled = false) {
+    return reinterpret_cast<LONG_PTR>(new CheckboxData {
+        pState,
+        disabled
+    });
+}
+
+HWND hCheckBoxShowAllWindows;
 
 inline void resizeChildWindows(HWND hwnd) {
     HCURSOR lPtrHandCursor = LoadCursor(nullptr, IDC_HAND);
@@ -625,7 +647,7 @@ inline void resizeChildWindows(HWND hwnd) {
         SendMessage(hCheckBoxAutoUpdate, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(hCheckBoxAutoUpdate, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(hCheckBoxAutoUpdate, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
-        SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::autoUpdate));
+        SetWindowLongPtr(hCheckBoxAutoUpdate, GWLP_USERDATA, makeCheckboxData(&config::autoUpdate));
         g_childWindows.push_back(hCheckBoxAutoUpdate);
     } else {
         SetWindowText(g_childWindows[i], text.c_str());
@@ -647,7 +669,7 @@ inline void resizeChildWindows(HWND hwnd) {
         SendMessage(hCheckboxDarkMode, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(hCheckboxDarkMode, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(hCheckboxDarkMode, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
-        SetWindowLongPtr(hCheckboxDarkMode, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::darkMode));
+        SetWindowLongPtr(hCheckboxDarkMode, GWLP_USERDATA, makeCheckboxData(&config::darkMode));
         g_childWindows.push_back(hCheckboxDarkMode);
     } else {
         SetWindowText(g_childWindows[i], text.c_str());
@@ -661,7 +683,7 @@ inline void resizeChildWindows(HWND hwnd) {
     lastWidth = g_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
     rect = { lastX, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
     if (createWindows) {
-        const auto hCheckBoxShowAllWindows = CreateWindowW(
+        hCheckBoxShowAllWindows = CreateWindowW(
             WMC_BUTTON, text.c_str(),
             WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
             rect.left, rect.top, rect.right, rect.bottom,
@@ -669,7 +691,7 @@ inline void resizeChildWindows(HWND hwnd) {
         SendMessage(hCheckBoxShowAllWindows, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), TRUE);
         SendMessage(hCheckBoxShowAllWindows, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
         SetClassLongPtr(hCheckBoxShowAllWindows, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(lPtrHandCursor));
-        SetWindowLongPtr(hCheckBoxShowAllWindows, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&config::showAllWindows));
+        SetWindowLongPtr(hCheckBoxShowAllWindows, GWLP_USERDATA, makeCheckboxData(&config::showAllWindows));
         g_childWindows.push_back(hCheckBoxShowAllWindows);
     } else {
         SetWindowText(g_childWindows[i], text.c_str());
@@ -881,9 +903,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     HDC mHdc = g_doubleBuffering(hwnd, ps, draw->hDC, true);
 
                     HBRUSH background = nullptr, foreground = nullptr;
-                    const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(draw->hwndItem, GWLP_USERDATA));
+                    const auto pData = reinterpret_cast<CheckboxData*>(GetWindowLongPtr(draw->hwndItem, GWLP_USERDATA));
                     SelectObject(mHdc, g_hDefaultFont);
-                    g_drawCheckBox(mHdc, pState ? *pState : false, draw->rcItem, text, background, foreground, false, nullptr);
+                    g_drawCheckBox(mHdc, pData && pData->pState->load(), draw->rcItem, text, background, foreground, false, nullptr);
 
                     DeleteObject(background);
                     DeleteObject(foreground);
@@ -1005,6 +1027,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_UPDATE_GRID_REQUEST:
         {
+            const auto pData = reinterpret_cast<CheckboxData*>(GetWindowLongPtr(hCheckBoxShowAllWindows, GWLP_USERDATA));
+            pData->disabled = false;
             const auto unpackedLParam = static_cast<UINT_PTR>(lParam);
             const bool ignoreChecks = unpackedLParam & 1u;
             auto pWindows = reinterpret_cast<std::vector<taskbar::WindowInfo>*>(wParam);
@@ -1046,12 +1070,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_COMMAND:
         {
+            CheckboxData* pData = nullptr;
             const auto lwParam = LOWORD(wParam);
-            if (lwParam >= IDS_CHECKBOX_MIN && lwParam <= IDS_CHECKBOX_MAX) {
+            if (lwParam >= IDS_CHECKBOX_MIN && lwParam <= IDS_CHECKBOX_MAX) { // Check if clicked component falls into the range of checkbox IDs
                 HWND hCheckbox = GetDlgItem(hwnd, lwParam);
-                if (const auto pState = reinterpret_cast<bool*>(GetWindowLongPtr(hCheckbox, GWLP_USERDATA))) {
+                pData = reinterpret_cast<CheckboxData*>(GetWindowLongPtr(hCheckbox, GWLP_USERDATA));
+                if (pData) {
+                    if (pData->disabled)
+                        break;
                     // Inverse checkbox state
-                    *pState = !*pState;
+                    pData->pState->store(!pData->pState->load());
                     if (lwParam != ID_CHECKBOX_DARK_MODE) // No need for updating, as dark mode check already redraws the window
                         g_redrawWindow(hCheckbox);
                 }
@@ -1063,6 +1091,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, const UINT uMsg, const WPARAM wParam, const 
                     break;
                 }
                 case ID_CHECKBOX_SHOW_ALL_WINDOWS:
+                {
+                    if (pData)
+                        pData->disabled = true;
+                }
                 case ID_BUTTON_UPDATE:
                 {
                     update(true, true);
