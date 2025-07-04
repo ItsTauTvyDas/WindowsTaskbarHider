@@ -340,26 +340,18 @@ void taskbar::resetTaskbar() {
 void taskbar::updateTaskbarState() {
     std::unordered_map<HMONITOR, HWND> _taskbarHandles;
     {
-        std::unique_lock taskbarLock(taskbarMutex);
+        std::lock_guard taskbarLock(taskbarMutex);
         _taskbarHandles = taskbarHandles;
-        // TODO: needs a fix, that return is concerning me
-        // for (auto i = 0; i < monitors::monitorCount; i++) {
-        //     const auto hMonitor = monitors::monitor(i);
-        //     if (const auto state = taskbarForcedVisibilityStates.find(hMonitor); state != taskbarForcedVisibilityStates.end()) {
-        //         if (state->second) {
-        //             taskbarMutex.unlock();
-        //             setTaskbarVisibility(_taskbarHandles[hMonitor], true, false, true);
-        //             return;
-        //         }
-        //     }
-        // }
-        taskbarMutex.unlock();
     }
     POINT cursorPos;
     GetCursorPos(&cursorPos);
     const auto windows = findAllMaximizedWindows();
     for (auto &[hMonitor, taskbar] : _taskbarHandles) {
         const bool contains = windows.contains(hMonitor);
+        if (const auto state = taskbarForcedVisibilityStates.find(hMonitor); state != taskbarForcedVisibilityStates.end() && state->second) {
+            setTaskbarVisibility(taskbar, true, false, true);
+            continue;
+        }
         setTaskbarVisibility(taskbar, contains, isCursorOverTaskbar(taskbar, cursorPos), contains);
     }
 }
