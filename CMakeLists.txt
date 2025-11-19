@@ -35,6 +35,16 @@ add_custom_command(
         COMMENT "Generating language files (language.h and language.cpp)"
 )
 
+function(generate_guid OUT_VAR input)
+    string(MD5 _hash "${input}")
+    string(SUBSTRING ${_hash} 0 8  p1)
+    string(SUBSTRING ${_hash} 8 4  p2)
+    string(SUBSTRING ${_hash} 12 4 p3)
+    string(SUBSTRING ${_hash} 16 4 p4)
+    string(SUBSTRING ${_hash} 20 12 p5)
+    set(${OUT_VAR} "${p1}-${p2}-${p3}-${p4}-${p5}" PARENT_SCOPE)
+endfunction()
+
 configure_file(resources.h.in "${CMAKE_CURRENT_BINARY_DIR}/resources.h" @ONLY)
 
 set(EXECUTABLE_SOURCES
@@ -64,7 +74,7 @@ add_executable(WindowsTaskbarHider WIN32 ${EXECUTABLE_SOURCES})
 target_include_directories(WindowsTaskbarHider PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_options(WindowsTaskbarHider PRIVATE -municode -mwindows)
 target_link_options(WindowsTaskbarHider PRIVATE -municode -mwindows)
-target_compile_definitions(WindowsTaskbarHider PRIVATE UNICODE _UNICODE IS_PORTABLE=0)
+target_compile_definitions(WindowsTaskbarHider PRIVATE UNICODE _UNICODE)
 target_link_libraries(WindowsTaskbarHider PRIVATE Dwmapi)
 
 # Portable version
@@ -72,7 +82,7 @@ add_executable(WindowsTaskbarHiderPortable WIN32 ${EXECUTABLE_SOURCES})
 target_include_directories(WindowsTaskbarHiderPortable PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_options(WindowsTaskbarHiderPortable PRIVATE -municode -mwindows)
 target_link_options(WindowsTaskbarHiderPortable PRIVATE -municode -mwindows)
-target_compile_definitions(WindowsTaskbarHiderPortable PRIVATE UNICODE _UNICODE IS_PORTABLE=1)
+target_compile_definitions(WindowsTaskbarHiderPortable PRIVATE UNICODE _UNICODE IS_PORTABLE)
 target_link_libraries(WindowsTaskbarHiderPortable PRIVATE Dwmapi)
 
 # Test
@@ -93,3 +103,19 @@ add_custom_command(
         TARGET WindowsTaskbarHiderPortable PRE_BUILD
         COMMAND powershell -NoProfile -Command "Stop-Process -Name WindowsTaskbarHider -Force -ErrorAction SilentlyContinue; exit 0"
 )
+
+# Installer stuff (requires WixTools to be installed)
+# https://github.com/wixtoolset/wix3
+# https://cmake.org/cmake/help/v3.9/module/CPackWIX.html
+set(CPACK_GENERATOR "WIX")
+set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
+set(CPACK_WIX_PROGRAM_MENU_FOLDER "${PROJECT_NAME}")
+set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT "https://github.com/ItsTauTvyDas/WindowsTaskbarHider")
+set(CPACK_WIX_PROPERTY_ARPCOMMENTS "Hide taskbar to make your wallpaper more clear!")
+generate_guid(CPACK_WIX_PRODUCT_GUID "${PROJECT_NAME}")
+generate_guid(CPACK_WIX_UPGRADE_GUID "${VERSION_PRODUCT_NUMBER}.${VERSION_PRODUCT_VERSION}.${VERSION_PRODUCT_BUILD}.${VERSION_PRODUCT_REVISION}")
+# CPACK
+set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_VENDOR "By ItsTauTvyDas")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}")
+include(CPack)
