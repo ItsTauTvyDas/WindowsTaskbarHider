@@ -17,6 +17,7 @@ public:
         bool wasRectModified = false;
         bool initiallyIgnored = false;
         DWORD focused = -1;
+        DWORD cloaked = -1;
         wchar_t wndClass[256] = {};
         RECT rect;
         wchar_t title[256] = {};
@@ -25,7 +26,7 @@ public:
 
         [[nodiscard]] WindowInfo reset() const;
         void updateMonitor();
-        void updateValues(HWND hwnd);
+        void updateValues();
 
         bool operator==(const WindowInfo& o) const {
             return maximized                         == o.maximized &&
