@@ -10,6 +10,8 @@
 
 #define IDI_APP_ICON                  100
 
+#define IS_WINDOWS_11(x)              (x >= 22000)
+
 #define APP_DEFAULT_LANGUAGES         @DEFAULT_SUPPORTED_LANGUAGES@
 #define IDR_INI_LANG_EN               2057
 #define IDR_INI_LANG_UK               1058
