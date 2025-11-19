@@ -9,6 +9,10 @@
 #include "resources.h"
 #include "taskbar.h"
 #include "utils.h"
+#ifndef IS_PORTABLE
+#include <filesystem>
+#include <shlobj.h>
+#endif
 
 #define CONFIG_FILENAME L"config.ini"
 
@@ -24,14 +28,16 @@ std::atomic<bool> config::disableAutoUpdateWhenUnfocused = true;
 std::atomic<bool> config::useRealOpacityValues;
 std::atomic<bool> config::animationsEnabled = true;
 std::atomic<bool> config::autoUpdateOnOpen = true;
+std::atomic<bool> config::fixTaskbarHoverGlitch = true;
+std::atomic<bool> config::exceptTaskbarPopups = true;
 
-std::atomic<int> config::taskbarUpdateInterval = 10;
+std::atomic<int> config::taskbarUpdateInterval;
 std::atomic<int> config::opacityWhenHidden;
-std::atomic<int> config::opacityWhenShown = 90;
-std::atomic<int> config::opacityWhenHovered = 100;
-std::atomic<int> config::opacityWhenHiddenInternal;
-std::atomic<int> config::opacityWhenShownInternal;
-std::atomic<int> config::opacityWhenHoveredInternal;
+std::atomic<int> config::opacityWhenShown;
+std::atomic<int> config::opacityWhenHovered;
+std::atomic<int> config::opacityWhenHiddenInternal = 50;
+std::atomic<int> config::opacityWhenShownInternal = 240;
+std::atomic<int> config::opacityWhenHoveredInternal = 255;
 std::atomic<int> config::languageCode = IDR_INI_LANG_EN;
 std::atomic<int> config::animationStepDelay = 3;
 std::atomic<int> config::animationOpacityStep = 10;
@@ -41,23 +47,53 @@ std::wstring config::languageShortName = L"en";
 std::wstring config::I_TaskbarWindowClassNameStarts = L"Shell_";
 std::wstring config::I_TaskbarWindowClassNameEnds = L"TrayWnd";
 
-std::vector<std::wstring> config::I_ExceptionalWindows = {
-    L"explorer.exe=TaskListThumbnailWnd",                  // Preview of windows when hovered over a taskbar app icon
-    L"explorer.exe=TaskListOverlayWnd",                    // Same as above
-    L"explorer.exe=NotifyIconOverflowWindow",              // More tray icons arrow window
-    L"explorer.exe=CiceroUIWndFrame",                      // Language chooser window
-    L"shellexperiencehost.exe=Windows.UI.Core.CoreWindow", // Wireless/Ethernet, sound, time windows
-};
-std::vector<std::wstring> config::ignoredWindows = {L"process:ApplicationFrameHost.exe"};
+std::vector<std::wstring> config::I_ExceptionalWindows;
+std::vector<std::wstring> config::ignoredWindows = {/*L"process:ApplicationFrameHost.exe"*/};
 std::vector<std::wstring> config::exceptionalWindows = {};
 
+void config::init() {
+    if (IS_WINDOWS_11(globals::sysBuildNumber)) {
+        I_ExceptionalWindows = {
+            L"startmenuexperiencehost.exe:Windows.UI.Core.CoreWindow", // Start menu
+            L"searchhost.exe:Windows.UI.Core.CoreWindow",              // Search menu
+            L"shellexperiencehost.exe:Windows.UI.Core.CoreWindow",     // Context menu of apps (jump lists), time, wireless/ethernet
+            L"explorer.exe:Shell_InputSwitchTopLevelWindow",           // Language switcher
+            L"explorer.exe:Xaml_WindowedPopupClass",                   // Context menu of taskbar, popups for various elements in taskbar (e.g. apps)
+            L"explorer.exe:TopLevelWindowForOverflowXamlIsland",       // More tray icons arrow window
+            L"explorer.exe:XamlExplorerHostIslandWindow",              // App preview, volume
+        };
+    } else {
+        I_ExceptionalWindows = {
+            L"explorer.exe:TaskListThumbnailWnd",                      // Preview of windows when hovered over a taskbar app icon
+            L"explorer.exe:TaskListOverlayWnd",                        // Same as above
+            L"explorer.exe:NotifyIconOverflowWindow",                  // More tray icons arrow window
+            L"explorer.exe:CiceroUIWndFrame",                          // Language chooser window
+            L"shellexperiencehost.exe:Windows.UI.Core.CoreWindow",     // Wireless/Ethernet, volume, time windows
+        };
+    }
+}
+
 bool config::save(const bool exposeInternalKeys) {
+#ifdef IS_PORTABLE
     std::wofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
+#else
+    // Creating directory in %appdata%
+    PWSTR appdata = nullptr;
+    SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &appdata);
+    std::filesystem::path configPath = appdata;
+    CoTaskMemFree(appdata);
+    configPath /= PROJECT_NAME;
+    std::filesystem::create_directories(configPath);
+    configPath /= CONFIG_FILENAME;
+    std::wofstream file(configPath, std::ios::out | std::ios::trunc);
+#endif
     if (!file.is_open()) {
         utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
         return false;
     }
+
     file << "; Github: " << PRODUCT_URL << std::endl;
+
     file << std::endl;
     file << ";  _    _ _           _                 _____         _    _                _   _ _     _" << std::endl;
     file << "; | |  | (_)         | |               |_   _|       | |  | |              | | | (_)   | |" << std::endl;
@@ -125,7 +161,7 @@ bool config::save(const bool exposeInternalKeys) {
     file << ";   - bottom: bottom coordinate (number)" << std::endl;
     file << ";   - monitor (or mon): monitor index (number >= 0)" << std::endl;
     file << ";" << std::endl;
-    file << "; Separators: '|' acts as OR, '&' acts as AND." << std::endl;
+    file << "; Separators: '|' acts as OR, '&' acts as AND, ':' acts as =, for example 'process:SomeApp.exe'." << std::endl;
     file << ";" << std::endl;
     file << "; Ignore UWP container windows" << std::endl;
     file << "; ApplicationFrameHost.exe (UWP containers) is used by mostly by Windows applications" << std::endl;
@@ -134,7 +170,13 @@ bool config::save(const bool exposeInternalKeys) {
     file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
     file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
     file << "ExceptionalWindows = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
+    file << "; Show taskbar when some its popups are opened (like start menu, language chooser and etc.)" << std::endl;
+    file << "ExceptTaskbarPopups = " << exceptTaskbarPopups << std::endl;
     file << std::endl;
+
+    file << "[Windows 10 Fixes]" << std::endl;
+    file << "; Sometimes hover effect can get stuck so enable this to fix it" << std::endl;
+    file << "FixTaskbarHoverGlitch = " << fixTaskbarHoverGlitch << std::endl;
 
     if (exposeInternalKeys) {
         file << "[Internal]" << std::endl;
@@ -152,7 +194,7 @@ bool config::exists() {
 }
 
 bool config::ensureConfigurationExists() {
-#if IS_PORTABLE
+#ifdef IS_PORTABLE
     return exists();
 #else
     if (!exists())
@@ -163,6 +205,19 @@ bool config::ensureConfigurationExists() {
 
 void config::open() {
     ShellExecute(nullptr, L"open", CONFIG_FILENAME, nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+int stringToInt(const std::wstring& str, const int defaultValue, const bool isBool) {
+    try {
+        return std::stoi(str);
+    } catch (const std::invalid_argument&) {
+        if (!isBool) return defaultValue;
+        if (_wcsicmp(str.c_str(), L"true")) return 1;
+        if (_wcsicmp(str.c_str(), L"false")) return 0;
+        return defaultValue;
+    } catch (const std::out_of_range&) {
+        return defaultValue;
+    }
 }
 
 void checkForInvalidIntegerValue(const std::wstring &key, auto &value, const int min, const int max, bool &noErrors) {
@@ -184,7 +239,7 @@ bool checkForEmptyValueI(const std::wstring &key, const std::wstring &value, std
         noErrors = false;
         return false;
     }
-    updatableObject.store(std::stoi(value));
+    updatableObject.store(stringToInt(value, defaultValue, false));
     return true;
 }
 
@@ -206,7 +261,7 @@ void checkBoolValidation(const std::wstring &key, const std::wstring &value, std
         noErrors = false;
         return;
     }
-    int bValue = std::stoi(value);
+    int bValue = stringToInt(value, defaultValue, true);
     checkForInvalidIntegerValue(key, bValue, 0, 1, noErrors);
     updatableObject.store(bValue);
 }
@@ -229,7 +284,7 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
                 checkForInvalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000, noErrors);
         } else if (key == L"General.Language") {
             auto languages = std::unordered_map<std::wstring, int>(APP_DEFAULT_LANGUAGES);
-#if IS_PORTABLE == 0
+#ifndef IS_PORTABLE
             if (utils::fileExists(std::wstring(L"languages/language." + value + L".ini").c_str())) {
                 setLanguage(IDR_INI_LANG_CUSTOM, value);
                 if (languages.contains(value))
@@ -243,7 +298,7 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
                     return false;
                 }
                 setLanguage(languages[value], value);
-#if IS_PORTABLE == 0
+#ifndef IS_PORTABLE
             }
 #endif
             utils::loadIfNeededAndGetCachedLanguageString(0, nullptr); // Trigger language cache to update
@@ -333,14 +388,14 @@ bool config::load() {
     int encodingErrorCount = 0;
 
     int lineNum = 0;
+    bool isLineSplit = false;
+    std::wstring key, value;
     while (getline(file, line)) {
         ++lineNum;
 
         try {
             utf8line = utils::utf8ToWide(line);
         } catch (const std::exception&) {
-            // my IDE is kinda stupid lol
-            // ReSharper disable once CppDFAUnusedValue
             noErrors = false;
             ++encodingErrorCount;
             if (encodingErrorCount >= 3)
@@ -349,9 +404,27 @@ bool config::load() {
             continue;
         }
 
-        std::wstring key, value;
+        if (isLineSplit) {
+            utils::trim(utf8line);
+            if (utf8line.starts_with(L"/")) {
+                std::wstring value0 = utf8line.substr(1);
+                utils::trim(value0);
+                value.append(value0);
+                continue;
+            }
+            if (!processSingle(prefix + key, value))
+                noErrors = false;
+            isLineSplit = false;
+        }
+
         if (!utils::processIniFileLine(utf8line, &prefix, key, value))
             continue;
+
+        if (value.starts_with(L"/")) {
+            isLineSplit = true;
+            value = value.substr(1);
+            continue;
+        }
 
         if (key.empty()) {
             utils::messageBox(MSG_CONFIG_INVALID_SYNTAX, MB_ICONERROR | MB_OK, { std::to_wstring(lineNum), utf8line });

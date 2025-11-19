@@ -19,6 +19,8 @@ public:
     static std::atomic<bool> useRealOpacityValues;
     static std::atomic<bool> animationsEnabled;
     static std::atomic<bool> autoUpdateOnOpen;
+    static std::atomic<bool> fixTaskbarHoverGlitch;
+    static std::atomic<bool> exceptTaskbarPopups;
 
     static std::atomic<int> taskbarUpdateInterval;
     static std::atomic<int> opacityWhenHidden;
@@ -35,6 +37,7 @@ public:
     static std::vector<std::wstring> exceptionalWindows;
     static std::wstring languageShortName;
 
+    static void init();
     static bool load();
     static bool save(bool exposeInternalKeys);
     static bool exists();
