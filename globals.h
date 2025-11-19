@@ -6,6 +6,7 @@
 
 class globals {
 public:
+    static DWORD sysBuildNumber;
     static std::wstring exe;
     static std::wstring args;
     static HWND hWnd;

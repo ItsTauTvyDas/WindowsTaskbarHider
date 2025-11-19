@@ -2,6 +2,7 @@
 
 #include "taskbar.h"
 
+DWORD globals::sysBuildNumber;
 std::wstring globals::exe;
 std::wstring globals::args;
 HWND globals::hWnd = nullptr;
