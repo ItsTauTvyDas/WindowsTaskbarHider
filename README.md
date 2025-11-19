@@ -1,4 +1,4 @@
-# Windows Taskbar Hider - Make your wallpaper look cleaner!
+# Windows Taskbar Hider - Make your wallpaper look cleaner! (Not finished)
 
 ## What is this?
 This is a light-weight Windows-only application that hides the taskbar when no window is maximized!
