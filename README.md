@@ -42,10 +42,17 @@ You are indeed right, but to be honest, I did all this just for fun and for bett
 * Add/Remove from startup folder
 * Taskbar pausing
 * Taskbar opacity when it's hidden, being shown (triggered by maximized window) and when hovered over with mouse
-* Animations
-* Portable and installable version
+* Hover/disappearing taskbar animations
+* Portable and installable versions
 
-## Program's arguments
+## Difference between portable and installed versions
+| Feature               | Portable                                                       | Installed |
+|-----------------------|----------------------------------------------------------------|-----------|
+| Configuration         | Loads if exists or saves if reloaded through *actions* button  | ✔️        |
+| Custom languages      | ❌ (not even loadable)                                          | ✔️        |
+| Run on startup option | ❌                                                              | ✔️        |
+
+## Arguments
 | Argument          | Alias      |  Parameters  | Description                                     |
 |-------------------|------------|:------------:|-------------------------------------------------|
 | `--reset-taskbar` | `-rtb`     |     None     | Reset taskbar and exit                          |
@@ -56,6 +63,8 @@ You are indeed right, but to be honest, I did all this just for fun and for bett
 A file called config.ini is going to be created next to exe file (unless `--no-config` argument specified).
 Extra configuration can be enabled by triggering "Expose internal configuration keys" button in GUI's actions select
 (if you want to restore them to default, just delete that section from the file and reload the config).
+Application has custom built-in INI parser, minimal *INI standards* are implemented but with one exception, where boolean is required,
+besides `0` and `1` it can also be `false` or `true` keywords.
 
 ```ini
 ; Github: https://github.com/ItsTauTvyDas/WindowsTaskbarHider
@@ -82,29 +91,42 @@ CloseToTray = 0
 MinimizeToTray = 1
 ; Only works if CloseToTray is disabled
 CloseConfirmMessage = 1
+; Disable automatic updates to the GUI when program gets unfocused
+DisableAutoUpdateWhenUnfocused = 1
 
 [Taskbar]
 ; Taskbar update loop interval in milliseconds
 UpdateInterval = 10
-; Disable automatic updates to the GUI when program gets unfocused
-DisableAutoUpdateWhenUnfocused = 1
-; Opacity level from 0 to 100
+; If enabled, opacity levels can be defined up to 255
+UseRealOpacityValues = 0
+; Opacity level from 0 to 100 (or 255 if above is enabled)
 OpacityWhenHidden = 0
-; Bellow limit changes from 1 to 100, 0 causes the taskbar to lose interactivity
+; Bellow minimum opacity limits change to 1, because 0 causes the taskbar to lose interactivity
 OpacityWhenShown = 90
 OpacityWhenHoveredOver = 100
 
 [Taskbar Hover Animation]
 ; Animation between OpacityWhenShown/OpacityWhenHidden and OpacityWhenHoveredOver
 ; If changed while application is running, restart is required!
-Enabled = 0
+Enabled = 1
 AnimationStepDelay = 3
-AnimationOpacityStep = 1
+AnimationOpacityStep = 10
 [Ignored Windows]
 ; Setting this to false (0) could slow down the application with debug mode on
 AlwaysIgnoreWhenNotMaximized = 1
-; Available tags: process/p (text), title/t (text), class/c (text), focus/f (0 or 1), maximized/m (0 or 1), left (number), top (int), right (number), bottom (number), monitor/mon (number >= 0)
-; Separator: |
+; Available tags: 
+;    process/p (text)
+;    title/t (text)
+;    class/c (text)
+;    focus/f (0 or 1)
+;    maximized/m (0 or 1)
+;    left (number)
+;    top (number)
+;    right (number)
+;    bottom (number)
+;    monitor/mon (number >= 0)
+;
+; Separators: | (acts as 'or'), & (acts as 'and')
 ;
 ; Ignore UWP container window and windows with empty titles
 ; ApplicationFrameHost.exe (UWP containers) is used by mostly by Windows applications
@@ -119,11 +141,21 @@ ExceptionalWindows =
 ## Issues
 - Settings and other similar apps that uses ApplicationFrameHost.exe don't get detected (it's buggy)
 - Not every context menu popup from taskbar is supported (taskbar can still disappear)
-- Sometimes debug table can show random symbols (encoding issue), just update again if that happens
 
 ## TODO
 - [ ] Find a way to fix issue with ApplicationFrameHost.exe
 - [ ] Show taskbar when any context menu from taskbar is opened (kinda works already but not for all popups)
+- [ ] Maybe use window events listener instead of a loop
+- [ ] Recheck how main thread interacts with other threads (variable safety-wise)
+
+## Configuration examples
+Tags short versions can be used but just for simplicity I will write them fully.
+### Making taskbar visible when explorer.exe is opened even when it's not maximized
+```ini
+AlwaysIgnoreWhenNotMaximized = 0
+IgnoredWindows = maximized:0|process:ApplicationFrameHost.exe
+ExceptionalWindows = process:explorer.exe&class=
+```
 
 ## Building
 This project was built using CMake (^3.10), MinGW (^11.0 w64), Ninja and CLion IDE.
