@@ -15,6 +15,7 @@
 #define MSG_TASKBAR_VISIBILITY_FIXED              @LANG_ID_COUNTER@
 
 #define MSG_CONFIG_LOAD_FAILED                    @LANG_ID_COUNTER@
+#define MSG_CONFIG_SAVE_FAILED                    @LANG_ID_COUNTER@
 #define MSG_CONFIG_INVALID_NUMBER                 @LANG_ID_COUNTER@
 #define MSG_CONFIG_BELOW_MIN                      @LANG_ID_COUNTER@
 #define MSG_CONFIG_ABOVE_MAX                      @LANG_ID_COUNTER@
