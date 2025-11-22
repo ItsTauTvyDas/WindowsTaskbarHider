@@ -2,14 +2,16 @@
 #define UTILS_H
 
 #include <dwmapi.h>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <map>
+#include <tlhelp32.h>
 
 class utils {
 public:
     static void getProcessInfo(HWND hwnd, std::wstring &processExeName, bool lowercase = false);
-    static bool killProcessByName(const wchar_t *processName, DWORD currentPid);
+    static bool getProcessesByName(const wchar_t *processName, DWORD currentPid, const std::function<void (PROCESSENTRY32W*)> &func);
     static bool processArguments(int argc, const LPWSTR *argv, LPWSTR commandLine);
     static void showExceptionMessageBox(const std::function<void(std::wstringstream&)>& callback, bool allowRetry);
     static LPWSTR replaceCharacterWithText(LPWSTR lpstr, wchar_t target, const std::wstring &replacement, int skip = 0);
@@ -24,7 +26,7 @@ public:
     static std::vector<std::wstring> splitToGroups(const std::wstring& s, unsigned int length);
     static bool showTrayNotification(const std::wstring &message);
     static bool fileExists(const wchar_t *path, bool dir = false);
-#if IS_PORTABLE == 0
+#ifndef IS_PORTABLE
     static bool doesAutoStart();
     static void toggleStartup();
     static bool updateLanguageFile();
@@ -45,8 +47,12 @@ public:
     static bool processIniFileLine(const std::wstring &orgLine, std::wstring *prefix, std::wstring &key, std::wstring &value);
     static std::wstring utf8ToWide(const std::string& str);
     static bool mouseInWindow(HWND window);
+    static DWORD evaluateBitmask(std::wstring str, DWORD currentBitmask, std::unordered_map<std::wstring, DWORD> bitmasks);
+#ifndef IS_PORTABLE
+    static std::filesystem::path toDataPath(const std::filesystem::path& relativePath);
+#endif
 private:
-#if IS_PORTABLE == 0
+#ifndef IS_PORTABLE
     struct INILine {
         std::wstring key;
         std::wstring value;

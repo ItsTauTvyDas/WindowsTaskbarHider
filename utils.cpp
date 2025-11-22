@@ -25,7 +25,7 @@
 #include <vector>
 #include <filesystem>
 
-bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
+bool utils::getProcessesByName(const wchar_t* processName, DWORD currentPid, const std::function<void (PROCESSENTRY32W*)> &func) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE)
         return false;
@@ -44,11 +44,14 @@ bool utils::killProcessByName(const wchar_t* processName, DWORD currentPid) {
             continue;
         if (_wcsicmp(pe.szExeFile, processName) != 0)
             continue;
-        if (HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID)) {
-            TerminateProcess(hProcess, 0);
-            CloseHandle(hProcess);
-            success = true;
-        }
+        success = true;
+        func(&pe);
+        success = true;
+        // if (HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID)) {
+        //     TerminateProcess(hProcess, 0);
+        //     CloseHandle(hProcess);
+        //     success = true;
+        // }
     } while (Process32Next(hSnap, &pe));
     CloseHandle(hSnap);
     return success;
@@ -296,20 +299,14 @@ bool utils::fileExists(const wchar_t *path, const bool dir) {
     return dir ? is_directory(fsPath, errC) : is_regular_file(fsPath, errC);
 }
 
-bool mkdir(const wchar_t* path) {
-    std::error_code errC;
-    std::filesystem::create_directory(path, errC);
-    return !errC || errC == std::errc::file_exists;
-}
-
 void utils::toUnicode(const LPCCH string, LPWSTR str) {
     MultiByteToWideChar(CP_ACP, 0, string, -1, str, MAX_PATH);
 }
 
-#if IS_PORTABLE == 0
-std::wstring createShortcutLinkPath(const bool global) {
+#ifndef IS_PORTABLE
+std::wstring createShortcutLinkPath() {
     WCHAR startupPath[260];
-    if (FAILED(SHGetFolderPath(nullptr, global ? CSIDL_COMMON_STARTUP : CSIDL_STARTUP, nullptr, 0, startupPath)))
+    if (FAILED(SHGetFolderPath(nullptr, CSIDL_STARTUP, nullptr, 0, startupPath)))
         return L"";
     const std::wstring name = globals::exe.substr(0, globals::exe.find_last_of('.'));
     return std::wstring(std::wstring(startupPath) + L"\\" + name + L".lnk");
@@ -331,29 +328,14 @@ bool GetWorkingDirectory(LPWSTR* pDirectory) {
     return true;
 }
 
-int isInProgramFiles(WCHAR appPath[MAX_PATH]) {
-    TCHAR programFilesPath[MAX_PATH] = {};
-    if (FAILED(SHGetFolderPath(nullptr, CSIDL_PROGRAM_FILES, nullptr, 0, programFilesPath)))
-        return -1;
-    if (appPath[0] == L'\0')
-        GetModuleFileName(nullptr, appPath, MAX_PATH);
-    return _tcsnicmp(appPath, programFilesPath, _tcslen(programFilesPath)) == 0 ? TRUE : FALSE;
-}
-
 bool utils::doesAutoStart() {
-    WCHAR appPath[MAX_PATH];
-    return fileExists(createShortcutLinkPath(isInProgramFiles(appPath)).c_str());
+    return fileExists(createShortcutLinkPath().c_str());
 }
 
 void utils::toggleStartup() {
     WCHAR appPath[260];
     GetModuleFileName(nullptr, appPath, MAX_PATH);
-    const int inProgramFiles = isInProgramFiles(appPath);
-    if (inProgramFiles == -1) {
-        messageBox(MSG_SHORTCUT_CREATION_FAILED, MB_ICONERROR | MB_OK);
-        return;
-    }
-    const std::wstring shortcutPath = createShortcutLinkPath(inProgramFiles == TRUE);
+    const std::wstring shortcutPath = createShortcutLinkPath();
     if (shortcutPath.empty()) {
         messageBox(MSG_SHORTCUT_CREATION_FAILED, MB_ICONERROR | MB_OK);
         return;
@@ -368,7 +350,7 @@ void utils::toggleStartup() {
     if (messageBox(MSG_SHORTCUT_ADD_VERIFY, MB_ICONQUESTION | MB_YESNO) == 7)
         return;
 
-    if (std::wofstream shortcut((shortcutPath.data())); shortcut.is_open()) {
+    if (std::wofstream shortcut(shortcutPath.data()); shortcut.is_open()) {
         CoInitialize(nullptr);
 
         IShellLinkW *psl;
@@ -434,6 +416,35 @@ std::wstring utils::getFormattedTime() {
     return oss.str();
 }
 
+DWORD utils::evaluateBitmask(std::wstring str, const DWORD currentBitmask, std::unordered_map<std::wstring, DWORD> bitmasks) {
+    trim(str);
+
+    if (str == L"any" || str == L"false")
+        return currentBitmask != 0;
+
+    if (str == L"0")
+        return currentBitmask == 0;
+
+    DWORD evaluatedBitmask = 0;
+    size_t start = 0;
+
+    while (true) {
+        const size_t pos = str.find(L',', start);
+        std::wstring token = str.substr(start, pos - start);
+        trim(token);
+
+        if (auto it = bitmasks.find(token); it != bitmasks.end())
+            evaluatedBitmask |= it->second;
+
+        if (pos == std::wstring::npos)
+            break;
+
+        start = pos + 1;
+    }
+
+    return evaluatedBitmask;
+}
+
 bool utils::processIniFileLine(const std::wstring &orgLine, std::wstring *prefix, std::wstring &key, std::wstring &value) {
     std::wstring line = orgLine;
     trim(line);
@@ -449,7 +460,7 @@ bool utils::processIniFileLine(const std::wstring &orgLine, std::wstring *prefix
         if (!prefix)
             return false;
 
-        auto name = line.substr(1, end-1);
+        auto name = line.substr(1, end - 1);
         trim(name);
         *prefix = std::wstring{name} + L".";
         return false;
@@ -473,7 +484,7 @@ bool utils::processIniFileLine(const std::wstring &orgLine, std::wstring *prefix
     return true;
 }
 
-#if IS_PORTABLE == 0
+#ifndef IS_PORTABLE
 bool utils::updateLanguageFile() {
     if (config::languageCode == IDR_INI_LANG_CUSTOM)
         return true;
@@ -499,7 +510,7 @@ bool utils::updateLanguageFile() {
     }
 
     if (needsModification) {
-        std::wofstream file(std::wstring(L"languages/language." + config::languageShortName + L".ini").c_str(), std::ios::out | std::ios::trunc);
+        std::wofstream file(DATA(WSTRINGIFPORTABLE(L"languages/language." + config::languageShortName + L".ini")).c_str(), std::ios::out | std::ios::trunc);
         if (!file.is_open()) {
             messageBox(MSG_FAILED_TO_UPDATE_LANGUAGE_FILE, MB_ICONERROR | MB_OK);
             return false;
@@ -519,7 +530,7 @@ bool utils::updateLanguageFile() {
 }
 
 bool utils::loadLanguageFromName(const std::wstring &shortName, std::wstringstream &wss) {
-    if (FILE* f = _wfopen(std::wstring(L"languages/language." + shortName + L".ini").c_str(), L"rb")) {
+    if (FILE* f = _wfopen(DATA(WSTRINGIFPORTABLE(L"languages/language." + shortName + L".ini"), .c_str()), L"rb")) {
         if (fseek(f, 0, SEEK_END) == 0) {
             if (const long size = ftell(f); size >= 0) {
                 rewind(f);
@@ -556,21 +567,21 @@ bool utils::loadLanguageFromName(const std::wstring &shortName, std::wstringstre
     config::languageShortName = L"en";
     config::languageCode = IDR_INI_LANG_EN;
     // Can't be bothered to load internal messages again
-    messageBoxRT(L"Failed to open/read languages/language." + shortName + L".ini file, using default language instead.", MB_ICONERROR | MB_OK);
+    messageBoxRT(L"Failed to open/read \"languages/language." + shortName + L".ini\" file, using default language instead.", MB_ICONERROR | MB_OK);
     return false;
 }
 
 void utils::exportLanguageFiles() {
-    mkdir(L"languages");
+    std::filesystem::create_directories(DATA(L"languages"));
     bool success = true;
-    for (const std::unordered_map<std::wstring, int> languages = APP_DEFAULT_LANGUAGES; const auto &[language, languageCode]: languages) {
-        const std::wstring fileName = L"languages/language." + language + L".ini";
-        if (fileExists(fileName.c_str())) {
-            if (std::ifstream file(fileName.c_str(), std::ios::binary | std::ios::ate); file.tellg() != 0)
+    for (const std::unordered_map<std::wstring, int> languages = APP_DEFAULT_LANGUAGES; const auto &[language, languageCode] : languages) {
+        const std::wstring filePath = DATA(L"languages/language." + language + L".ini");
+        if (fileExists(filePath.c_str())) {
+            if (std::ifstream file(filePath.c_str(), std::ios::binary | std::ios::ate); file.tellg() != 0)
                 continue;
         }
 
-        const auto hRes = FindResource(globals::hIns, MAKEINTRESOURCE(languageCode), L"INI");
+        const auto hRes = FindResourceW(globals::hIns, MAKEINTRESOURCE(languageCode), L"INI");
         if (!hRes) {
             success = false;
             continue;
@@ -590,7 +601,7 @@ void utils::exportLanguageFiles() {
         }
 
         static constexpr unsigned char UTF8_BOM[] = { 0xEF, 0xBB, 0xBF };
-        if (FILE* out = _wfopen(fileName.c_str(), L"wb"); !out) {
+        if (FILE* out = _wfopen(filePath.c_str(), L"wb"); !out) {
             success = false;
         } else {
             fwrite(UTF8_BOM, sizeof(UTF8_BOM), 1, out);
@@ -603,7 +614,7 @@ void utils::exportLanguageFiles() {
 }
 
 bool utils::loadInternalLanguageStringsIntoMap(std::map<int, INILine> &map) {
-    if (const auto hRes = FindResource(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
+    if (const auto hRes = FindResourceW(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
         if (const HGLOBAL hData = LoadResource(globals::hIns, hRes)) {
             const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
             const auto content = static_cast<const char*>(LockResource(hData));
@@ -640,13 +651,13 @@ void utils::loadIfNeededAndGetCachedLanguageString(const unsigned int mType, std
     if (cachedMessages.empty() || mType == 0) {
         cachedMessages.clear(); // Clear cached messages
         std::wstringstream input;
-#if IS_PORTABLE == 0
+#ifndef IS_PORTABLE
         if (config::languageCode == IDR_INI_LANG_CUSTOM)
             loadLanguageFromName(config::languageShortName, input);
 #endif
 
         if (input.str().empty()) {
-            if (const auto hRes = FindResource(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
+            if (const auto hRes = FindResourceW(globals::hIns, MAKEINTRESOURCE(config::languageCode), L"INI")) {
                 if (const HGLOBAL hData = LoadResource(globals::hIns, hRes)) {
                     const int dataSize = static_cast<int>(SizeofResource(globals::hIns, hRes));
                     const auto content = static_cast<const char*>(LockResource(hData));
@@ -729,15 +740,15 @@ std::wstring utils::formatLangString(const std::wstring& rStr, const std::vector
 }
 
 int utils::messageBox(const unsigned int mType, const unsigned int uType, const std::vector<std::wstring> &values) {
-    return MessageBox(globals::hWnd, message(mType, values).c_str(), message(MSG_APPLICATION_NAME).c_str(), uType);
+    return MessageBoxW(globals::hWnd, message(mType, values).c_str(), message(MSG_APPLICATION_NAME).c_str(), uType);
 }
 
 int utils::messageBox(const std::wstring &mText, const unsigned int uType) {
-    return MessageBox(globals::hWnd, mText.c_str(), message(MSG_APPLICATION_NAME).c_str(), uType);
+    return MessageBoxW(globals::hWnd, mText.c_str(), message(MSG_APPLICATION_NAME).c_str(), uType);
 }
 
 int utils::messageBoxRT(const std::wstring &mText, const unsigned int uType) {
-    return MessageBox(globals::hWnd, mText.c_str(), PROJECT_NAME, uType);
+    return MessageBoxW(globals::hWnd, mText.c_str(), PROJECT_NAME, uType);
 }
 
 std::wstring utils::message(const unsigned int mType, const std::vector<std::wstring> &values) {
@@ -769,15 +780,15 @@ bool utils::isUserUsingDarkTheme() {
     return (buffer[3] << 24 | buffer[2] << 16 | buffer[1] << 8 | buffer[0]) == 0;
 }
 
-std::wstring utils::utf8ToWide(const std::string& string) {
-    if (string.empty())
+std::wstring utils::utf8ToWide(const std::string& str) {
+    if (str.empty())
         return {};
 
     const int required = MultiByteToWideChar(
         CP_UTF8,
         MB_ERR_INVALID_CHARS,
-        string.data(),
-        static_cast<int>(string.size()),
+        str.data(),
+        static_cast<int>(str.size()),
         nullptr, 0
     );
 
@@ -788,8 +799,8 @@ std::wstring utils::utf8ToWide(const std::string& string) {
     int got = MultiByteToWideChar(
         CP_UTF8,
         MB_ERR_INVALID_CHARS,
-        string.data(),
-        static_cast<int>(string.size()),
+        str.data(),
+        static_cast<int>(str.size()),
         &result[0],
         required
     );
@@ -800,3 +811,19 @@ std::wstring utils::utf8ToWide(const std::string& string) {
     return result;
 }
 
+#ifndef IS_PORTABLE
+std::filesystem::path utils::toDataPath(const std::filesystem::path& relativePath) {
+    static std::filesystem::path sAppdataPath;
+    if (sAppdataPath.empty()) {
+        PWSTR appdata = nullptr;
+        SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &appdata);
+        sAppdataPath = appdata;
+        CoTaskMemFree(appdata);
+        sAppdataPath /= PROJECT_NAME;
+    }
+    std::filesystem::create_directories(sAppdataPath);
+    auto copy = sAppdataPath;
+    copy /= relativePath;
+    return copy;
+}
+#endif
