@@ -2,9 +2,11 @@
 #define TASKBAR_H
 
 #include <dwmapi.h>
+#include <mutex>
 #include <string>
-#include <thread>
 #include <unordered_map>
+
+#include "win32thread.h"
 
 class taskbar {
 public:
@@ -51,12 +53,14 @@ public:
     static std::mutex taskbarMutex;
     static std::unordered_map<HMONITOR, bool> taskbarForcedVisibilityStates;
     static std::unordered_map<HMONITOR, HWND> taskbarHandles;
-    static std::thread updateThread;
+    // static std::thread updateThread;
+    static win32thread updateThread;
 
     static void initThread();
     static void findTaskbarHandles();
     static void setTaskbarVisibility(HWND hwnd, bool visible, bool hoveredOver, bool causedByMaximizedWindow);
     static void resetTaskbar();
+    static void resumeTaskbar();
     static void updateTaskbarState();
     static void clearErrorState();
     static void clearForcedVisibilityStates();
