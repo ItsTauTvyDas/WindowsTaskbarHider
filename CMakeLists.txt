@@ -5,7 +5,7 @@ project(WindowsTaskbarHider)
 
 set(CMAKE_CXX_STANDARD             20)
 set(CMAKE_CXX_FLAGS_RELEASE        "${CMAKE_CXX_FLAGS_RELEASE} -static -static-libgcc -static-libstdc++ -Os -fdata-sections -ffunction-sections")
-set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -Wl,--gc-sections -s -static -lpthread")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -Wl,--gc-sections -s -static")
 set(CMAKE_CXX_FLAGS_DEBUG          "${CMAKE_CXX_FLAGS_DEBUG} -gdwarf-3")
 
 set(PRODUCT_COMPANY          "ItsTauTvyDas")
@@ -63,6 +63,7 @@ set(EXECUTABLE_SOURCES
         resources.h
         taskbar_animation.cpp
         taskbar_animation.h
+        win32thread.h
         "${CMAKE_CURRENT_BINARY_DIR}/language.h"
         "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"
         resources/language/language.en.2057.ini
@@ -85,13 +86,15 @@ target_link_options(WindowsTaskbarHiderPortable PRIVATE -municode -mwindows)
 target_compile_definitions(WindowsTaskbarHiderPortable PRIVATE UNICODE _UNICODE IS_PORTABLE)
 target_link_libraries(WindowsTaskbarHiderPortable PRIVATE Dwmapi)
 
-# Test
-add_executable(WindowsTaskbarHiderTest WIN32 test/main.cpp)
-target_include_directories(WindowsTaskbarHiderTest PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_options(WindowsTaskbarHiderTest PRIVATE -municode -mwindows)
-target_link_options(WindowsTaskbarHiderTest PRIVATE -municode -mwindows)
-target_compile_definitions(WindowsTaskbarHiderTest PRIVATE UNICODE _UNICODE IS_PORTABLE=1)
-target_link_libraries(WindowsTaskbarHiderTest PRIVATE Dwmapi)
+# Test (just testing out some related to project or separate code that does not need to be public, this is solely for my own purpose)
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test")
+    add_executable(WindowsTaskbarHiderTest WIN32 test/main.cpp)
+    target_include_directories(WindowsTaskbarHiderTest PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+    target_compile_options(WindowsTaskbarHiderTest PRIVATE -municode -mwindows)
+    target_link_options(WindowsTaskbarHiderTest PRIVATE -municode -mwindows)
+    target_compile_definitions(WindowsTaskbarHiderTest PRIVATE UNICODE _UNICODE IS_PORTABLE)
+    target_link_libraries(WindowsTaskbarHiderTest PRIVATE Dwmapi)
+endif()
 
 # PowerShell command to forcefully kill any existing processes of the application (I was too lazy to close it every time lol)
 add_custom_command(
@@ -107,15 +110,27 @@ add_custom_command(
 # Installer stuff (requires WixTools to be installed)
 # https://github.com/wixtoolset/wix3
 # https://cmake.org/cmake/help/v3.9/module/CPackWIX.html
+# https://cmake.org/cmake/help/latest/module/CPack.html
 set(CPACK_GENERATOR "WIX")
 set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
-set(CPACK_WIX_PROGRAM_MENU_FOLDER "${PROJECT_NAME}")
+set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
 set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT "https://github.com/ItsTauTvyDas/WindowsTaskbarHider")
 set(CPACK_WIX_PROPERTY_ARPCOMMENTS "Hide taskbar to make your wallpaper more clear!")
+set(CPACK_PACKAGE_VERSION "${VERSION_PRODUCT_NUMBER}.${VERSION_PRODUCT_VERSION}.${VERSION_PRODUCT_BUILD}.${VERSION_PRODUCT_REVISION}")
 generate_guid(CPACK_WIX_PRODUCT_GUID "${PROJECT_NAME}")
-generate_guid(CPACK_WIX_UPGRADE_GUID "${VERSION_PRODUCT_NUMBER}.${VERSION_PRODUCT_VERSION}.${VERSION_PRODUCT_BUILD}.${VERSION_PRODUCT_REVISION}")
-# CPACK
-set(CPACK_PACKAGE_VERSION "1.0.0")
+generate_guid(CPACK_WIX_UPGRADE_GUID "${CPACK_PACKAGE_VERSION}")
 set(CPACK_PACKAGE_VENDOR "By ItsTauTvyDas")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}")
+set(CPACK_PACKAGE_EXECUTABLES "${PROJECT_NAME}" "${PRODUCT_DESCRIPTION}")
+set(CPACK_WIX_PROGRAM_MENU_FOLDER "${PROJECT_NAME}")
+set(CPACK_CREATE_DESKTOP_LINKS "${PROJECT_NAME}")
+install(TARGETS WindowsTaskbarHider RUNTIME DESTINATION .)
 include(CPack)
+add_custom_target(
+        WindowsTaskbarHiderInstaller
+        COMMAND powershell -NoProfile -Command "cpack.exe -G WIX --config CPackConfig.cmake -VV --debug --trace-expand | Tee-Object -FilePath ${PROJECT_NAME}.msi.log"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        COMMENT "CPACK"
+        VERBATIM
+        DEPENDS WindowsTaskbarHider
+)
