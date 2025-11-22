@@ -25,16 +25,16 @@ std::atomic<bool> config::closeToTray;
 std::atomic<bool> config::minimizeToTray = true;
 std::atomic<bool> config::closeConfirmMessage = true;
 std::atomic<bool> config::disableAutoUpdateWhenUnfocused = true;
-std::atomic<bool> config::useRealOpacityValues;
+std::atomic<bool> config::useRealOpacityValues = true;
 std::atomic<bool> config::animationsEnabled = true;
 std::atomic<bool> config::autoUpdateOnOpen = true;
 std::atomic<bool> config::fixTaskbarHoverGlitch = true;
 std::atomic<bool> config::exceptTaskbarPopups = true;
 
-std::atomic<int> config::taskbarUpdateInterval;
-std::atomic<int> config::opacityWhenHidden;
-std::atomic<int> config::opacityWhenShown;
-std::atomic<int> config::opacityWhenHovered;
+std::atomic<int> config::taskbarUpdateInterval = 5;
+std::atomic<int> config::opacityWhenHidden = 50;
+std::atomic<int> config::opacityWhenShown = 240;
+std::atomic<int> config::opacityWhenHovered = 255;
 std::atomic<int> config::opacityWhenHiddenInternal = 50;
 std::atomic<int> config::opacityWhenShownInternal = 240;
 std::atomic<int> config::opacityWhenHoveredInternal = 255;
@@ -74,21 +74,9 @@ void config::init() {
 }
 
 bool config::save(const bool exposeInternalKeys) {
-#ifdef IS_PORTABLE
-    std::wofstream file(CONFIG_FILENAME, std::ios::out | std::ios::trunc);
-#else
-    // Creating directory in %appdata%
-    PWSTR appdata = nullptr;
-    SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &appdata);
-    std::filesystem::path configPath = appdata;
-    CoTaskMemFree(appdata);
-    configPath /= PROJECT_NAME;
-    std::filesystem::create_directories(configPath);
-    configPath /= CONFIG_FILENAME;
-    std::wofstream file(configPath, std::ios::out | std::ios::trunc);
-#endif
+    std::wofstream file(DATA(CONFIG_FILENAME), std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
-        utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
+        utils::messageBox(MSG_CONFIG_SAVE_FAILED, MB_ICONERROR | MB_OK);
         return false;
     }
 
@@ -190,7 +178,7 @@ bool config::save(const bool exposeInternalKeys) {
 }
 
 bool config::exists() {
-    return utils::fileExists(CONFIG_FILENAME);
+    return utils::fileExists(DATA(CONFIG_FILENAME, .c_str()));
 }
 
 bool config::ensureConfigurationExists() {
@@ -204,7 +192,7 @@ bool config::ensureConfigurationExists() {
 }
 
 void config::open() {
-    ShellExecute(nullptr, L"open", CONFIG_FILENAME, nullptr, nullptr, SW_SHOWNORMAL);
+    ShellExecute(nullptr, L"open", DATA(CONFIG_FILENAME, .c_str()), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 int stringToInt(const std::wstring& str, const int defaultValue, const bool isBool) {
@@ -285,7 +273,7 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
         } else if (key == L"General.Language") {
             auto languages = std::unordered_map<std::wstring, int>(APP_DEFAULT_LANGUAGES);
 #ifndef IS_PORTABLE
-            if (utils::fileExists(std::wstring(L"languages/language." + value + L".ini").c_str())) {
+            if (utils::fileExists(DATA(WSTRINGIFPORTABLE(L"languages/language." + value + L".ini")).c_str())) {
                 setLanguage(IDR_INI_LANG_CUSTOM, value);
                 if (languages.contains(value))
                     utils::updateLanguageFile();
@@ -374,7 +362,7 @@ bool config::load() {
     if (!ensureConfigurationExists())
         return false;
 
-    std::ifstream file(CONFIG_FILENAME, std::ios::binary);
+    std::ifstream file(DATA(CONFIG_FILENAME), std::ios::binary);
     if (!file) {
         utils::messageBox(MSG_CONFIG_LOAD_FAILED, MB_ICONERROR | MB_OK);
         return false;

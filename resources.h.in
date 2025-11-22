@@ -3,6 +3,14 @@
 
 #define STRINGIFY(x)                  #x
 
+#ifdef IS_PORTABLE
+#define DATA(path, ...)               path
+#define WSTRINGIFPORTABLE(x)          std::wstring(x)
+#else
+#define DATA(path, ...)               utils::toDataPath(path) __VA_ARGS__
+#define WSTRINGIFPORTABLE(x)          x
+#endif
+
 #define PROJECT_NAME                  L"@PROJECT_NAME@"
 #define TRAY_TITLE                    PROJECT_NAME L" " VER_FILEVERSION_STR
 
@@ -19,6 +27,7 @@
 
 #define WM_UPDATE_GRID_REQUEST        (WM_APP + 1)
 #define WM_TASKBAR_THREAD_ERROR       (WM_APP + 2)
+#define WM_TRIGGER                    (WM_APP + 3)
 
 #define WM_TRAY_ICON                  (WM_USER + 1)
 
