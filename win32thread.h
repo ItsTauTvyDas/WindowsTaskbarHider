@@ -16,8 +16,8 @@ public:
     {
         if (this != &other) {
             CloseHandle(other.handle);
-            other.handle = nullptr;
             handle = other.handle;
+            other.handle = nullptr;
         }
         return *this;
     }
