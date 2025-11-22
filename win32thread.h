@@ -1,6 +1,8 @@
 #ifndef WINDOWSTASKBARHIDER_WIN32THREAD_H
 #define WINDOWSTASKBARHIDER_WIN32THREAD_H
 
+#include <windows.h>
+
 class win32thread {
 public:
     HANDLE handle;
