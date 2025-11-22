@@ -4,7 +4,6 @@
 #include <mutex>
 #include <windows.h>
 #include <ranges>
-#include <thread>
 
 #include "config.h"
 #include "globals.h"
@@ -22,14 +21,15 @@ std::atomic<bool> clearForcedVisibilityStatesBool;
 std::unordered_map<HMONITOR, bool> taskbar::taskbarForcedVisibilityStates;
 std::unordered_map<HMONITOR, HWND> taskbar::taskbarHandles;
 
-std::thread taskbar::updateThread;
+// std::thread taskbar::updateThread;
+win32thread taskbar::updateThread;
 std::mutex taskbar::taskbarMutex;
 
-void taskbarLoop() {
+DWORD WINAPI taskbarLoop(LPVOID) {
     bool called = false;
     while (true) {
         if (globals::isShuttingDown)
-            return;
+            break;
         if (!globals::taskbarLoopRunState) {
             if (!called) {
                 taskbar::resetTaskbar();
@@ -45,16 +45,19 @@ void taskbarLoop() {
             }
             clearForcedVisibilityStatesBool = false;
         }
-        taskbar::updateTaskbarState();
-        std::this_thread::sleep_for(std::chrono::milliseconds(config::taskbarUpdateInterval));
         called = false;
+        taskbar::updateTaskbarState();
+        // std::this_thread::sleep_for(std::chrono::milliseconds(config::taskbarUpdateInterval));
+        Sleep(config::taskbarUpdateInterval);
     }
+    return 0;
 }
 
 void taskbar::initThread() {
     if (updateThread.joinable())
         return;
-    updateThread = std::thread(taskbarLoop);
+    // updateThread = std::thread(taskbarLoop);
+    updateThread = win32thread(taskbarLoop);
 }
 
 void taskbar::collectWindowData(const bool _ignorePreviousWindowsCheck, const bool _ignoreGUIUpdateChecks) {
@@ -130,6 +133,13 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                     GetClassName(wInfo.hwnd, wInfo.wndClass, sizeof(wInfo.wndClass));
                 if (std::wstring(wInfo.wndClass) == value)
                     succeededTags++;
+            } else if (key == L"cloaked" || key == L"clk") {
+                if (wInfo.cloaked == -1) {
+                    DWORD cloaked = 0;
+                    if (const HRESULT hr = DwmGetWindowAttribute(wInfo.hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr)) {
+
+                    }
+                }
             } else if (key == L"monitor" || key == L"mon") {
                 if (const int index = std::stoi(value); index >= 0 && index < monitors::monitorCount && monitors::monitor(index) == wInfo.hMonitor)
                     succeededTags++;
@@ -174,7 +184,7 @@ void taskbar::WindowInfo::updateMonitor() {
     hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
 }
 
-void taskbar::WindowInfo::updateValues(HWND hwnd) {
+void taskbar::WindowInfo::updateValues() {
     WINDOWINFO wi; wi.cbSize = sizeof(WINDOWINFO); GetWindowInfo(hwnd, &wi);
     focused = wi.dwWindowStatus; // Focus status (0 or 1)
     utils::getProcessInfo(hwnd, procFilename); // Process filename
@@ -223,7 +233,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
 
             std::wstring succeededIgnoreTagGroup, succeededExceptionTagGroup;
             if (ewp.collectWindowsInfo)
-                wInfo.updateValues(hwnd);
+                wInfo.updateValues();
 
             if (!wInfo.initiallyIgnored) {
                 if (!config::ignoredWindows.empty())
@@ -329,10 +339,19 @@ void taskbar::setTaskbarVisibility(HWND taskbar, bool visible, bool hoveredOver,
 }
 
 void taskbar::resetTaskbar() {
-    // std::lock_guard lock(taskbarMutex);
+    std::lock_guard lock(taskbarMutex);
     for (HWND hwnd : taskbarHandles | std::views::values) {
-        SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+        // SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
+        ShowWindowAsync(hwnd, SW_SHOW);
+    }
+}
+
+void taskbar::resumeTaskbar() {
+    std::lock_guard lock(taskbarMutex);
+    for (HWND hwnd : taskbarHandles | std::views::values) {
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
+        SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
         ShowWindowAsync(hwnd, SW_SHOW);
     }
 }
