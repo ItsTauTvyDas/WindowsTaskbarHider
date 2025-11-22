@@ -71,21 +71,21 @@ void taskbar::findTaskbarHandles() {
         std::lock_guard lock(taskbarMutex);
         taskbarHandles.clear();
     }
-    EnumWindows([](HWND hwnd, const LPARAM) -> BOOL {
+    EnumWindows([](HWND hWnd, const LPARAM) -> BOOL {
         std::wstring className(256, L'\0');
-        if (const int len = GetClassNameW(hwnd, className.data(), static_cast<int>(className.size())); len > 0) {
+        if (const int len = GetClassNameW(hWnd, className.data(), static_cast<int>(className.size())); len > 0) {
             className.resize(len);
             const std::wstring& prefix = config::I_TaskbarWindowClassNameStarts;
             const std::wstring& suffix = config::I_TaskbarWindowClassNameEnds;
             if (className.find(prefix) != 0)
                 return TRUE;
             if (className.size() >= suffix.size() && className.compare(className.size() - suffix.size(), suffix.size(), suffix) == 0) {
-                WindowInfo wInfo { hwnd };
+                WindowInfo wInfo { hWnd };
                 wInfo.updateMonitor();
-                const LONG_PTR style = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-                SetWindowLongPtr(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED);
+                const LONG_PTR style = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+                SetWindowLongPtr(hWnd, GWL_EXSTYLE, style | WS_EX_LAYERED);
                 std::lock_guard lock(taskbarMutex);
-                taskbarHandles[wInfo.hMonitor] = hwnd;
+                taskbarHandles[wInfo.hMonitor] = hWnd;
             }
         }
         return TRUE;
@@ -108,7 +108,7 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
             std::wstring value = tExpr.substr(pos + 1);
             if (key == L"process" || key == L"p") {
                 if (wInfo.procFilename.empty())
-                    utils::getProcessInfo(wInfo.hwnd, wInfo.procFilename);
+                    utils::getProcessInfo(wInfo.hWnd, wInfo.procFilename);
                 std::wstring process = wInfo.procFilename;
                 std::transform(process.begin(), process.end(), process.begin(), tolower);
                 std::transform(value.begin(), value.end(), value.begin(), tolower);
@@ -116,27 +116,27 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                     succeededTags++;
             } else if (key == L"title" || key == L"t") {
                 if (wInfo.title[0] == L'\0')
-                    GetWindowText(wInfo.hwnd, wInfo.title, sizeof(wInfo.title));
+                    GetWindowText(wInfo.hWnd, wInfo.title, sizeof(wInfo.title));
                 if (wInfo.title == value)
                     succeededTags++;
             } else if (key == L"focus" || key == L"f") {
                 if (wInfo.focused == -1) {
                     WINDOWINFO wi;
                     wi.cbSize = sizeof(WINDOWINFO);
-                    GetWindowInfo(wInfo.hwnd, &wi);
+                    GetWindowInfo(wInfo.hWnd, &wi);
                     wInfo.focused = wi.dwWindowStatus;
                 }
                 if (static_cast<int>(wInfo.focused) == stoi(value))
                     succeededTags++;
             } else if (key == L"class" || key == L"c") {
                 if (wInfo.wndClass[0] == L'\0')
-                    GetClassName(wInfo.hwnd, wInfo.wndClass, sizeof(wInfo.wndClass));
+                    GetClassName(wInfo.hWnd, wInfo.wndClass, sizeof(wInfo.wndClass));
                 if (std::wstring(wInfo.wndClass) == value)
                     succeededTags++;
             } else if (key == L"cloaked" || key == L"clk") {
                 if (wInfo.cloaked == -1) {
                     DWORD cloaked = 0;
-                    if (const HRESULT hr = DwmGetWindowAttribute(wInfo.hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr)) {
+                    if (const HRESULT hr = DwmGetWindowAttribute(wInfo.hWnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr)) {
 
                     }
                 }
@@ -148,7 +148,7 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                     succeededTags++;
             } else if (key == L"left" || key == L"right" || key == L"top" || key == L"bottom") {
                 if (!wInfo.wasRectModified) {
-                    GetWindowRect(wInfo.hwnd, &wInfo.rect);
+                    GetWindowRect(wInfo.hWnd, &wInfo.rect);
                     wInfo.wasRectModified = true;
                 }
                 const int iValue = std::stoi(value);
@@ -177,20 +177,20 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
 }
 
 taskbar::WindowInfo taskbar::WindowInfo::reset() const {
-    return { hwnd, hMonitor };
+    return { hWnd, hMonitor };
 }
 
 void taskbar::WindowInfo::updateMonitor() {
-    hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
 }
 
 void taskbar::WindowInfo::updateValues() {
-    WINDOWINFO wi; wi.cbSize = sizeof(WINDOWINFO); GetWindowInfo(hwnd, &wi);
+    WINDOWINFO wi; wi.cbSize = sizeof(WINDOWINFO); GetWindowInfo(hWnd, &wi);
     focused = wi.dwWindowStatus; // Focus status (0 or 1)
-    utils::getProcessInfo(hwnd, procFilename); // Process filename
-    GetWindowText(hwnd, title, sizeof(title)); // Title
-    GetClassName(hwnd, wndClass, sizeof(wndClass)); // Class
-    GetWindowRect(hwnd, &rect); // Rect
+    utils::getProcessInfo(hWnd, procFilename); // Process filename
+    GetWindowText(hWnd, title, sizeof(title)); // Title
+    GetClassName(hWnd, wndClass, sizeof(wndClass)); // Class
+    GetWindowRect(hWnd, &rect); // Rect
 }
 
 std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
@@ -209,13 +209,13 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
     ewp.ignorePreviousWindowsCheck = ignorePreviousWindowsCheck;
     ewp.collectAllWindows = config::showAllWindows;
     try {
-        EnumWindows([](HWND hwnd, const LPARAM lParam) -> BOOL {
+        EnumWindows([](HWND hWnd, const LPARAM lParam) -> BOOL {
             EnumWindowParam ewp = *reinterpret_cast<EnumWindowParam*>(lParam);
 
             WINDOWPLACEMENT wp;
             wp.length = sizeof(WINDOWPLACEMENT);
 
-            if (!GetWindowPlacement(hwnd, &wp) || !IsWindowVisible(hwnd) || IsIconic(hwnd))
+            if (!GetWindowPlacement(hWnd, &wp) || !IsWindowVisible(hWnd) || IsIconic(hWnd))
                 return TRUE;
 
             WindowInfo wInfo = {};
@@ -225,9 +225,9 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
                 else
                     return TRUE;
             }
-            wInfo.hwnd = hwnd;
+            wInfo.hWnd = hWnd;
             wInfo.updateMonitor();
-            if (const auto taskbar = taskbarHandles.find(wInfo.hMonitor); taskbar != taskbarHandles.end() && taskbarHandles[wInfo.hMonitor] == hwnd)
+            if (const auto taskbar = taskbarHandles.find(wInfo.hMonitor); taskbar != taskbarHandles.end() && taskbarHandles[wInfo.hMonitor] == hWnd)
                 return TRUE;
             wInfo.maximized = wp.showCmd == SW_MAXIMIZE;
 
@@ -245,7 +245,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
 
             if (ewp.collectWindowsInfo) {
                 wInfo.fault = wInfo.wasExceptional ? succeededExceptionTagGroup : succeededIgnoreTagGroup;
-                wInfo.hwnd = nullptr;
+                wInfo.hWnd = nullptr;
                 windows.push_back(wInfo);
             }
 
@@ -340,19 +340,19 @@ void taskbar::setTaskbarVisibility(HWND taskbar, bool visible, bool hoveredOver,
 
 void taskbar::resetTaskbar() {
     std::lock_guard lock(taskbarMutex);
-    for (HWND hwnd : taskbarHandles | std::views::values) {
-        // SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
-        ShowWindowAsync(hwnd, SW_SHOW);
+    for (HWND hWnd : taskbarHandles | std::views::values) {
+        // SetLayeredWindowAttributes(hWnd, 0, 255, LWA_ALPHA);
+        SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
+        ShowWindowAsync(hWnd, SW_SHOW);
     }
 }
 
 void taskbar::resumeTaskbar() {
     std::lock_guard lock(taskbarMutex);
-    for (HWND hwnd : taskbarHandles | std::views::values) {
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
-        SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
-        ShowWindowAsync(hwnd, SW_SHOW);
+    for (HWND hWnd : taskbarHandles | std::views::values) {
+        SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
+        SetLayeredWindowAttributes(hWnd, 0, 255, LWA_ALPHA);
+        ShowWindowAsync(hWnd, SW_SHOW);
     }
 }
 

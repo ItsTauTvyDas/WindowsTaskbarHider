@@ -11,7 +11,7 @@
 class taskbar {
 public:
     struct WindowInfo {
-        HWND hwnd = nullptr;
+        HWND hWnd = nullptr;
         HMONITOR hMonitor = nullptr;
         bool maximized = false;
         bool detected = false;
@@ -33,7 +33,7 @@ public:
         bool operator==(const WindowInfo& o) const {
             return maximized                         == o.maximized &&
                    detected                          == o.detected &&
-                   hwnd                              == o.hwnd &&
+                   hWnd                              == o.hWnd &&
                    hMonitor                          == o.hMonitor &&
                    wasExceptional                    == o.wasExceptional &&
                    wasRectModified                   == o.wasRectModified &&
@@ -58,7 +58,7 @@ public:
 
     static void initThread();
     static void findTaskbarHandles();
-    static void setTaskbarVisibility(HWND hwnd, bool visible, bool hoveredOver, bool causedByMaximizedWindow);
+    static void setTaskbarVisibility(HWND hWnd, bool visible, bool hoveredOver, bool causedByMaximizedWindow);
     static void resetTaskbar();
     static void resumeTaskbar();
     static void updateTaskbarState();

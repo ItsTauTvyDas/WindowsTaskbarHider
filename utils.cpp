@@ -57,9 +57,9 @@ bool utils::getProcessesByName(const wchar_t* processName, DWORD currentPid, con
     return success;
 }
 
-void utils::getProcessInfo(HWND hwnd, std::wstring &processExeName, const bool lowercase) {
+void utils::getProcessInfo(HWND hWnd, std::wstring &processExeName, const bool lowercase) {
     DWORD pid = 0;
-    GetWindowThreadProcessId(hwnd, &pid);
+    GetWindowThreadProcessId(hWnd, &pid);
     if (pid == 0) {
         processExeName = L"#_unknown(?)";
         return;
