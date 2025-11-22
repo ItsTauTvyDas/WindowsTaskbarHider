@@ -63,6 +63,7 @@ set(EXECUTABLE_SOURCES
         resources.h
         taskbar_animation.cpp
         taskbar_animation.h
+        win32thread.cpp
         win32thread.h
         "${CMAKE_CURRENT_BINARY_DIR}/language.h"
         "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"

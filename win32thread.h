@@ -5,46 +5,25 @@
 
 class win32thread {
 public:
-    HANDLE handle;
+    win32thread();
+    explicit win32thread(const LPTHREAD_START_ROUTINE& proc);
+
     win32thread& operator=(const win32thread&) = delete;
+    win32thread& operator=(win32thread&& other) noexcept;
 
-    explicit win32thread() {
-        handle = nullptr;
-    }
+    void join();
 
-    win32thread& operator=(win32thread&& other) noexcept
+    [[nodiscard]] bool joinable() const noexcept
     {
-        if (this != &other) {
-            CloseHandle(other.handle);
-            handle = other.handle;
-            other.handle = nullptr;
-        }
-        return *this;
-    }
-
-    explicit win32thread(const LPTHREAD_START_ROUTINE& proc) {
-        handle = CreateThread(
-            nullptr,
-            0,
-            proc,
-            nullptr,
-            0,
-            nullptr
-        );
-    }
-
-    [[nodiscard]] bool joinable() const noexcept {
         return handle != nullptr;
     }
 
-    void join() {
-        if (!joinable())
-            return;
-        WaitForSingleObject(handle, INFINITE);
-        CloseHandle(handle);
-        handle = nullptr;
+    [[nodiscard]] HANDLE getHandle() const noexcept {
+        return handle;
     }
-};
 
+private:
+    HANDLE handle;
+};
 
 #endif
