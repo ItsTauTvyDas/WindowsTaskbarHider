@@ -1,8 +1,10 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-#include "taskbar.h"
+#include <atomic>
 #include <string>
+
+#include "taskbar.h"
 
 class globals {
 public:
