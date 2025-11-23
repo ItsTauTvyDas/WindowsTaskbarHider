@@ -1481,7 +1481,7 @@ bool GetWindowsBuild(DWORD& build) {
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) {
-    HANDLE hMutex = CreateMutex(nullptr, TRUE, PROJECT_NAME);
+    HANDLE hMutex = CreateMutexW(nullptr, TRUE, PROJECT_NAME);
     const DWORD hMutexLastError = GetLastError();
 
     GetWindowsBuild(globals::sysBuildNumber);
