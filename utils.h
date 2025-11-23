@@ -10,6 +10,11 @@
 
 class utils {
 public:
+    template <typename K, typename V> struct pair {
+        const K key;
+        const V value;
+    };
+
     static void getProcessInfo(HWND hWnd, std::wstring &processExeName, bool lowercase = false);
     static bool getProcessesByName(const wchar_t *processName, DWORD currentPid, const std::function<void (PROCESSENTRY32W*)> &func);
     static bool processArguments(int argc, const LPWSTR *argv, LPWSTR commandLine);
@@ -26,6 +31,7 @@ public:
     static std::vector<std::wstring> splitToGroups(const std::wstring& s, unsigned int length);
     static bool showTrayNotification(const std::wstring &message);
     static bool fileExists(const wchar_t *path, bool dir = false);
+    static int stoi(const wchar_t* str, bool* success = nullptr);
 #ifndef IS_PORTABLE
     static bool doesAutoStart();
     static void toggleStartup();
@@ -47,7 +53,7 @@ public:
     static bool processIniFileLine(const std::wstring &orgLine, std::wstring *prefix, std::wstring &key, std::wstring &value);
     static std::wstring utf8ToWide(const std::string& str);
     static bool mouseInWindow(HWND window);
-    static DWORD evaluateBitmask(std::wstring str, DWORD currentBitmask, std::unordered_map<std::wstring, DWORD> bitmasks);
+    static bool hasBitmaskStrW(std::wstring str, const DWORD currentBitmask, const pair<const std::wstring_view, const DWORD>* entries, size_t count);
 #ifndef IS_PORTABLE
     static std::filesystem::path toDataPath(const std::filesystem::path& relativePath);
 #endif

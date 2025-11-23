@@ -413,7 +413,7 @@ std::wstring utils::getFormattedTime() {
     return oss.str();
 }
 
-DWORD utils::evaluateBitmask(std::wstring str, const DWORD currentBitmask, std::unordered_map<std::wstring, DWORD> bitmasks) {
+bool utils::hasBitmaskStrW(std::wstring str, const DWORD currentBitmask, const pair<const std::wstring_view, const DWORD>* entries, const size_t count) {
     trim(str);
 
     if (str == L"any" || str == L"false")
@@ -429,9 +429,14 @@ DWORD utils::evaluateBitmask(std::wstring str, const DWORD currentBitmask, std::
         const size_t pos = str.find(L',', start);
         std::wstring token = str.substr(start, pos - start);
         trim(token);
+        std::ranges::transform(token, token.begin(), tolower);
 
-        if (auto it = bitmasks.find(token); it != bitmasks.end())
-            evaluatedBitmask |= it->second;
+        for (size_t i = 0; i < count; i++) {
+            if (const auto [key, value] = entries[i]; key == token) {
+                evaluatedBitmask |= value;
+                break;
+            }
+        }
 
         if (pos == std::wstring::npos)
             break;
@@ -439,7 +444,16 @@ DWORD utils::evaluateBitmask(std::wstring str, const DWORD currentBitmask, std::
         start = pos + 1;
     }
 
-    return evaluatedBitmask;
+    return currentBitmask & evaluatedBitmask;
+}
+
+int utils::stoi(const wchar_t* str, bool* success) {
+    wchar_t* end;
+    long v = std::wcstol(str, &end, 10);
+    if (v < INT_MIN) v = INT_MIN;
+    if (v > INT_MAX) v = INT_MAX;
+    if (success) *success = *str != L'\0' && *end == L'\0';
+    return static_cast<int>(v);
 }
 
 bool utils::processIniFileLine(const std::wstring &orgLine, std::wstring *prefix, std::wstring &key, std::wstring &value) {
