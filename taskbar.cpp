@@ -1,7 +1,6 @@
 #include "taskbar.h"
 
 #include <iostream>
-#include <mutex>
 #include <windows.h>
 #include <ranges>
 
@@ -21,11 +20,10 @@ std::atomic<bool> clearForcedVisibilityStatesBool;
 std::unordered_map<HMONITOR, bool> taskbar::taskbarForcedVisibilityStates;
 std::unordered_map<HMONITOR, HWND> taskbar::taskbarHandles;
 
-// std::thread taskbar::updateThread;
-win32thread taskbar::updateThread;
+std::thread taskbar::updateThread;
 std::mutex taskbar::taskbarMutex;
 
-DWORD WINAPI taskbarLoop(LPVOID) {
+void taskbarLoop() {
     bool called = false;
     while (true) {
         if (globals::isShuttingDown)
@@ -47,17 +45,14 @@ DWORD WINAPI taskbarLoop(LPVOID) {
         }
         called = false;
         taskbar::updateTaskbarState();
-        // std::this_thread::sleep_for(std::chrono::milliseconds(config::taskbarUpdateInterval));
-        Sleep(config::taskbarUpdateInterval);
+        std::this_thread::sleep_for(std::chrono::milliseconds(config::taskbarUpdateInterval));
     }
-    return 0;
 }
 
 void taskbar::initThread() {
     if (updateThread.joinable())
         return;
-    // updateThread = std::thread(taskbarLoop);
-    updateThread = win32thread(taskbarLoop);
+    updateThread = std::thread(taskbarLoop);
 }
 
 void taskbar::collectWindowData(const bool _ignorePreviousWindowsCheck, const bool _ignoreGUIUpdateChecks) {
@@ -263,7 +258,7 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
     }
 
     if (ewp.collectWindowsInfo) {
-        const int size = ewp.maximizedWindows->size();
+        const int size = static_cast<int>(ewp.maximizedWindows->size());
         // some monitor can have none of the windows maximized, and it causes a bug where all windows are displayed in debug table
         if (!windows.empty() && ewp.collectWindowsInfo && !ewp.collectAllWindows && size > 0 && size!= monitors::monitorCount)
             while (!windows.empty() && !windows.back().detected)

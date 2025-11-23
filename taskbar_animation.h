@@ -2,14 +2,12 @@
 #define TASKBAR_ANIMATION_H
 
 #include <mutex>
+#include <thread>
 #include <windows.h>
-
-#include "win32thread.h"
 
 class taskbar_animation {
 public:
-    // static std::thread animationThread;
-    static win32thread animationThread;
+    static std::thread animationThread;
     static std::mutex animationMutex;
 
     static void initThread();

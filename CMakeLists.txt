@@ -5,7 +5,7 @@ project(WindowsTaskbarHider)
 
 set(CMAKE_CXX_STANDARD             20)
 set(CMAKE_CXX_FLAGS_RELEASE        "${CMAKE_CXX_FLAGS_RELEASE} -static -static-libgcc -static-libstdc++ -Os -fdata-sections -ffunction-sections")
-set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -Wl,--gc-sections -s -static")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -Wl,--gc-sections -s -static -lpthread")
 set(CMAKE_CXX_FLAGS_DEBUG          "${CMAKE_CXX_FLAGS_DEBUG} -gdwarf-3")
 
 set(PRODUCT_COMPANY          "ItsTauTvyDas")
@@ -63,8 +63,6 @@ set(EXECUTABLE_SOURCES
         resources.h
         taskbar_animation.cpp
         taskbar_animation.h
-        win32thread.cpp
-        win32thread.h
         "${CMAKE_CURRENT_BINARY_DIR}/language.h"
         "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"
         resources/language/language.en.2057.ini

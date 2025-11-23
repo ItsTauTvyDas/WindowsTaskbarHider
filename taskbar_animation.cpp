@@ -2,16 +2,13 @@
 
 #include <algorithm>
 #include <iostream>
-#include <windows.h>
 
 #include "config.h"
 #include "globals.h"
 #include "utils.h"
-#include "win32thread.h"
 
 std::unordered_map<HWND, int> animatingState = {};
-// std::thread taskbar_animation::animationThread;
-win32thread taskbar_animation::animationThread;
+std::thread taskbar_animation::animationThread;
 
 std::mutex taskbar_animation::animationMutex;
 
@@ -24,7 +21,7 @@ inline int nextOpacity(HWND taskbar, const int visibleOpacityPoint) {
     return std::clamp(currentOpacity + delta, visibleOpacityPoint, config::opacityWhenHoveredInternal.load());
 }
 
-DWORD WINAPI animationLoop(LPVOID) {
+void animationLoop() {
     while (true) {
         if (globals::isShuttingDown)
             break;
@@ -41,15 +38,12 @@ DWORD WINAPI animationLoop(LPVOID) {
                 animatingState.erase(taskbar);
             }
         }
-        // std::this_thread::sleep_for(std::chrono::milliseconds(config::animationStepDelay));
-        Sleep(config::animationStepDelay);
+        std::this_thread::sleep_for(std::chrono::milliseconds(config::animationStepDelay));
     }
-    return 0;
 }
 
 void taskbar_animation::initThread() {
-    // animationThread = std::thread(animationLoop);
-    animationThread = win32thread(animationLoop);
+    animationThread = std::thread(animationLoop);
 }
 
 bool taskbar_animation::isAnimating(HWND taskbar) {

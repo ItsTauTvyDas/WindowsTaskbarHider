@@ -4,9 +4,8 @@
 #include <dwmapi.h>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
-
-#include "win32thread.h"
 
 class taskbar {
 public:
@@ -53,8 +52,7 @@ public:
     static std::mutex taskbarMutex;
     static std::unordered_map<HMONITOR, bool> taskbarForcedVisibilityStates;
     static std::unordered_map<HMONITOR, HWND> taskbarHandles;
-    // static std::thread updateThread;
-    static win32thread updateThread;
+    static std::thread updateThread;
 
     static void initThread();
     static void findTaskbarHandles();
