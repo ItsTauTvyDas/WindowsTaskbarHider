@@ -35,6 +35,10 @@ add_custom_command(
         COMMENT "Generating language files (language.h and language.cpp)"
 )
 
+add_custom_target(LanguageGeneration
+        DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/language.h" "${CMAKE_CURRENT_BINARY_DIR}/language.cpp"
+)
+
 function(generate_guid OUT_VAR input)
     string(MD5 _hash "${input}")
     string(SUBSTRING ${_hash} 0 8  p1)
@@ -76,6 +80,8 @@ target_compile_options(WindowsTaskbarHider PRIVATE -municode -mwindows)
 target_link_options(WindowsTaskbarHider PRIVATE -municode -mwindows)
 target_compile_definitions(WindowsTaskbarHider PRIVATE UNICODE _UNICODE)
 target_link_libraries(WindowsTaskbarHider PRIVATE Dwmapi)
+add_dependencies(WindowsTaskbarHider LanguageGeneration)
+target_include_directories(WindowsTaskbarHider PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 # Portable version
 add_executable(WindowsTaskbarHiderPortable WIN32 ${EXECUTABLE_SOURCES})
@@ -84,6 +90,8 @@ target_compile_options(WindowsTaskbarHiderPortable PRIVATE -municode -mwindows)
 target_link_options(WindowsTaskbarHiderPortable PRIVATE -municode -mwindows)
 target_compile_definitions(WindowsTaskbarHiderPortable PRIVATE UNICODE _UNICODE IS_PORTABLE)
 target_link_libraries(WindowsTaskbarHiderPortable PRIVATE Dwmapi)
+add_dependencies(WindowsTaskbarHiderPortable LanguageGeneration)
+target_include_directories(WindowsTaskbarHiderPortable PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 # Test (just testing out some related to project or separate code that does not need to be public, this is solely for my own purpose)
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test")
@@ -93,6 +101,8 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test")
     target_link_options(WindowsTaskbarHiderTest PRIVATE -municode -mwindows)
     target_compile_definitions(WindowsTaskbarHiderTest PRIVATE UNICODE _UNICODE IS_PORTABLE)
     target_link_libraries(WindowsTaskbarHiderTest PRIVATE Dwmapi)
+    add_dependencies(WindowsTaskbarHiderTest LanguageGeneration)
+    target_include_directories(WindowsTaskbarHiderTest PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
 # PowerShell command to forcefully kill any existing processes of the application (I was too lazy to close it every time lol)
