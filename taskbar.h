@@ -1,8 +1,10 @@
 #ifndef TASKBAR_H
 #define TASKBAR_H
 
+#include <cstring>
 #include <dwmapi.h>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -15,12 +17,11 @@ public:
         bool maximized = false;
         bool detected = false;
         bool wasExceptional = false;
-        bool wasRectModified = false;
         bool initiallyIgnored = false;
-        DWORD focused = -1;
-        DWORD cloaked = -1;
+        std::optional<bool> focused = -1;
+        std::optional<DWORD> cloaked = -1;
         wchar_t wndClass[256] = {};
-        RECT rect;
+        std::optional<RECT> rect;
         wchar_t title[256] = {};
         std::wstring fault;
         std::wstring procFilename;
@@ -35,14 +36,13 @@ public:
                    hWnd                              == o.hWnd &&
                    hMonitor                          == o.hMonitor &&
                    wasExceptional                    == o.wasExceptional &&
-                   wasRectModified                   == o.wasRectModified &&
                    focused                           == o.focused &&
                    initiallyIgnored                  == o.initiallyIgnored &&
                    std::wcscmp(wndClass, o.wndClass) == 0 &&
-                   rect.left                         == o.rect.left &&
-                   rect.top                          == o.rect.top &&
-                   rect.right                        == o.rect.right &&
-                   rect.bottom                       == o.rect.bottom &&
+                   rect.has_value()                  == o.rect.has_value() &&
+                   (
+                       !rect.has_value() || std::memcmp(&rect.value(), &o.rect.value(), sizeof(RECT)) == 0
+                   ) &&
                    std::wcscmp(title, o.title)       == 0 &&
                    fault                             == o.fault &&
                    procFilename                      == o.procFilename;

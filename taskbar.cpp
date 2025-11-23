@@ -101,6 +101,7 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                 continue;
             std::wstring key = tExpr.substr(0, pos);
             std::wstring value = tExpr.substr(pos + 1);
+            bool temp;
             if (key == L"process" || key == L"p") {
                 if (wInfo.procFilename.empty())
                     utils::getProcessInfo(wInfo.hWnd, wInfo.procFilename);
@@ -111,57 +112,61 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                     succeededTags++;
             } else if (key == L"title" || key == L"t") {
                 if (wInfo.title[0] == L'\0')
-                    GetWindowText(wInfo.hWnd, wInfo.title, sizeof(wInfo.title));
+                    GetWindowTextW(wInfo.hWnd, wInfo.title, sizeof(wInfo.title));
                 if (wInfo.title == value)
                     succeededTags++;
             } else if (key == L"focus" || key == L"f") {
-                if (wInfo.focused == -1) {
+                if (!wInfo.focused) {
                     WINDOWINFO wi;
                     wi.cbSize = sizeof(WINDOWINFO);
                     GetWindowInfo(wInfo.hWnd, &wi);
-                    wInfo.focused = wi.dwWindowStatus;
+                    wInfo.focused = wi.dwWindowStatus == WS_ACTIVECAPTION;
                 }
-                if (static_cast<int>(wInfo.focused) == stoi(value))
+                if (static_cast<int>(wInfo.focused.value()) == utils::stoi(value.c_str(), &temp) && temp)
                     succeededTags++;
             } else if (key == L"class" || key == L"c") {
                 if (wInfo.wndClass[0] == L'\0')
-                    GetClassName(wInfo.hWnd, wInfo.wndClass, sizeof(wInfo.wndClass));
+                    GetClassNameW(wInfo.hWnd, wInfo.wndClass, sizeof(wInfo.wndClass));
                 if (std::wstring(wInfo.wndClass) == value)
                     succeededTags++;
             } else if (key == L"cloaked" || key == L"clk") {
-                if (wInfo.cloaked == -1) {
-                    DWORD cloaked = 0;
-                    if (const HRESULT hr = DwmGetWindowAttribute(wInfo.hWnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); SUCCEEDED(hr)) {
-
+                if (!wInfo.cloaked) {
+                    DWORD cloaked;
+                    if (const HRESULT hr = DwmGetWindowAttribute(wInfo.hWnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); FAILED(hr)) {
+                        // Fail silently?
+                        goto end;
                     }
+                    wInfo.cloaked = cloaked;
                 }
+                if (std::to_wstring(*wInfo.cloaked) == value || utils::hasBitmaskStrW(value, *wInfo.cloaked, globals::cloakedBitmasks, 3))
+                    succeededTags++;
             } else if (key == L"monitor" || key == L"mon") {
-                if (const int index = std::stoi(value); index >= 0 && index < monitors::monitorCount && monitors::monitor(index) == wInfo.hMonitor)
+                if (const int index = utils::stoi(value.c_str()); index >= 0 && index < monitors::monitorCount && monitors::monitor(index) == wInfo.hMonitor)
                     succeededTags++;
             } else if (key == L"maximized" || key == L"m") {
-                if (wp.showCmd == SW_MAXIMIZE == stoi(value))
+                if ((wp.showCmd == SW_MAXIMIZE) == (value == L"1"))
                     succeededTags++;
             } else if (key == L"left" || key == L"right" || key == L"top" || key == L"bottom") {
-                if (!wInfo.wasRectModified) {
-                    GetWindowRect(wInfo.hWnd, &wInfo.rect);
-                    wInfo.wasRectModified = true;
+                if (!wInfo.rect) {
+                    wInfo.rect.emplace();
+                    GetWindowRect(wInfo.hWnd, &*wInfo.rect);
                 }
-                const int iValue = std::stoi(value);
-                int rect;
+                std::wstring rect;
                 if (key == L"left")
-                    rect = wInfo.rect.left;
+                    rect = wInfo.rect->left;
                 else if (key == L"right")
-                    rect = wInfo.rect.right;
+                    rect = wInfo.rect->right;
                 else if (key == L"top")
-                    rect = wInfo.rect.top;
+                    rect = wInfo.rect->top;
                 else if (key == L"bottom")
-                    rect = wInfo.rect.bottom;
+                    rect = wInfo.rect->bottom;
                 else
                     continue;
-                if (rect == iValue)
+                if (rect == value)
                     succeededTags++;
             }
         }
+        end:
         if (succeededTags == tags.size()) {
             if (succeededTagGroup)
                 *succeededTagGroup = tagGroup;
@@ -183,9 +188,12 @@ void taskbar::WindowInfo::updateValues() {
     WINDOWINFO wi; wi.cbSize = sizeof(WINDOWINFO); GetWindowInfo(hWnd, &wi);
     focused = wi.dwWindowStatus; // Focus status (0 or 1)
     utils::getProcessInfo(hWnd, procFilename); // Process filename
-    GetWindowText(hWnd, title, sizeof(title)); // Title
-    GetClassName(hWnd, wndClass, sizeof(wndClass)); // Class
-    GetWindowRect(hWnd, &rect); // Rect
+    GetWindowTextW(hWnd, title, sizeof(title)); // Title
+    GetClassNameW(hWnd, wndClass, sizeof(wndClass)); // Class
+    rect = wi.rcWindow; // Rect
+    if (const HRESULT hr = DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); FAILED(hr)) {
+        cloaked = -2; // Fail silently?
+    }
 }
 
 std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
