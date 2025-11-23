@@ -1,6 +1,4 @@
 #include "language.h"
-#include <string>
-#include <unordered_map>
 
 const std::unordered_map<unsigned int, std::wstring> language::messageTypeMap = {
 @LANGUAGE_MAPPING_ENTRIES@

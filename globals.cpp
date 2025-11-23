@@ -1,7 +1,5 @@
 #include "globals.h"
 
-#include "taskbar.h"
-
 DWORD globals::sysBuildNumber;
 std::wstring globals::exe;
 std::wstring globals::args;

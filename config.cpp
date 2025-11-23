@@ -1,7 +1,6 @@
 #include "config.h"
 
 #include <fstream>
-#include <string>
 #include <algorithm>
 #include <ranges>
 #include "globals.h"
@@ -9,6 +8,7 @@
 #include "resources.h"
 #include "taskbar.h"
 #include "utils.h"
+
 #ifndef IS_PORTABLE
 #include <filesystem>
 #include <shlobj.h>

@@ -5,25 +5,22 @@
 #include <shlobj.h>
 #include <fstream>
 #include <iomanip>
-#include <iostream>
-#include <map>
 #include <tchar.h>
 #include <windows.h>
-#include "resources.h"
-#include "config.h"
-#include "taskbar.h"
 #include <sstream>
-#include <tlhelp32.h>
-#include "globals.h"
 #include <unordered_map>
 #include <mutex>
 #include <psapi.h>
-#include "language.h"
 #include <strsafe.h>
 #include <algorithm>
 #include <ranges>
 #include <vector>
-#include <filesystem>
+
+#include "resources.h"
+#include "config.h"
+#include "taskbar.h"
+#include "globals.h"
+#include "language.h"
 
 bool utils::getProcessesByName(const wchar_t* processName, DWORD currentPid, const std::function<void (PROCESSENTRY32W*)> &func) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
