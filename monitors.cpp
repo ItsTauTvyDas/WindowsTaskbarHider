@@ -5,8 +5,7 @@
 
 #include "taskbar.h"
 
-HMONITOR indexedMonitorsUnsafe[64];
-
+HMONITOR monitors::indexedMonitorsUnsafe[];
 std::atomic<int> monitors::monitorCount;
 std::mutex monitors::monitorsMutex;
 

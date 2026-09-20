@@ -17,6 +17,8 @@ public:
 
     static HMONITOR monitor(int i);
     static void indexMonitors();
+private:
+    static HMONITOR indexedMonitorsUnsafe[64];
 };
 
 #endif //MONITORS_H
