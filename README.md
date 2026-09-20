@@ -6,8 +6,6 @@ The initial idea was to show a cleaner desktop with desktop icons disabled.
 This can work perfectly with **TranslucentTB** to make the desktop look even more cleaner.
 **Keep in mind that the taskbar still pertains its area, it doesn't extend your desktop.**
 
-***The application has not been yet tested on Windows 11!***
-
 ## How it works?
 The application loops over all visible, non-iconic windows and checks specified tags in the configuration.
 All of this is happening every 10ms (can be changed) + indeterminate loop processing time.
