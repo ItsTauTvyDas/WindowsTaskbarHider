@@ -129,17 +129,6 @@ bool loopThroughWindowTags(const std::vector<std::wstring>& vector, taskbar::Win
                     GetClassNameW(wInfo.hWnd, wInfo.wndClass, sizeof(wInfo.wndClass));
                 if (std::wstring(wInfo.wndClass) == value)
                     succeededTags++;
-            } else if (key == L"cloaked" || key == L"clk") {
-                if (!wInfo.cloaked) {
-                    DWORD cloaked;
-                    if (const HRESULT hr = DwmGetWindowAttribute(wInfo.hWnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); FAILED(hr)) {
-                        // Fail silently?
-                        goto end;
-                    }
-                    wInfo.cloaked = cloaked;
-                }
-                if (std::to_wstring(*wInfo.cloaked) == value || utils::hasBitmaskStrW(value, *wInfo.cloaked, globals::cloakedBitmasks, 3))
-                    succeededTags++;
             } else if (key == L"monitor" || key == L"mon") {
                 if (const int index = utils::stoi(value.c_str()); index >= 0 && index < monitors::monitorCount && monitors::monitor(index) == wInfo.hMonitor)
                     succeededTags++;
@@ -191,9 +180,6 @@ void taskbar::WindowInfo::updateValues() {
     GetWindowTextW(hWnd, title, sizeof(title)); // Title
     GetClassNameW(hWnd, wndClass, sizeof(wndClass)); // Class
     rect = wi.rcWindow; // Rect
-    if (const HRESULT hr = DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)); FAILED(hr)) {
-        cloaked = -2; // Fail silently?
-    }
 }
 
 std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindows() {
@@ -213,6 +199,10 @@ std::unordered_map<HMONITOR, taskbar::WindowInfo> taskbar::findAllMaximizedWindo
     ewp.collectAllWindows = config::showAllWindows;
     try {
         EnumWindows([](HWND hWnd, const LPARAM lParam) -> BOOL {
+            int cloaked;
+            if (const HRESULT hr = DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, &cloaked, sizeof(int)); cloaked && !FAILED(hr))
+                return TRUE;
+
             EnumWindowParam ewp = *reinterpret_cast<EnumWindowParam*>(lParam);
 
             WINDOWPLACEMENT wp;

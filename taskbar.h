@@ -19,7 +19,6 @@ public:
         bool wasExceptional = false;
         bool initiallyIgnored = false;
         std::optional<bool> focused = -1;
-        std::optional<DWORD> cloaked = -1;
         wchar_t wndClass[256] = {};
         std::optional<RECT> rect;
         wchar_t title[256] = {};
