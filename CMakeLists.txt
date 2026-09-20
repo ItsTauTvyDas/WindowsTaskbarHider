@@ -89,6 +89,10 @@ set(EXECUTABLE_SOURCES
         "${CMAKE_CURRENT_BINARY_DIR_CONFIGURED}/language.cpp"
         resources/language/language.en.2057.ini
         resources/language/language.uk.1058.ini
+        config_ui.cpp
+        config_ui.h
+        win_draw.cpp
+        win_draw.h
 )
 
 # Installable version
