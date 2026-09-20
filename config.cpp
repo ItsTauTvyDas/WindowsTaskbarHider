@@ -48,7 +48,7 @@ std::wstring config::I_TaskbarWindowClassNameStarts = L"Shell_";
 std::wstring config::I_TaskbarWindowClassNameEnds = L"TrayWnd";
 
 std::vector<std::wstring> config::I_ExceptionalWindows;
-std::vector<std::wstring> config::ignoredWindows = {/*L"process:ApplicationFrameHost.exe"*/};
+std::vector<std::wstring> config::ignoredWindows = {};
 std::vector<std::wstring> config::exceptionalWindows = {};
 
 void config::init() {
@@ -150,12 +150,6 @@ bool config::save(const bool exposeInternalKeys) {
     file << ";   - monitor (or mon): monitor index (number >= 0)" << std::endl;
     file << ";" << std::endl;
     file << "; Separators: '|' acts as OR, '&' acts as AND, ':' acts as =, for example 'process:SomeApp.exe'." << std::endl;
-    file << ";" << std::endl;
-    file << "; Ignore UWP container windows" << std::endl;
-    file << "; ApplicationFrameHost.exe (UWP containers) is used by mostly by Windows applications" << std::endl;
-    file << "; Some of the processes seem to have maximized windows, even though they are not visible" << std::endl;
-    file << "; We don't have a way to distinguish between that invisible window," << std::endl;
-    file << "; so the taskbar is going to be still invisible when opening something like Settings" << std::endl;
     file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
     file << "ExceptionalWindows = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
     file << "; Show taskbar when some its popups are opened (like start menu, language chooser and etc.)" << std::endl;
@@ -181,6 +175,10 @@ bool config::exists() {
     return utils::fileExists(DATA(CONFIG_FILENAME, .c_str()));
 }
 
+bool config::directoryExists() {
+    return utils::fileExists(DATA(L"", .c_str()), true);
+}
+
 bool config::ensureConfigurationExists() {
 #ifdef IS_PORTABLE
     return exists();
@@ -192,7 +190,11 @@ bool config::ensureConfigurationExists() {
 }
 
 void config::open() {
-    ShellExecute(nullptr, L"open", DATA(CONFIG_FILENAME, .c_str()), nullptr, nullptr, SW_SHOWNORMAL);
+    ShellExecuteW(nullptr, L"open", DATA(CONFIG_FILENAME, .c_str()), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+void config::openDirectory() {
+    ShellExecuteW(nullptr, L"open", DATA(L"", .c_str()), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 int stringToInt(const std::wstring& str, const int defaultValue, const bool isBool) {
@@ -200,8 +202,8 @@ int stringToInt(const std::wstring& str, const int defaultValue, const bool isBo
         return std::stoi(str);
     } catch (const std::invalid_argument&) {
         if (!isBool) return defaultValue;
-        if (_wcsicmp(str.c_str(), L"true")) return 1;
-        if (_wcsicmp(str.c_str(), L"false")) return 0;
+        if (_wcsicmp(str.c_str(), L"true") == 0) return 1;
+        if (_wcsicmp(str.c_str(), L"false") == 0) return 0;
         return defaultValue;
     } catch (const std::out_of_range&) {
         return defaultValue;

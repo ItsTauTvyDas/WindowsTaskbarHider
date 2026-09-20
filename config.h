@@ -41,7 +41,9 @@ public:
     static bool load();
     static bool save(bool exposeInternalKeys);
     static bool exists();
+    static bool directoryExists();
     static void open();
+    static void openDirectory();
     static bool processSingle(const std::wstring &key, const std::wstring &value);
 
     // Internal
