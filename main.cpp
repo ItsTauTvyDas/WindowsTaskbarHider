@@ -12,6 +12,7 @@
 #include "language.h"
 #include "monitors.h"
 #include "taskbar_animation.h"
+#include "win_draw.h"
 
 #pragma comment(lib, "Dwmapi.lib")
 
@@ -19,26 +20,6 @@
 #define EVENT_OBJECT_UNCLOAKED    0x8018
 
 #define C_RED                     RGB(255, 0, 0)
-
-#define WCP_BASE_COLOR            config::darkMode ? darkColorPalette[0] : lightColorPalette[0]
-#define WCP_FOREGROUND            config::darkMode ? darkColorPalette[1] : lightColorPalette[1]
-#define WCP_BACKGROUND            config::darkMode ? darkColorPalette[2] : lightColorPalette[2]
-#define WCP_BACKGROUND2           config::darkMode ? darkColorPalette[3] : lightColorPalette[3]
-#define WCP_BUTTON_BG             config::darkMode ? darkColorPalette[4] : lightColorPalette[4]
-#define WCP_BUTTON_BORDER         config::darkMode ? darkColorPalette[5] : lightColorPalette[5]
-#define WCP_BUTTON_CLICKED_BG     config::darkMode ? darkColorPalette[6] : lightColorPalette[6]
-#define WCP_SCROLLBAR_COLOR       config::darkMode ? darkColorPalette[7] : lightColorPalette[7]
-
-#define WSC_BUTTON_DEFAULT_W      120
-#define WSC_BUTTON_DEFAULT_H      30
-#define WSC_HEADER                70
-#define WSC_SCROLLBAR_WIDTH       17
-#define WSC_GRID_Y                100
-#define WSC_GRID_TOP_OFFSET       40
-#define WSC_SCROLL_ROWS           1
-#define WSC_CHECKBOX_TEXT_OFFSET  20
-#define WSC_BUTTON_X_MARGIN       15
-#define WSC_CHECKBOX_SPACING      10
 
 #define APP_WINDOW_MIN_WIDTH      800
 #define APP_WINDOW_MIN_HEIGHT     550
@@ -48,29 +29,6 @@
 
 #define W_GRID_MAX_COLUMNS        9
 
-constexpr COLORREF darkColorPalette[] = {
-    RGB(  0,   0,   0), // Base color
-    RGB(255, 255, 255), // Text color
-    RGB( 30,  30,  30), // Background color
-    RGB( 25,  25,  25), // Second background color
-    RGB( 50,  50,  50), // Button background color
-    RGB( 55,  55,  55), // Button border color
-    RGB( 80,  80,  80), // Button clicked background color
-    RGB( 60,  60,  60), // Scrollbar color
-};
-
-constexpr COLORREF lightColorPalette[] = {
-    RGB(255, 255, 255), // Base color
-    RGB(  0,   0,   0), // Text color
-    RGB(255, 255, 255), // Background color
-    RGB(240, 240, 240), // Second background color
-    RGB(220, 220, 220), // Button background color
-    RGB(180, 180, 180), // Button border color
-    RGB(200, 200, 200), // Button clicked background color
-    RGB(200, 200, 200), // Scrollbar color
-    RGB(150, 150, 150), // Scrollbar background color
-};
-
 std::wstring g_tableHeaders[W_GRID_MAX_COLUMNS] = {};
 std::vector<HWND> g_childWindows;
 
@@ -78,13 +36,10 @@ constexpr bool g_tableCollapsableHeaders[] = {
     false, true, true, true, true, false, false, false, true
 };
 
-bool g_focused               = false,
-     g_tableSizesInitialized = false,
+bool g_focused = false,
      g_tableHeaderCheckboxCollapseStates[W_GRID_MAX_COLUMNS] = {};
 RECT g_trackableCheckBoxes[W_GRID_MAX_COLUMNS] = {};
-HWND g_hYScrollBar       = nullptr,
-     g_hXScrollBar       = nullptr,
-     g_hCBShowAllWindows = nullptr,
+HWND g_hCBShowAllWindows = nullptr,
 #ifdef IS_PORTABLE
      g_hInstallButton    = nullptr,
 #endif
@@ -94,18 +49,27 @@ HFONT g_hDefaultFont     = nullptr,
       g_hTableFontBold   = nullptr,
       g_hTableFont       = nullptr;
 HBRUSH g_lastCreatedBrush = nullptr;
-int g_windowWidth              = APP_WINDOW_MIN_WIDTH,
-    g_windowHeight             = APP_WINDOW_MIN_HEIGHT,
-    g_windowClientHeight       = 0,
-    g_windowClientWidth        = 0,
-    g_windowScrollYPos         = 0,
-    g_windowScrollXPos         = 0,
+int g_windowWidth                                  = APP_WINDOW_MIN_WIDTH,
+    g_windowHeight                                 = APP_WINDOW_MIN_HEIGHT,
+    g_windowClientHeight                           = 0,
+    g_windowClientWidth                            = 0,
     g_tableDefaultColumnWidths[W_GRID_MAX_COLUMNS] = {},
-    g_tableColumnWidths[W_GRID_MAX_COLUMNS] = {},
-    g_tableColumnXMargin       = 10,
-    g_tableRowHeight           = 30,
-    g_lastUpdatedTimeTextWidth = 0;
+    g_tableColumnWidths[W_GRID_MAX_COLUMNS]        = {},
+    g_tableColumnXMargin                           = 10,
+    g_tableRowHeight                               = 30,
+    g_lastUpdatedTimeTextWidth                     = 0;
 std::wstring g_lastTableUpdateTime = L"00:00:00.000";
+
+int WTBH_getContentHeight();
+int WTBH_getContentWidth();
+
+win_draw::scrollable_content g_gridScroll(WTBH_getContentWidth,
+    WTBH_getContentHeight,
+    &g_windowClientWidth,
+    &g_windowClientHeight,
+    &g_windowWidth,
+    &g_windowHeight,
+    WSC_HEADER);
 
 std::vector<taskbar::WindowInfo> g_windowsCache;
 int g_windowsCacheSize = 0;
@@ -121,54 +85,6 @@ inline int WTBH_getContentWidth() {
     return std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), config::autoUpdate ? g_windowClientWidth : 0, std::plus());
 }
 
-inline int WTBH_getMaxYScroll(const int contentHeight) {
-    return contentHeight - (g_windowClientHeight - WSC_HEADER) - WSC_GRID_Y;
-}
-
-inline int WTBH_getMaxXScroll(const int contentWidth) {
-    const int visibleWidth = g_windowClientWidth - WSC_SCROLLBAR_WIDTH;
-    return contentWidth - visibleWidth;
-}
-
-inline void WTBH_updateYScrollBarInfo() {
-    const int contentHeight = WTBH_getContentHeight() + WSC_SCROLLBAR_WIDTH;
-    if (const int maxScroll = WTBH_getMaxYScroll(contentHeight); g_windowScrollYPos > maxScroll)
-        g_windowScrollYPos = maxScroll;
-    if (g_windowScrollYPos < 0)
-        g_windowScrollYPos = 0;
-
-    SCROLLINFO si = {};
-    si.cbSize = sizeof(SCROLLINFO);
-    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
-    si.nMin   = 0;
-    si.nMax   = contentHeight - WSC_GRID_Y;
-    si.nPage  = g_windowClientHeight - WSC_HEADER;
-    si.nPos   = g_windowScrollYPos;
-    SetScrollInfo(g_hYScrollBar, SB_CTL, &si, true);
-}
-
-inline void WTBH_updateXScrollBarInfo() {
-    const int contentWidth = WTBH_getContentWidth() + 20;
-    if (const int maxScroll = WTBH_getMaxXScroll(contentWidth); g_windowScrollXPos > maxScroll)
-        g_windowScrollXPos = maxScroll;
-    if (g_windowScrollXPos < 0)
-        g_windowScrollXPos = 0;
-
-    SCROLLINFO si = {};
-    si.cbSize = sizeof(SCROLLINFO);
-    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
-    si.nMin   = 0;
-    si.nMax   = contentWidth;
-    si.nPage  = g_windowClientWidth - WSC_SCROLLBAR_WIDTH;
-    si.nPos   = g_windowScrollXPos;
-    SetScrollInfo(g_hXScrollBar, SB_CTL, &si, true);
-}
-
-inline void WTBH_updateXYScrollBarsInfo() {
-    WTBH_updateYScrollBarInfo();
-    WTBH_updateXScrollBarInfo();
-}
-
 inline void WTBH_resizeChildWindows(HWND hWnd);
 
 inline void WTBH_updateLanguage(HWND hWnd) {
@@ -178,24 +94,6 @@ inline void WTBH_updateLanguage(HWND hWnd) {
         WTBH_resizeChildWindows(hWnd);
         SetWindowTextW(hWnd, utils::message(MSG_APPLICATION_NAME).c_str());
     }
-}
-
-inline bool WTBH_getYScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) {
-    sbi.cbSize = sizeof(SCROLLBARINFO);
-    GetScrollBarInfo(g_hYScrollBar, OBJID_CLIENT, &sbi);
-    rect = utils::rect(g_windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER + sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop);
-    if (WTBH_getMaxYScroll(WTBH_getContentHeight()) <= -WSC_SCROLLBAR_WIDTH)
-        return false;
-    return true;
-}
-
-inline bool WTBH_getXScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) {
-    sbi.cbSize = sizeof(SCROLLBARINFO);
-    GetScrollBarInfo(g_hXScrollBar, OBJID_CLIENT, &sbi);
-    rect = utils::rect(sbi.xyThumbTop, g_windowHeight - WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH);
-    if (WTBH_getMaxXScroll(WTBH_getContentWidth()) <= -20)
-        return false;
-    return true;
 }
 
 HBRUSH WTBH_createBrush(const COLORREF color) {
@@ -208,151 +106,11 @@ void WTBH_deleteLastBrush() {
     g_lastCreatedBrush = nullptr;
 }
 
-inline void WTBH_drawScrollBars(HDC hdc) {
-    #define SELECT_BRUSH utils::mouseInRect(&rect, VK_LBUTTON) ? brushClicked : brush
-
-    HBRUSH brush = CreateSolidBrush(WCP_SCROLLBAR_COLOR);
-    HBRUSH brushClicked = CreateSolidBrush(WCP_BUTTON_CLICKED_BG);
-
-    RECT rect;
-    SCROLLBARINFO sbi = {};
-
-    SelectObject(hdc, g_hDefaultFontBold);
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, WCP_FOREGROUND);
-
-    // Y scrollbar middle thumb
-    bool paintScrollBarMiddleThumb = WTBH_getYScrollBarMiddleThumb(rect, sbi);
-    if (paintScrollBarMiddleThumb)
-        FillRect(hdc, &rect, SELECT_BRUSH);
-
-    // Y scrollbar thumbs
-    rect.top = WSC_HEADER;
-    rect.bottom = rect.top + 16;
-    FillRect(hdc, &rect, SELECT_BRUSH);
-    DrawTextW(hdc, L"\u02C4", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
-
-    rect.top = g_windowClientHeight - 17;
-    rect.bottom = g_windowClientHeight;
-    FillRect(hdc, &rect, SELECT_BRUSH);
-    DrawTextW(hdc, L"\u02C5", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
-
-    // X scrollbar middle thumb
-    paintScrollBarMiddleThumb = WTBH_getXScrollBarMiddleThumb(rect, sbi);
-    if (paintScrollBarMiddleThumb)
-        FillRect(hdc, &rect, SELECT_BRUSH);
-
-    // X scrollbar thumbs
-    rect.left = 0;
-    rect.right = 16;
-    FillRect(hdc, &rect, SELECT_BRUSH);
-    DrawTextW(hdc, L"\u02C2", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
-
-    rect.left = g_windowClientWidth - WSC_SCROLLBAR_WIDTH - rect.right;
-    rect.right = rect.left + 16;
-    FillRect(hdc, &rect, SELECT_BRUSH);
-    DrawTextW(hdc, L"\u02C3", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
-
-    DeleteObject(brush);
-    DeleteObject(brushClicked);
-}
-
-HDC WTBH_doubleBuffering(HWND hWnd, PAINTSTRUCT &ps, HDC oHdc, const bool start) {
-    static HBITMAP memBitmap;
-    static HGDIOBJ oldBitmap;
-    static HDC mHdc, hdc;
-    if (start) {
-        if (!oHdc)
-            hdc = BeginPaint(hWnd, &ps);
-        else
-            hdc = oHdc;
-        mHdc = CreateCompatibleDC(hdc);
-
-        memBitmap = CreateCompatibleBitmap(hdc, g_windowClientWidth, g_windowClientHeight);
-        oldBitmap = SelectObject(mHdc, memBitmap);
-        return mHdc;
-    }
-
-    BitBlt(hdc, 0, 0, g_windowClientWidth, g_windowClientHeight, mHdc, 0, 0, SRCCOPY);
-
-    SelectObject(mHdc, oldBitmap);
-    DeleteObject(memBitmap);
-    DeleteDC(mHdc);
-    if (!oHdc) {
-        EndPaint(hWnd, &ps);
-        hdc = nullptr;
-    }
-    memBitmap = nullptr;
-    oldBitmap = nullptr;
-    mHdc = nullptr;
-    return nullptr;
-}
-
-inline void WTBH_DrawTextW(HDC hdc, const std::wstring &text, const int x, const int y) {
-    TextOut(hdc, x, y, text.c_str(), static_cast<int>(text.length()));
-}
-
-void WTBH_drawCheckBox(HDC mHdc, bool pState, const RECT oRect, const LPCWSTR text, HBRUSH &background, HBRUSH &foreground, const bool reverse, const int *id) {
-    if (!background)
-        background = CreateSolidBrush(WCP_BACKGROUND2);
-    if (!foreground)
-        foreground = CreateSolidBrush(WCP_FOREGROUND);
-
-    // Background color
-    FillRect(mHdc, &oRect, background);
-
-    if (id)
-        g_trackableCheckBoxes[*id] = oRect;
-
-    // Create checkbox rect
-    RECT boxRect = oRect;
-    boxRect.right = boxRect.left + 16;
-    boxRect.top += (boxRect.bottom - boxRect.top - 16 ) / 2;
-    boxRect.bottom = boxRect.top + 16;
-
-    // Draw checkbox rect
-    FillRect(mHdc, &boxRect, background);
-    FrameRect(mHdc, &boxRect, foreground);
-    if (reverse)
-        pState = !pState;
-    if (pState) {
-        // Create a little rect inside checkbox rect
-        boxRect.left += 3;
-        boxRect.top += 3;
-        boxRect.right -= 3;
-        boxRect.bottom -= 3;
-        FillRect(mHdc, &boxRect, foreground);
-    }
-
-    RECT textRect = oRect;
-    textRect.left += WSC_CHECKBOX_TEXT_OFFSET;
-    const auto oldBkColor = SetBkColor(mHdc, WCP_BACKGROUND2);
-    const auto oldTextColor = SetTextColor(mHdc, WCP_FOREGROUND);
-    DrawTextW(mHdc, text, -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
-    SetBkColor(mHdc, oldBkColor);
-    SetTextColor(mHdc, oldTextColor);
-}
-
-int WTBH_calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font) {
-    HGDIOBJ oldFont = nullptr;
-    if (font)
-        oldFont = SelectObject(hdc, font);
-    SIZE sz;
-    GetTextExtentPoint32W(hdc, text.c_str(), static_cast<int>(text.size()), &sz);
-    if (font)
-        SelectObject(hdc, oldFont);
-    return sz.cx;
-}
-
 inline void WTBH_redrawLowerArea(HWND hWnd) {
     RECT rect { 0, WSC_HEADER, g_windowWidth, g_windowClientHeight };
     InvalidateRect(hWnd, &rect, true);
     rect = utils::rect(g_windowClientWidth - g_lastUpdatedTimeTextWidth - 10, 45, g_lastUpdatedTimeTextWidth, 30);
     InvalidateRect(hWnd, &rect, true);
-}
-
-inline void WTBH_redrawWindow(HWND hWnd) {
-    RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
 }
 
 inline void WTBH_paintGrid(HDC hdc, const int sx, const int sy, const int rows) {
@@ -409,7 +167,7 @@ inline void WTBH_paintGrid(HDC hdc, const int sx, const int sy, const int rows) 
 inline void WTBH_calculateDefaultWidths(HDC hdc) {
     for (auto i = 0; i < W_GRID_MAX_COLUMNS; i++) {
         std::wstring header = g_tableHeaders[i];
-        g_tableDefaultColumnWidths[i] = WTBH_calculateTextWidth(hdc, header, g_hTableFont);
+        g_tableDefaultColumnWidths[i] = win_draw::calculateTextWidth(hdc, header, g_hTableFont);
         if (g_tableCollapsableHeaders[i])
             g_tableDefaultColumnWidths[i] += WSC_CHECKBOX_TEXT_OFFSET;
     }
@@ -481,7 +239,7 @@ inline void WTBH_calculateCurrentWidths(HDC hdc, const int rows) {
             wInfo = g_windowsCache[row - 1];
         for (auto col = 0; col < W_GRID_MAX_COLUMNS; col++)
             if (const std::wstring value = row == 0 ? g_tableHeaders[col] : WTBH_getWindowValue(wInfo, col); !value.empty()) {
-                int width = WTBH_calculateTextWidth(hdc, value, g_hTableFont) + 2 * g_tableColumnXMargin;
+                int width = win_draw::calculateTextWidth(hdc, value, g_hTableFont) + 2 * g_tableColumnXMargin;
                 if (row == 0 && g_tableCollapsableHeaders[col])
                     width += WSC_CHECKBOX_TEXT_OFFSET;
                 if (g_tableHeaderCheckboxCollapseStates[col]) {
@@ -512,7 +270,8 @@ inline void WTBH_printDataToGrid(HDC hdc, const int sx, const int sy, const int 
                 value = g_tableHeaders[col];
                 const auto oldFont = SelectObject(hdc, g_hTableFontBold);
                 if (g_tableCollapsableHeaders[col]) {
-                    WTBH_drawCheckBox(hdc, g_tableHeaderCheckboxCollapseStates[col], rect, value.c_str(), background, foreground, true, &col);
+                    win_draw::drawCheckBox(hdc, !g_tableHeaderCheckboxCollapseStates[col], rect, value.c_str(), background, foreground);
+                    g_trackableCheckBoxes[col] = rect;
                 } else {
                     DrawTextW(hdc, value.c_str(), -1, &rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
                 }
@@ -540,18 +299,18 @@ inline void WTBH_updateTable(HDC hdc, const bool onlyPaintGrid) {
     if (g_tableDefaultColumnWidths[0] == 0)
         WTBH_calculateDefaultWidths(hdc);
 
-    const int y = WSC_GRID_Y - g_windowScrollYPos;
+    const int y = WSC_GRID_Y - g_gridScroll.scrollYPos;
     const int rows = g_windowsCacheSize + 1; // +header
 
     SelectObject(hdc, g_hTableFont);
     SetBkMode(hdc, TRANSPARENT);
     if (!onlyPaintGrid)
         WTBH_calculateCurrentWidths(hdc, rows);
-    WTBH_paintGrid(hdc, 10 - g_windowScrollXPos, y, rows);
+    WTBH_paintGrid(hdc, 10 - g_gridScroll.scrollXPos, y, rows);
     if (!onlyPaintGrid)
-        WTBH_printDataToGrid(hdc, 10 - g_windowScrollXPos, y, rows);
+        WTBH_printDataToGrid(hdc, 10 - g_gridScroll.scrollXPos, y, rows);
 
-    WTBH_updateXYScrollBarsInfo();
+    g_gridScroll.updateXYScrollBarsInfo();
 }
 
 struct WTBH_CHECKBOX_DATA {
@@ -575,7 +334,7 @@ inline void WTBH_resizeChildWindows(HWND hWnd) {
 
     // Update button
     std::wstring text = utils::message(MSG_WND_HEADER_TABLE_UPDATE);
-    int lastWidth = WTBH_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2;
+    int lastWidth = win_draw::calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2;
     RECT rect = { 10, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
     if (createWindows) {
         const auto hButtonUpdate = CreateWindowExW(
@@ -595,7 +354,7 @@ inline void WTBH_resizeChildWindows(HWND hWnd) {
 
     // Actions button
     text = utils::message(MSG_WND_HEADER_ACTIONS);
-    rect = { 0, 0, WTBH_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2, WSC_BUTTON_DEFAULT_H };
+    rect = { 0, 0, win_draw::calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2, WSC_BUTTON_DEFAULT_H };
     if (createWindows) {
         g_hSettingsButton = CreateWindowExW(
             0, WMC_BUTTON, text.c_str(),
@@ -615,7 +374,7 @@ inline void WTBH_resizeChildWindows(HWND hWnd) {
 #if IS_PORTABLE
     // Install button
     text = utils::message(MSG_WND_HEADER_INSTALL);
-    rect = { 0, 0, WTBH_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2, WSC_BUTTON_DEFAULT_H };
+    rect = { 0, 0, win_draw::calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_BUTTON_X_MARGIN * 2, WSC_BUTTON_DEFAULT_H };
     if (createWindows) {
         g_hInstallButton = CreateWindowExW(
             0, WMC_BUTTON, text.c_str(),
@@ -638,7 +397,7 @@ inline void WTBH_resizeChildWindows(HWND hWnd) {
 
     // Auto update check box
     text = utils::message(MSG_WND_HEADER_AUTO_UPDATE);
-    lastWidth = WTBH_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
+    lastWidth = win_draw::calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
     rect = { lastX, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
     if (createWindows) {
         const auto hCheckBoxAutoUpdate = CreateWindowExW(
@@ -660,7 +419,7 @@ inline void WTBH_resizeChildWindows(HWND hWnd) {
 
     // Dark mode check box
     text = utils::message(MSG_WND_HEADER_DARK_MODE);
-    lastWidth = WTBH_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
+    lastWidth = win_draw::calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
     rect = { lastX, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
     if (createWindows) {
         const auto hCheckboxDarkMode = CreateWindowExW(
@@ -683,7 +442,7 @@ inline void WTBH_resizeChildWindows(HWND hWnd) {
 
     // Show all windows check box
     text = utils::message(MSG_WND_HEADER_SHOW_ALL_WINDOWS);
-    lastWidth = WTBH_calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
+    lastWidth = win_draw::calculateTextWidth(hdc, text, g_hDefaultFont) + WSC_CHECKBOX_TEXT_OFFSET;
     rect = { lastX, 10, lastWidth, WSC_BUTTON_DEFAULT_H };
     if (createWindows) {
         g_hCBShowAllWindows = CreateWindowExW(
@@ -734,7 +493,7 @@ bool WTBH_getWindowsBuild(DWORD& build) {
 LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
     static NOTIFYICONDATA nid = {};
     static bool minimizedNotifShowed = false;
-    int *scrollPosition;
+    long *scrollPosition;
 
     switch (uMsg) {
         case WM_CREATE:
@@ -793,22 +552,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
 
             WTBH_resizeChildWindows(hWnd);
 
-            g_hYScrollBar = CreateWindowExW(
+            g_gridScroll.hYScrollBar = CreateWindowExW(
                 WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
                 WS_CHILD | WS_VISIBLE | SBS_VERT,
                 -WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, 0,
                 hWnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_Y), create->hInstance, nullptr);
-            SendMessageW(g_hYScrollBar, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), true);
-            SendMessageW(g_hYScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetLayeredWindowAttributes(g_hYScrollBar, 0, 1, LWA_ALPHA);
+            SendMessageW(g_gridScroll.hYScrollBar, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), true);
+            SendMessageW(g_gridScroll.hYScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+            SetLayeredWindowAttributes(g_gridScroll.hYScrollBar, 0, 1, LWA_ALPHA);
 
-            g_hXScrollBar = CreateWindowExW(
+            g_gridScroll.hXScrollBar = CreateWindowExW(
                 WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
                 WS_CHILD | WS_VISIBLE | SBS_HORZ,
                 0, 0, 0, 0,
                 hWnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_X), create->hInstance, nullptr);
-            SendMessageW(g_hXScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetLayeredWindowAttributes(g_hXScrollBar, 0, 1, LWA_ALPHA);
+            SendMessageW(g_gridScroll.hXScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+            SetLayeredWindowAttributes(g_gridScroll.hXScrollBar, 0, 1, LWA_ALPHA);
 
             // Add icon
             Shell_NotifyIconW(NIM_ADD, &nid);
@@ -831,8 +590,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 g_windowWidth = LOWORD(lParam);
                 g_windowHeight = HIWORD(lParam);
                 // Reposition scrollbar
-                MoveWindow(g_hYScrollBar, g_windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, g_windowHeight - WSC_HEADER, true);
-                MoveWindow(g_hXScrollBar, 0, g_windowHeight - WSC_SCROLLBAR_WIDTH, g_windowWidth - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, true);
+                MoveWindow(g_gridScroll.hYScrollBar, g_windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, g_windowHeight - WSC_HEADER, true);
+                MoveWindow(g_gridScroll.hXScrollBar, 0, g_windowHeight - WSC_SCROLLBAR_WIDTH, g_windowWidth - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, true);
                 RECT rect;
                 GetWindowRect(g_hSettingsButton, &rect);
                 int width = rect.right - rect.left;
@@ -845,8 +604,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 g_windowClientHeight = rect.bottom - rect.top;
                 g_windowClientWidth = rect.right - rect.left;
 
-                WTBH_updateXYScrollBarsInfo();
-                WTBH_redrawWindow(hWnd);
+                g_gridScroll.updateXYScrollBarsInfo();
+                win_draw::redrawWindow(hWnd);
             }
             break;
         }
@@ -860,7 +619,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 if (PtInRect(&rect, pt)) {
                     g_tableHeaderCheckboxCollapseStates[i] = !g_tableHeaderCheckboxCollapseStates[i];
                     WTBH_redrawLowerArea(hWnd);
-                    WTBH_updateXScrollBarInfo();
+                    g_gridScroll.updateXScrollBarInfo();
                     break;
                 }
             }
@@ -893,7 +652,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
 #endif
                 case ID_BUTTON_UPDATE:
                 {
-                    HDC mHdc = WTBH_doubleBuffering(hWnd, ps, draw->hDC, true);
+                    HDC mHdc = win_draw::doubleBuffering(hWnd, ps, draw->hDC, true, &g_windowClientWidth, &g_windowClientHeight);
                     COLORREF buttonBackgroundColor = WCP_BUTTON_BG;
                     if (draw->itemState & ODS_SELECTED)
                         buttonBackgroundColor = WCP_BUTTON_CLICKED_BG;
@@ -917,7 +676,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
 
                     DeleteObject(buttonBaseBackgroundBrush);
                     DeleteObject(buttonBackgroundBrush);
-                    WTBH_doubleBuffering(hWnd, ps, draw->hDC, false);
+                    win_draw::doubleBuffering(hWnd, ps, draw->hDC, false, &g_windowClientWidth, &g_windowClientHeight);
                     break;
                 }
                 case ID_CHECKBOX_TABLE_HEADER:
@@ -925,16 +684,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 case ID_CHECKBOX_DARK_MODE:
                 case ID_CHECKBOX_AUTO_UPDATE:
                 {
-                    HDC mHdc = WTBH_doubleBuffering(hWnd, ps, draw->hDC, true);
+                    HDC mHdc = win_draw::doubleBuffering(hWnd, ps, draw->hDC, true, &g_windowClientWidth, &g_windowClientHeight);
 
                     HBRUSH background = nullptr, foreground = nullptr;
                     const auto pData = reinterpret_cast<WTBH_CHECKBOX_DATA*>(GetWindowLongPtrW(draw->hwndItem, GWLP_USERDATA));
                     SelectObject(mHdc, g_hDefaultFont);
-                    WTBH_drawCheckBox(mHdc, pData && pData->pState->load(), draw->rcItem, text, background, foreground, false, nullptr);
-
+                    win_draw::drawCheckBox(mHdc, pData && pData->pState->load(), draw->rcItem, text, background, foreground);
                     DeleteObject(background);
                     DeleteObject(foreground);
-                    WTBH_doubleBuffering(hWnd, ps, draw->hDC, false);
+                    win_draw::doubleBuffering(hWnd, ps, draw->hDC, false, &g_windowClientWidth, &g_windowClientHeight);
                     break;
                 }
                 default:
@@ -945,7 +703,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
         case WM_PAINT:
         {
             PAINTSTRUCT ps;
-            HDC mHdc = WTBH_doubleBuffering(hWnd, ps, nullptr, true);
+            HDC mHdc = win_draw::doubleBuffering(hWnd, ps, nullptr, true, &g_windowClientWidth, &g_windowClientHeight);
 
             // Update colors for window
             SetBkColor(mHdc, WCP_BACKGROUND);
@@ -956,7 +714,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             // Above table text
             SetBkColor(mHdc, WCP_BACKGROUND);
             SelectObject(mHdc, g_hDefaultFont);
-            WTBH_DrawTextW(mHdc, utils::message(MSG_WND_DEBUG_TABLE_HEADER_TEXT), 10 - g_windowScrollXPos, 80 - g_windowScrollYPos);
+            win_draw::drawText(mHdc, utils::message(MSG_WND_DEBUG_TABLE_HEADER_TEXT), 10 - g_gridScroll.scrollXPos, 80 - g_gridScroll.scrollYPos);
 
             // Table
             WTBH_updateTable(mHdc, false);
@@ -974,21 +732,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             SelectObject(mHdc, g_hDefaultFont);
 
             // Header text
-            WTBH_DrawTextW(mHdc, utils::message(MSG_WND_HEADER_TEXT), 10, 45);
+            win_draw::drawText(mHdc, utils::message(MSG_WND_HEADER_TEXT), 10, 45);
 
             // Table update time text
             std::wstring text = utils::message(MSG_WND_LAST_UPDATE_AT) + L" ";
             if (g_lastUpdatedTimeTextWidth == 0)
-                g_lastUpdatedTimeTextWidth = WTBH_calculateTextWidth(mHdc, g_lastTableUpdateTime, g_hDefaultFontBold);
-            WTBH_DrawTextW(mHdc, text, g_windowClientWidth - WTBH_calculateTextWidth(mHdc, text, g_hDefaultFont) - g_lastUpdatedTimeTextWidth - 10, 45);
+                g_lastUpdatedTimeTextWidth = win_draw::calculateTextWidth(mHdc, g_lastTableUpdateTime, g_hDefaultFontBold);
+            win_draw::drawText(mHdc, text, g_windowClientWidth - win_draw::calculateTextWidth(mHdc, text, g_hDefaultFont) - g_lastUpdatedTimeTextWidth - 10, 45);
             auto oldFont = SelectObject(mHdc, g_hDefaultFontBold);
-            WTBH_DrawTextW(mHdc, g_lastTableUpdateTime, g_windowClientWidth - g_lastUpdatedTimeTextWidth - 10, 45);
+            win_draw::drawText(mHdc, g_lastTableUpdateTime, g_windowClientWidth - g_lastUpdatedTimeTextWidth - 10, 45);
             SelectObject(mHdc, oldFont);
 
             // Draw scrollbars
-            WTBH_drawScrollBars(mHdc);
+            g_gridScroll.drawScrollBars(mHdc, g_hDefaultFontBold);
 
-            WTBH_doubleBuffering(hWnd, ps, nullptr, false);
+            win_draw::doubleBuffering(hWnd, ps, nullptr, false, &g_windowClientWidth, &g_windowClientHeight);
             break;
         }
         case WM_TRAY_ICON:
@@ -1067,7 +825,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             g_windowsCache = std::move(*pWindows);
             delete pWindows;
             WTBH_redrawLowerArea(hWnd);
-            WTBH_updateXYScrollBarsInfo();
+            g_gridScroll.updateXYScrollBarsInfo();
             break;
         }
         case WM_WTSSESSION_CHANGE: {
@@ -1107,7 +865,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                     // Inverse checkbox state
                     pData->pState->store(!pData->pState->load());
                     if (lwParam != ID_CHECKBOX_DARK_MODE) // No need for updating, as dark mode check already redraws the window
-                        WTBH_redrawWindow(hCheckbox);
+                        win_draw::redrawWindow(hCheckbox);
+                    else
+                        win_draw::updateTitlebarColors(globals::hWnd);
                 }
             }
             switch (lwParam) {
@@ -1135,15 +895,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
 #endif
                 case ID_CHECKBOX_AUTO_UPDATE:
                 {
-                    g_windowScrollXPos = 0;
-                    g_windowScrollYPos = 0;
-                    WTBH_redrawWindow(hWnd);
-                    WTBH_updateXYScrollBarsInfo();
+                    g_gridScroll.scrollXPos = 0;
+                    g_gridScroll.scrollYPos = 0;
+                    win_draw::redrawWindow(hWnd);
+                    g_gridScroll.updateXYScrollBarsInfo();
                     break;
                 }
                 case ID_CHECKBOX_DARK_MODE:
                 {
-                    WTBH_redrawWindow(hWnd);
+                    win_draw::redrawWindow(hWnd);
                     break;
                 }
                 // Next ones are for system tray and actions button menu
@@ -1181,7 +941,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                         utils::messageBox(MSG_CONFIG_RELOADED_WITH_ERRORS, MB_ICONWARNING | MB_OK);
                     minimizedNotifShowed = false;
                     WTBH_updateLanguage(hWnd);
-                    WTBH_redrawWindow(hWnd);
+                    win_draw::redrawWindow(hWnd);
                     // taskbar::resetTaskbar();
                     taskbar::clearErrorState();
                     break;
@@ -1216,9 +976,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             if (!hScrollBar)
                 break;
             if (int scrollBarID = GetDlgCtrlID(hScrollBar); scrollBarID == ID_SCROLLBAR_X) {
-                scrollPosition = &g_windowScrollXPos;
+                scrollPosition = &g_gridScroll.scrollXPos;
             } else if (scrollBarID == ID_SCROLLBAR_Y) {
-                scrollPosition = &g_windowScrollYPos;
+                scrollPosition = &g_gridScroll.scrollYPos;
             } else {
                 break;
             }
@@ -1240,16 +1000,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 default: break;
             }
 
-            WTBH_updateXYScrollBarsInfo();
+            g_gridScroll.updateXYScrollBarsInfo();
             WTBH_redrawLowerArea(hWnd);
             break;
         }
         case WM_MOUSEWHEEL:
         {
-            scrollPosition = GetKeyState(VK_SHIFT) & KF_UP ? &g_windowScrollXPos : &g_windowScrollYPos;
+            scrollPosition = GetKeyState(VK_SHIFT) & KF_UP ? &g_gridScroll.scrollXPos : &g_gridScroll.scrollYPos;
             const int oldPos = *scrollPosition;
             *scrollPosition += -(GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA * (WSC_SCROLL_ROWS * g_tableRowHeight));
-            WTBH_updateXYScrollBarsInfo();
+            g_gridScroll.updateXYScrollBarsInfo();
             if (oldPos == *scrollPosition)
                 break;
             WTBH_redrawLowerArea(hWnd);
@@ -1288,8 +1048,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             DeleteObject(g_hDefaultFontBold);
             DeleteObject(g_hTableFont);
             DeleteObject(g_hTableFontBold);
-            DeleteObject(g_hYScrollBar);
-            DeleteObject(g_hXScrollBar);
+            DeleteObject(g_gridScroll.hYScrollBar);
+            DeleteObject(g_gridScroll.hXScrollBar);
             Shell_NotifyIcon(NIM_DELETE, &nid);
             PostQuitMessage(0);
             break;
@@ -1612,6 +1372,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         return 1;
     }
 
+    win_draw::updateTitlebarColors(globals::hWnd);
+
     const auto windowPreviewsEventHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     const auto windowCloakEventHook = SetWinEventHook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
@@ -1632,7 +1394,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
-    
+
     if (windowPreviewsEventHook)
         UnhookWinEvent(windowPreviewsEventHook);
     if (windowCloakEventHook)
