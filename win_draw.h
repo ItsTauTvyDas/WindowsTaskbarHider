@@ -41,6 +41,7 @@ constexpr COLORREF lightColorPalette[] = {
 #define WSC_BUTTON_DEFAULT_W      120
 #define WSC_BUTTON_DEFAULT_H      30
 #define WSC_HEADER                70
+#define WSC_CONFIG_HEADER         50
 #define WSC_SCROLLBAR_WIDTH       17
 #define WSC_GRID_Y                100
 #define WSC_GRID_TOP_OFFSET       40
@@ -51,25 +52,28 @@ constexpr COLORREF lightColorPalette[] = {
 
 #define DWMWA_CAPTION_COLOR 35
 
-namespace win_draw {
-    void redrawWindow(HWND hWnd);
-    int calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font);
-    void drawText(HDC hdc, const std::wstring &text, int x, int y);
-    void drawCheckBox(HDC mHdc, bool pState, RECT oRect, LPCWSTR text, HBRUSH &bg, HBRUSH &fg);
-    HDC doubleBuffering(HWND hWnd, PAINTSTRUCT &ps, HDC oHdc, bool start, const int *winClientW, const int *winClientH);
-    void updateTitlebarColors(HWND hWnd);
+class win_draw {
+public:
+    static void redrawWindow(HWND hWnd);
+    static int calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font);
+    static void drawText(HDC hdc, const std::wstring &text, int x, int y);
+    static void drawCheckBox(HDC mHdc, bool pState, RECT oRect, LPCWSTR text, HBRUSH &bg, HBRUSH &fg);
+    static HDC doubleBuffering(HWND hWnd, PAINTSTRUCT &ps, HDC oHdc, bool start, const int *winClientW, const int *winClientH);
+    static void updateTitlebarColors(HWND hWnd);
+    static HBRUSH createBrush(COLORREF color);
+    static void deleteLastBrush();
 
     class scrollable_content {
     public:
-        HWND hXScrollBar = nullptr;
-        HWND hYScrollBar = nullptr;
-        const int *winClientW = nullptr;
-        const int *winClientH = nullptr;
-        const int *winW = nullptr;
-        const int *winH = nullptr;
-        long scrollYPos = 0;
-        long scrollXPos = 0;
-        long topOffset = 0;
+        HWND hXScrollBar;
+        HWND hYScrollBar;
+        const int *winClientW;
+        const int *winClientH;
+        const int *winW;
+        const int *winH;
+        long scrollYPos;
+        long scrollXPos;
+        long topOffset;
 
         scrollable_content(std::function<int()> getContentWidth,
                            std::function<int()> getContentHeight,
@@ -82,7 +86,12 @@ namespace win_draw {
         void updateXScrollBarInfo();
         void updateYScrollBarInfo();
         void updateXYScrollBarsInfo();
+        void createScrollbars(HWND hWnd, HINSTANCE hInstance);
+        void onWindowMove() const;
+        bool onScroll(LPARAM lParam, WPARAM wParam);
+        bool onMouseWheel(WPARAM wParam, int rowHeight);
         void drawScrollBars(HDC hdc, HFONT hFontBold) const;
+        void destroy() const;
     private:
         const std::function<int()> getContentWidth;
         const std::function<int()> getContentHeight;
@@ -92,6 +101,8 @@ namespace win_draw {
         bool getYScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) const;
         bool getXScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) const;
     };
+private:
+    static HBRUSH lastBrush;
 };
 
 #endif //WINDOWSTASKBARHIDER_WIN_DRAW_H
