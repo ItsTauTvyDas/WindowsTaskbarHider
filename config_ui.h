@@ -49,7 +49,6 @@ private:
     static const std::size_t settingsCount;
 
     static std::vector<HWND> controls;
-    static void createControls(HWND hWnd);
     static void layoutControls();
 
     static win_draw::scrollable_content scrollable;
