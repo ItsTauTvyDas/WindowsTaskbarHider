@@ -9,6 +9,8 @@
 #include <iostream>
 #include <sstream>
 #include <numeric>
+
+#include "config_ui.h"
 #include "language.h"
 #include "monitors.h"
 #include "taskbar_animation.h"
@@ -16,18 +18,10 @@
 
 #pragma comment(lib, "Dwmapi.lib")
 
-#define EVENT_OBJECT_CLOAKED      0x8017
-#define EVENT_OBJECT_UNCLOAKED    0x8018
-
-#define C_RED                     RGB(255, 0, 0)
-
-#define APP_WINDOW_MIN_WIDTH      800
-#define APP_WINDOW_MIN_HEIGHT     550
-
-#define WMC_BUTTON                L"BUTTON"
-#define WMC_SCROLLBAR             L"SCROLLBAR"
-
-#define W_GRID_MAX_COLUMNS        9
+#define C_RED                 RGB(255, 0, 0)
+#define APP_WINDOW_MIN_WIDTH  800
+#define APP_WINDOW_MIN_HEIGHT 550
+#define W_GRID_MAX_COLUMNS    9
 
 std::wstring g_tableHeaders[W_GRID_MAX_COLUMNS] = {};
 std::vector<HWND> g_childWindows;
@@ -76,12 +70,12 @@ int g_windowsCacheSize = 0;
 
 HHOOK g_hKeyboardHook = nullptr;
 
-inline int WTBH_getContentHeight() {
+int WTBH_getContentHeight() {
     // +1 for header row
     return (g_windowsCacheSize + 1) * g_tableRowHeight + WSC_GRID_Y + WSC_GRID_TOP_OFFSET + (config::autoUpdate ? g_windowClientHeight : 0);
 }
 
-inline int WTBH_getContentWidth() {
+int WTBH_getContentWidth() {
     return std::accumulate(std::begin(g_tableColumnWidths), std::end(g_tableColumnWidths), config::autoUpdate ? g_windowClientWidth : 0, std::plus());
 }
 
@@ -96,16 +90,6 @@ inline void WTBH_updateLanguage(HWND hWnd) {
     }
 }
 
-HBRUSH WTBH_createBrush(const COLORREF color) {
-    g_lastCreatedBrush = CreateSolidBrush(color);
-    return g_lastCreatedBrush;
-}
-
-void WTBH_deleteLastBrush() {
-    DeleteObject(g_lastCreatedBrush);
-    g_lastCreatedBrush = nullptr;
-}
-
 inline void WTBH_redrawLowerArea(HWND hWnd) {
     RECT rect { 0, WSC_HEADER, g_windowWidth, g_windowClientHeight };
     InvalidateRect(hWnd, &rect, true);
@@ -118,8 +102,8 @@ inline void WTBH_paintGrid(HDC hdc, const int sx, const int sy, const int rows) 
     const int gridHeight = rows * g_tableRowHeight;
 
     const RECT rect = { sx, sy, gridWidth + sx, sy + g_tableRowHeight };
-    FillRect(hdc, &rect, WTBH_createBrush(WCP_BACKGROUND2));
-    WTBH_deleteLastBrush();
+    FillRect(hdc, &rect, win_draw::createBrush(WCP_BACKGROUND2));
+    win_draw::deleteLastBrush();
 
     auto hPen = CreatePen(PS_SOLID, 1, WCP_FOREGROUND);
     auto hOldPen = static_cast<HPEN>(SelectObject(hdc, hPen));
@@ -493,7 +477,6 @@ bool WTBH_getWindowsBuild(DWORD& build) {
 LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
     static NOTIFYICONDATA nid = {};
     static bool minimizedNotifShowed = false;
-    long *scrollPosition;
 
     switch (uMsg) {
         case WM_CREATE:
@@ -532,12 +515,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 DEFAULT_PITCH | FF_DONTCARE,
                 L"Sonoran Sans Serif"
             );
+            globals::hDefaultFontP = &g_hDefaultFont;
 
             LOGFONT lf;
             // Re-create default font but bold
             GetObjectW(g_hDefaultFont, sizeof(LOGFONT), &lf);
             lf.lfWeight = FW_BOLD;
             g_hDefaultFontBold = CreateFontIndirectW(&lf);
+            globals::hDefaultFontBoldP = &g_hDefaultFontBold;
 
             // Re-create default font for table but with different face name
             GetObjectW(g_hDefaultFont, sizeof(LOGFONT), &lf);
@@ -552,22 +537,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
 
             WTBH_resizeChildWindows(hWnd);
 
-            g_gridScroll.hYScrollBar = CreateWindowExW(
-                WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
-                WS_CHILD | WS_VISIBLE | SBS_VERT,
-                -WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, 0,
-                hWnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_Y), create->hInstance, nullptr);
-            SendMessageW(g_gridScroll.hYScrollBar, WM_SETFONT, reinterpret_cast<WPARAM>(g_hDefaultFont), true);
-            SendMessageW(g_gridScroll.hYScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetLayeredWindowAttributes(g_gridScroll.hYScrollBar, 0, 1, LWA_ALPHA);
-
-            g_gridScroll.hXScrollBar = CreateWindowExW(
-                WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
-                WS_CHILD | WS_VISIBLE | SBS_HORZ,
-                0, 0, 0, 0,
-                hWnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_X), create->hInstance, nullptr);
-            SendMessageW(g_gridScroll.hXScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-            SetLayeredWindowAttributes(g_gridScroll.hXScrollBar, 0, 1, LWA_ALPHA);
+            g_gridScroll.createScrollbars(hWnd, create->hInstance);
 
             // Add icon
             Shell_NotifyIconW(NIM_ADD, &nid);
@@ -590,8 +560,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 g_windowWidth = LOWORD(lParam);
                 g_windowHeight = HIWORD(lParam);
                 // Reposition scrollbar
-                MoveWindow(g_gridScroll.hYScrollBar, g_windowWidth - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, g_windowHeight - WSC_HEADER, true);
-                MoveWindow(g_gridScroll.hXScrollBar, 0, g_windowHeight - WSC_SCROLLBAR_WIDTH, g_windowWidth - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, true);
+                g_gridScroll.onWindowMove();
                 RECT rect;
                 GetWindowRect(g_hSettingsButton, &rect);
                 int width = rect.right - rect.left;
@@ -708,8 +677,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             // Update colors for window
             SetBkColor(mHdc, WCP_BACKGROUND);
             SetTextColor(mHdc, WCP_FOREGROUND);
-            FillRect(mHdc, &ps.rcPaint, WTBH_createBrush(WCP_BACKGROUND));
-            WTBH_deleteLastBrush();
+            FillRect(mHdc, &ps.rcPaint, win_draw::createBrush(WCP_BACKGROUND));
+            win_draw::deleteLastBrush();
 
             // Above table text
             SetBkColor(mHdc, WCP_BACKGROUND);
@@ -725,8 +694,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             wRect.left = 0;
             wRect.top = 0;
             wRect.bottom = WSC_HEADER;
-            FillRect(mHdc, &wRect, WTBH_createBrush(WCP_BACKGROUND2));
-            WTBH_deleteLastBrush();
+            FillRect(mHdc, &wRect, win_draw::createBrush(WCP_BACKGROUND2));
+            win_draw::deleteLastBrush();
 
             SetBkColor(mHdc, WCP_BACKGROUND2);
             SelectObject(mHdc, g_hDefaultFont);
@@ -764,6 +733,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 if (lParam != WM_CONTEXTMENU)
                     AppendMenuW(hMenu, MF_STRING | MF_DISABLED, ID_TRAY_HEADER, TRAY_TITLE);
                 AppendMenuW(hMenu, MF_STRING | (config::exists() ? 0 : MF_DISABLED), ID_TRAY_OPEN_CONFIG, utils::message(MSG_TRAY_CONFIG_OPEN).c_str());
+                AppendMenuW(hMenu, MF_STRING | 0, ID_TRAY_OPEN_CONFIG_UI, L"Interactive configuration");
                 AppendMenuW(hMenu, MF_STRING, ID_TRAY_RELOAD_CONFIG, utils::message(MSG_TRAY_CONFIG_RELOAD).c_str());
                 if (lParam == WM_CONTEXTMENU)
                     AppendMenuW(hMenu, MF_STRING | (config::exists() ? 0 : MF_DISABLED), ID_TRAY_EXPOSE_INTERNALS, utils::message(MSG_TRAY_CONFIG_EXPOSE_INTERNALS).c_str());
@@ -921,6 +891,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                     config::openDirectory();
                     break;
                 }
+                case ID_TRAY_OPEN_CONFIG_UI: {
+                    config_ui::open();
+                    break;
+                }
                 case ID_TRAY_EXPOSE_INTERNALS:
                 {
                     config::save(true);
@@ -972,45 +946,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
         }
         case WM_HSCROLL:
         case WM_VSCROLL: {
-            HWND hScrollBar = reinterpret_cast<HWND>(lParam);
-            if (!hScrollBar)
+            if (!g_gridScroll.onScroll(lParam, wParam))
                 break;
-            if (int scrollBarID = GetDlgCtrlID(hScrollBar); scrollBarID == ID_SCROLLBAR_X) {
-                scrollPosition = &g_gridScroll.scrollXPos;
-            } else if (scrollBarID == ID_SCROLLBAR_Y) {
-                scrollPosition = &g_gridScroll.scrollYPos;
-            } else {
-                break;
-            }
-
-            switch (LOWORD(wParam))
-            {
-                case SB_LINEUP:     *scrollPosition -= 10;  break; // Arrow up
-                case SB_LINEDOWN:   *scrollPosition += 10;  break; // Arrow down
-                case SB_PAGEUP:     *scrollPosition -= 100; break; // Click upper thumb
-                case SB_PAGEDOWN:   *scrollPosition += 100; break; // Click lower thumb
-                case SB_THUMBTRACK: {
-                    SCROLLINFO si;
-                    si.cbSize = sizeof(SCROLLINFO);
-                    si.fMask = SIF_TRACKPOS;
-                    GetScrollInfo(hScrollBar, SB_CTL, &si);
-                    *scrollPosition = si.nTrackPos;
-                    break;
-                }
-                default: break;
-            }
-
-            g_gridScroll.updateXYScrollBarsInfo();
             WTBH_redrawLowerArea(hWnd);
             break;
         }
         case WM_MOUSEWHEEL:
         {
-            scrollPosition = GetKeyState(VK_SHIFT) & KF_UP ? &g_gridScroll.scrollXPos : &g_gridScroll.scrollYPos;
-            const int oldPos = *scrollPosition;
-            *scrollPosition += -(GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA * (WSC_SCROLL_ROWS * g_tableRowHeight));
-            g_gridScroll.updateXYScrollBarsInfo();
-            if (oldPos == *scrollPosition)
+            if (!g_gridScroll.onMouseWheel(wParam, g_tableRowHeight))
                 break;
             WTBH_redrawLowerArea(hWnd);
             break;
@@ -1048,8 +991,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             DeleteObject(g_hDefaultFontBold);
             DeleteObject(g_hTableFont);
             DeleteObject(g_hTableFontBold);
-            DeleteObject(g_gridScroll.hYScrollBar);
-            DeleteObject(g_gridScroll.hXScrollBar);
+            g_gridScroll.destroy();
             Shell_NotifyIcon(NIM_DELETE, &nid);
             PostQuitMessage(0);
             break;
@@ -1373,6 +1315,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     }
 
     win_draw::updateTitlebarColors(globals::hWnd);
+
+    config_ui::init(hIcon);
 
     const auto windowPreviewsEventHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     const auto windowCloakEventHook = SetWinEventHook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
