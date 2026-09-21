@@ -93,6 +93,7 @@ set(EXECUTABLE_SOURCES
         config_ui.h
         win_draw.cpp
         win_draw.h
+        _compiletime_helper.hpp
 )
 
 # Use UCRT consistently (this bundled MinGW's winpthread expects it)
