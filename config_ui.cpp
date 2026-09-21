@@ -12,6 +12,19 @@ int config_ui::winClientW;
 int config_ui::winClientH;
 HWND config_ui::windowHandle;
 win_draw::scrollable_content config_ui::scrollable(getContentWidth, getContentHeight, &winClientW, &winClientH, WSC_CONFIG_HEADER);
+config_ui::SettingList config_ui::settings;
+
+void config_ui::buildSettings() {
+    settings.clear();
+
+    addSetting<SettingSeparator>(L"Window");
+    addSetting<SettingCheckbox>(L"Dark mode", L"Window.DarkMode", config::darkMode);
+    addSetting<SettingCheckbox>(L"Auto update", L"Window.AutoUpdate", config::autoUpdate);
+
+    addSetting<SettingSeparator>(L"Taskbar");
+    addSetting<SettingNumber>(L"Update interval (ms)", L"Taskbar.UpdateInterval", config::taskbarUpdateInterval, 1, 1000);
+    addSetting<SettingNumber>(L"Opacity when hidden", L"Taskbar.OpacityWhenHidden", config::opacityWhenHidden, 0, 255);
+}
 
 int config_ui::getContentHeight() {
     return 1000;
@@ -47,7 +60,7 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
         }
         case WM_MOUSEWHEEL:
         {
-            if (!scrollable.onMouseWheel(wParam, 30))
+            if (!scrollable.onMouseWheel(wParam, CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT))
                 break;
             redrawWindow();
             break;
@@ -84,6 +97,67 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
             FillRect(mHdc, &ps.rcPaint, win_draw::createBrush(WCP_BACKGROUND));
             win_draw::deleteLastBrush();
 
+            // Drawing settings
+            long start = CONFIG_UI_SETTINGS_DRAW_Y;
+            HBRUSH checkboxBg = CreateSolidBrush(WCP_BACKGROUND);
+            HBRUSH checkboxFg = CreateSolidBrush(WCP_FOREGROUND);
+            for (const auto &rawSetting : settings) {
+                const long y = start - scrollable.scrollYPos;
+                const long x = CONFIG_UI_SETTINGS_DRAW_X/* - scrollable.scrollXPos*/;
+                const std::wstring *label = &rawSetting->label;
+
+                HGDIOBJ oldFont = SelectObject(mHdc, *globals::hDefaultFontP);
+                SetBkColor(mHdc, WCP_BACKGROUND);
+                COLORREF oldColor = SetTextColor(mHdc, WCP_FOREGROUND);
+                if (rawSetting->type != SettingType::separator) {
+                    // Draw label for every control except separator
+                    win_draw::drawText(mHdc, *label, x + 20, y);
+                }
+                switch (rawSetting->type) {
+                    case SettingType::separator: {
+                        SIZE textSize;
+                        win_draw::calculateTextSize(mHdc, *label, *globals::hDefaultFontP, &textSize);
+                        // Line
+                        HPEN hPen = CreatePen(PS_SOLID, 1, WCP_FOREGROUND);
+                        HPEN hOldPen = (HPEN)SelectObject(mHdc, hPen);
+                        const long lineY = y + textSize.cy / 2;
+                        MoveToEx(mHdc, x, lineY, nullptr);
+                        LineTo(mHdc, winClientW - x - WSC_SCROLLBAR_WIDTH, lineY);
+                        SelectObject(mHdc, hOldPen);
+                        DeleteObject(hPen);
+                        // Text
+                        win_draw::drawText(mHdc, *label, winClientW / 2 - textSize.cx / 2, y);
+                        break;
+                    }
+                    case SettingType::checkbox: {
+                        auto &setting = dynamic_cast<SettingCheckbox &>(*rawSetting);
+                        // Checkbox
+                        const long checkboxX = winClientW - x - WSC_SCROLLBAR_WIDTH - CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT;
+                        const RECT rect{
+                            .left = checkboxX,
+                            .top = y,
+                            .right = checkboxX + CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT,
+                            .bottom = y + CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT
+                        };
+                        win_draw::drawCheckBox(mHdc, setting.value, rect, L"", checkboxBg, checkboxFg);
+                        break;
+                    }
+                    case SettingType::number: {
+                        auto &setting = dynamic_cast<SettingNumber &>(*rawSetting);
+                        break;
+                    }
+                    case SettingType::select: {
+                        // auto &setting = dynamic_cast<SettingSelect &>(*rawSetting);
+                        break;
+                    }
+                }
+                start += CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT;
+                SelectObject(mHdc, oldFont);
+                SetTextColor(mHdc, oldColor);
+            }
+            DeleteObject(checkboxBg);
+            DeleteObject(checkboxFg);
+
             // Header
             RECT wRect;
             GetWindowRect(hWnd, &wRect);
@@ -93,6 +167,7 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
             FillRect(mHdc, &wRect, win_draw::createBrush(WCP_BACKGROUND2));
             win_draw::deleteLastBrush();
 
+            // Scrollbar
             scrollable.drawScrollBars(mHdc, *globals::hDefaultFontBoldP);
 
             win_draw::doubleBuffering(hWnd, ps, nullptr, false, &winClientW, &winClientH);
@@ -137,6 +212,8 @@ void config_ui::init(HICON hIcon) {
     GetClientRect(windowHandle, &rect);
     winClientH = rect.bottom - rect.top;
     winClientW = rect.right - rect.left;
+
+    buildSettings();
 
     initOk = windowHandle != nullptr;
 }
