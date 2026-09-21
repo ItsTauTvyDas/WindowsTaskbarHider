@@ -50,7 +50,7 @@ constexpr COLORREF lightColorPalette[] = {
 #define WSC_BUTTON_X_MARGIN       15
 #define WSC_CHECKBOX_SPACING      10
 
-#define DWMWA_CAPTION_COLOR 35
+constexpr DWORD MY_DWMWA_CAPTION_COLOR = 35;
 
 class win_draw {
 public:

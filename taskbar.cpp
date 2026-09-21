@@ -3,6 +3,7 @@
 #include <iostream>
 #include <windows.h>
 #include <ranges>
+#include <algorithm>
 
 #include "config.h"
 #include "globals.h"

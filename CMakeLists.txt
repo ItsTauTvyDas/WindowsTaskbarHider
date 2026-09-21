@@ -95,6 +95,10 @@ set(EXECUTABLE_SOURCES
         win_draw.h
 )
 
+# Use UCRT consistently (this bundled MinGW's winpthread expects it)
+add_compile_options(-mcrtdll=ucrt)
+add_link_options(-mcrtdll=ucrt)
+
 # Installable version
 add_executable(WindowsTaskbarHider WIN32 ${EXECUTABLE_SOURCES})
 target_compile_options(WindowsTaskbarHider PRIVATE -municode -mwindows)
