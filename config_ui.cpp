@@ -4,34 +4,190 @@
 #include "resources.h"
 #include "language.h"
 #include "win_draw.h"
+#include "_compiletime_helper.hpp"
 
 #define CONFIG_CLASS_NAME PROJECT_NAME"Config"
 
 bool config_ui::initOk = false;
-int config_ui::winClientW;
-int config_ui::winClientH;
-HWND config_ui::windowHandle;
-win_draw::scrollable_content config_ui::scrollable(getContentWidth, getContentHeight, &winClientW, &winClientH, WSC_CONFIG_HEADER);
-config_ui::SettingList config_ui::settings;
+void config_ui::init(HICON hIcon) {
+    WNDCLASSEX wc    = {};
+    wc.cbSize        = sizeof(WNDCLASSEX);
+    wc.style         = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc   = WndProc;
+    wc.hInstance     = globals::hIns;
+    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hIcon         = hIcon;
+    wc.lpszClassName = CONFIG_CLASS_NAME;
 
-void config_ui::buildSettings() {
-    settings.clear();
+    if (!RegisterClassExW(&wc)) {
+        utils::showExceptionMessageBox([](std::wstringstream& crashInfo) {
+            crashInfo << utils::message(MSG_WINDOW_REGISTER_FAILED);
+        }, true);
+        return;
+    }
 
-    addSetting<SettingSeparator>(L"Window");
-    addSetting<SettingCheckbox>(L"Dark mode", L"Window.DarkMode", config::darkMode);
-    addSetting<SettingCheckbox>(L"Auto update", L"Window.AutoUpdate", config::autoUpdate);
+    windowHandle = CreateWindowExW(
+        WS_EX_CLIENTEDGE, CONFIG_CLASS_NAME, L"Settings",
+        WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_MINIMIZEBOX) | WS_CLIPCHILDREN,
+        0, 0, CONFIG_UI_WINDOW_MIN_WIDTH, CONFIG_UI_WINDOW_MIN_HEIGHT,
+        globals::hWnd, nullptr, globals::hIns, nullptr);
 
-    addSetting<SettingSeparator>(L"Taskbar");
-    addSetting<SettingNumber>(L"Update interval (ms)", L"Taskbar.UpdateInterval", config::taskbarUpdateInterval, 1, 1000);
-    addSetting<SettingNumber>(L"Opacity when hidden", L"Taskbar.OpacityWhenHidden", config::opacityWhenHidden, 0, 255);
+    RECT rect;
+    GetClientRect(windowHandle, &rect);
+    winClientH = rect.bottom - rect.top;
+    winClientW = rect.right - rect.left;
+
+    initOk = windowHandle != nullptr;
+}
+void config_ui::open() {
+    if (!initOk)
+        return;
+
+    scrollable.scrollXPos = 0;
+    scrollable.scrollYPos = 0;
+    scrollable.updateXYScrollBarsInfo();
+
+    win_draw::updateTitlebarColors(windowHandle);
+
+    RECT o, w;
+    GetWindowRect(globals::hWnd, &o);
+    GetWindowRect(windowHandle, &w);
+    SetWindowPos(windowHandle, nullptr,
+                 o.left + ((o.right - o.left) - (w.right - w.left)) / 2,
+                 o.top  + ((o.bottom - o.top) - (w.bottom - w.top)) / 2,
+                 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+
+    EnableWindow(globals::hWnd, false);
+    ShowWindow(windowHandle, SW_SHOW);
+    SetForegroundWindow(windowHandle);
+}
+void config_ui::close() {
+    EnableWindow(globals::hWnd, true);
+    ShowWindow(windowHandle, SW_HIDE);
+    SetForegroundWindow(globals::hWnd);
+}
+void config_ui::save() {
+
 }
 
+#define SETTING_SEPARATOR(cat)          \
+    {                                   \
+        .type = SettingType::separator, \
+        .langKey = cat                  \
+    }
+
+#define SETTING_CHECKBOX(cat, key, var)   \
+    {                                     \
+        .type = SettingType::checkbox,    \
+        .langKey = TO_TITLE_CASE(key),    \
+        .iniKey = CONFIG_KEY(cat, key),   \
+        .boolean = &config::var           \
+    }
+
+#define SETTING_NUMBER(cat, key, var, lo, hi, ...) \
+    {                                              \
+        .type = SettingType::number,               \
+        .langKey = TO_TITLE_CASE(key),             \
+        .iniKey = CONFIG_KEY(cat, key),            \
+        .number = &config::var,                    \
+        .min = lo,                                 \
+        .max = hi                                  \
+        __VA_OPT__(, .unit = __VA_ARGS__)          \
+    }
+
+constexpr config_ui::Setting config_ui::settings[] = {
+    SETTING_SEPARATOR(CONFIG_CAT_WINDOW),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW, CONFIG_KEY_DARK_MODE, darkMode),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW, CONFIG_KEY_AUTO_UPDATE, autoUpdate),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW, CONFIG_KEY_SHOW_ALL_WINDOWS, showAllWindows),
+
+    SETTING_SEPARATOR(CONFIG_CAT_WINDOW_BEHAVIOUR),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_OPEN_ON_START, openOnStart),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_CLOSE_TO_TRAY, closeToTray),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_MINIMIZE_TO_TRAY, minimizeToTray),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_CLOSE_CONFIRM_MESSAGE, closeConfirmMessage),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_DISABLE_AUTO_UPDATE_WHEN_UNFOCUSED, disableAutoUpdateWhenUnfocused),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_AUTO_UPDATE_ON_OPEN, autoUpdateOnOpen),
+
+    SETTING_NUMBER(CONFIG_CAT_TASKBAR, CONFIG_KEY_UPDATE_INTERVAL, taskbarUpdateInterval, 1, 1000, L"ms"),
+    SETTING_CHECKBOX(CONFIG_CAT_TASKBAR, CONFIG_KEY_USE_REAL_OPACITY_VALUES, useRealOpacityValues),
+    SETTING_NUMBER(CONFIG_CAT_TASKBAR, CONFIG_KEY_OPACITY_WHEN_HIDDEN, opacityWhenHidden, 0, 255),
+    SETTING_NUMBER(CONFIG_CAT_TASKBAR, CONFIG_KEY_OPACITY_WHEN_SHOWN, opacityWhenShown, 1, 255),
+    SETTING_NUMBER(CONFIG_CAT_TASKBAR, CONFIG_KEY_OPACITY_WHEN_HOVERED_OVER, opacityWhenHovered, 1, 255),
+
+    SETTING_SEPARATOR(CONFIG_CAT_TASKBAR_HOVER_ANIMATION),
+    SETTING_CHECKBOX(CONFIG_CAT_TASKBAR_HOVER_ANIMATION, CONFIG_KEY_ANIMATION_ENABLED, animationsEnabled),
+    SETTING_NUMBER(CONFIG_CAT_TASKBAR_HOVER_ANIMATION, CONFIG_KEY_ANIMATION_STEP_DELAY, animationStepDelay, 1, 1000),
+    SETTING_NUMBER(CONFIG_CAT_TASKBAR_HOVER_ANIMATION, CONFIG_KEY_ANIMATION_OPACITY_STEP, animationOpacityStep, 1, 255),
+
+    SETTING_SEPARATOR(CONFIG_CAT_IGNORED_WINDOWS),
+    SETTING_CHECKBOX(CONFIG_CAT_IGNORED_WINDOWS, CONFIG_KEY_ALWAYS_IGNORE_WHEN_NOT_MAXIMIZED, alwaysIgnoreWhenNotMaximized),
+    SETTING_CHECKBOX(CONFIG_CAT_IGNORED_WINDOWS, CONFIG_KEY_EXCEPT_TASKBAR_POPUPS, exceptTaskbarPopups),
+
+    SETTING_SEPARATOR(CONFIG_CAT_WINDOWS_10_FIXES),
+    SETTING_CHECKBOX(CONFIG_CAT_WINDOWS_10_FIXES, CONFIG_KEY_FIX_TASKBAR_HOVER_GLITCH, fixTaskbarHoverGlitch),
+};
+constexpr std::size_t config_ui::settingsCount = std::size(settings);
+
+HWND config_ui::windowHandle;
+int config_ui::winClientW;
+int config_ui::winClientH;
+std::vector<HWND> config_ui::controls;
+win_draw::scrollable_content config_ui::scrollable(getContentWidth, getContentHeight, &winClientW, &winClientH, WSC_CONFIG_HEADER);
+
 int config_ui::getContentHeight() {
-    return 1000;
+    return settingsCount * CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT + WSC_SCROLLBAR_WIDTH + CONFIG_UI_SETTINGS_DRAW_Y;
 }
 
 int config_ui::getContentWidth() {
     return 0;
+}
+
+void config_ui::redrawWindow() {
+    RECT rect;
+    GetClientRect(windowHandle, &rect);
+    InvalidateRect(windowHandle, &rect, true);
+}
+
+void config_ui::createControls(HWND hWnd) {
+    controls.assign(settingsCount, nullptr);
+    for (std::size_t i = 0; i < settingsCount; i++) {
+        const Setting &s = settings[i];
+        if (s.type != SettingType::checkbox)
+            continue;
+
+        HWND handle = CreateWindowExW(
+            0, WMC_BUTTON, L"",
+            WS_CHILD | WS_VISIBLE | BS_CHECKBOX | BS_OWNERDRAW,
+            0, 0, CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT, CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT,
+            hWnd, reinterpret_cast<HMENU>(ID_CONFIG_SETTING_BASE + i),
+            globals::hIns, nullptr);
+        SendMessageW(handle, WM_SETFONT, reinterpret_cast<WPARAM>(*globals::hDefaultFontP), true);
+        SendMessageW(handle, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+        SetClassLongPtrW(handle, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(LoadCursorW(nullptr, IDC_HAND)));
+        SetWindowLongPtrW(handle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&s));
+        controls[i] = handle;
+    }
+}
+
+void config_ui::layoutControls() {
+    constexpr int rowH = CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT;
+    const int checkboxX = winClientW - CONFIG_UI_SETTINGS_DRAW_X - WSC_SCROLLBAR_WIDTH - rowH;
+
+    HDWP dwp = BeginDeferWindowPos(settingsCount);
+    if (!dwp)
+        return;
+    for (std::size_t i = 0; i < settingsCount; i++) {
+        if (!controls[i])
+            continue;
+        const int y = CONFIG_UI_SETTINGS_DRAW_Y + static_cast<int>(i) * rowH - scrollable.scrollYPos;
+        const bool visible = y >= WSC_CONFIG_HEADER && y + rowH <= winClientH;
+        dwp = DeferWindowPos(dwp, controls[i], nullptr, checkboxX, y, rowH, rowH,
+                             SWP_NOZORDER | SWP_NOACTIVATE | (visible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
+        if (!dwp)
+            return;
+    }
+    EndDeferWindowPos(dwp);
 }
 
 LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
@@ -39,6 +195,7 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
         case WM_CREATE: {
             const auto create = reinterpret_cast<LPCREATESTRUCT>(lParam);
             scrollable.createScrollbars(hWnd, create->hInstance, false, true);
+            createControls(hWnd);
             break;
         }
         case WM_SIZE: {
@@ -47,6 +204,7 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
                 winClientH = HIWORD(lParam);
                 scrollable.onWindowMove();
                 scrollable.updateXYScrollBarsInfo();
+                layoutControls();
                 InvalidateRect(hWnd, nullptr, TRUE);
             }
             break;
@@ -55,6 +213,7 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
         case WM_VSCROLL: {
             if (!scrollable.onScroll(lParam, wParam))
                 break;
+            layoutControls();
             redrawWindow();
             break;
         }
@@ -62,7 +221,46 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
         {
             if (!scrollable.onMouseWheel(wParam, CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT))
                 break;
+            layoutControls();
             redrawWindow();
+            break;
+        }
+        case WM_COMMAND: {
+            if (const int id = LOWORD(wParam); id >= ID_CONFIG_SETTING_BASE && id < ID_CONFIG_SETTING_BASE + static_cast<int>(settingsCount)) {
+                if (const Setting &s = settings[id - ID_CONFIG_SETTING_BASE]; s.type == SettingType::checkbox) {
+                    if (s.boolean == &config::autoUpdate) {
+                        SendMessageW(globals::hWnd, WM_COMMAND, MAKEWPARAM(ID_CHECKBOX_AUTO_UPDATE, BN_CLICKED), 0);
+                    } else if (s.boolean == &config::showAllWindows) {
+                        SendMessageW(globals::hWnd, WM_COMMAND, MAKEWPARAM(ID_CHECKBOX_SHOW_ALL_WINDOWS, BN_CLICKED), 0);
+                    } else {
+                        s.boolean->store(!s.boolean->load());
+                    }
+
+                    if (&config::darkMode == s.boolean) {
+                        win_draw::updateTitlebarColors(globals::hWnd);
+                        win_draw::updateTitlebarColors(hWnd);
+                        RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+                        win_draw::redrawWindow(globals::hWnd);
+                    } else {
+                        win_draw::redrawWindow(controls[id - ID_CONFIG_SETTING_BASE]);
+                    }
+                }
+            }
+            break;
+        }
+        case WM_DRAWITEM: {
+            const auto d = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
+            const auto s = reinterpret_cast<const Setting*>(GetWindowLongPtrW(d->hwndItem, GWLP_USERDATA));
+            if (!s || s->type != SettingType::checkbox)
+                break;
+            PAINTSTRUCT ps;
+            HDC mHdc = win_draw::doubleBuffering(hWnd, ps, d->hDC, true, &winClientW, &winClientH);
+            HBRUSH bg = nullptr,
+                   fg = nullptr;
+            win_draw::drawCheckBox(mHdc, s->boolean->load(), d->rcItem, L"", bg, fg);
+            DeleteObject(bg);
+            DeleteObject(fg);
+            win_draw::doubleBuffering(hWnd, ps, d->hDC, false, &winClientW, &winClientH);
             break;
         }
         case WM_CLOSE: {
@@ -99,24 +297,22 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
 
             // Drawing settings
             long start = CONFIG_UI_SETTINGS_DRAW_Y;
-            HBRUSH checkboxBg = CreateSolidBrush(WCP_BACKGROUND);
-            HBRUSH checkboxFg = CreateSolidBrush(WCP_FOREGROUND);
-            for (const auto &rawSetting : settings) {
+            for (const auto &setting : settings) {
                 const long y = start - scrollable.scrollYPos;
                 const long x = CONFIG_UI_SETTINGS_DRAW_X/* - scrollable.scrollXPos*/;
-                const std::wstring *label = &rawSetting->label;
+                const wchar_t *label = setting.langKey;
 
                 HGDIOBJ oldFont = SelectObject(mHdc, *globals::hDefaultFontP);
                 SetBkColor(mHdc, WCP_BACKGROUND);
                 COLORREF oldColor = SetTextColor(mHdc, WCP_FOREGROUND);
-                if (rawSetting->type != SettingType::separator) {
+                if (setting.type != SettingType::separator) {
                     // Draw label for every control except separator
-                    win_draw::drawText(mHdc, *label, x + 20, y);
+                    win_draw::drawText(mHdc, label, x + 20, y);
                 }
-                switch (rawSetting->type) {
+                switch (setting.type) {
                     case SettingType::separator: {
                         SIZE textSize;
-                        win_draw::calculateTextSize(mHdc, *label, *globals::hDefaultFontP, &textSize);
+                        win_draw::calculateTextSize(mHdc, label, *globals::hDefaultFontP, &textSize);
                         // Line
                         HPEN hPen = CreatePen(PS_SOLID, 1, WCP_FOREGROUND);
                         HPEN hOldPen = (HPEN)SelectObject(mHdc, hPen);
@@ -126,37 +322,25 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
                         SelectObject(mHdc, hOldPen);
                         DeleteObject(hPen);
                         // Text
-                        win_draw::drawText(mHdc, *label, winClientW / 2 - textSize.cx / 2, y);
+                        win_draw::drawText(mHdc, label, winClientW / 2 - textSize.cx / 2, y);
                         break;
                     }
                     case SettingType::checkbox: {
-                        auto &setting = dynamic_cast<SettingCheckbox &>(*rawSetting);
-                        // Checkbox
-                        const long checkboxX = winClientW - x - WSC_SCROLLBAR_WIDTH - CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT;
-                        const RECT rect{
-                            .left = checkboxX,
-                            .top = y,
-                            .right = checkboxX + CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT,
-                            .bottom = y + CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT
-                        };
-                        win_draw::drawCheckBox(mHdc, setting.value, rect, L"", checkboxBg, checkboxFg);
                         break;
                     }
                     case SettingType::number: {
-                        auto &setting = dynamic_cast<SettingNumber &>(*rawSetting);
                         break;
                     }
                     case SettingType::select: {
-                        // auto &setting = dynamic_cast<SettingSelect &>(*rawSetting);
                         break;
                     }
+                    case SettingType::text:
+                        break;
                 }
                 start += CONFIG_UI_SETTINGS_DRAW_ROW_HEIGHT;
                 SelectObject(mHdc, oldFont);
                 SetTextColor(mHdc, oldColor);
             }
-            DeleteObject(checkboxBg);
-            DeleteObject(checkboxFg);
 
             // Header
             RECT wRect;
@@ -177,76 +361,4 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
             return DefWindowProcW(hWnd, uMsg, wParam, lParam);
     }
     return 1;
-}
-
-void config_ui::redrawWindow() {
-    RECT rect;
-    GetClientRect(windowHandle, &rect);
-    InvalidateRect(windowHandle, &rect, true);
-}
-
-void config_ui::init(HICON hIcon) {
-    WNDCLASSEX wc    = {};
-    wc.cbSize        = sizeof(WNDCLASSEX);
-    wc.style         = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc   = WndProc;
-    wc.hInstance     = globals::hIns;
-    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hIcon         = hIcon;
-    wc.lpszClassName = CONFIG_CLASS_NAME;
-
-    if (!RegisterClassExW(&wc)) {
-        utils::showExceptionMessageBox([](std::wstringstream& crashInfo) {
-            crashInfo << utils::message(MSG_WINDOW_REGISTER_FAILED);
-        }, true);
-        return;
-    }
-
-    windowHandle = CreateWindowExW(
-        WS_EX_CLIENTEDGE, CONFIG_CLASS_NAME, L"Settings",
-        WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_MINIMIZEBOX),
-        0, 0, CONFIG_UI_WINDOW_MIN_WIDTH, CONFIG_UI_WINDOW_MIN_HEIGHT,
-        globals::hWnd, nullptr, globals::hIns, nullptr);
-
-    RECT rect;
-    GetClientRect(windowHandle, &rect);
-    winClientH = rect.bottom - rect.top;
-    winClientW = rect.right - rect.left;
-
-    buildSettings();
-
-    initOk = windowHandle != nullptr;
-}
-
-void config_ui::open() {
-    if (!initOk)
-        return;
-
-    scrollable.scrollXPos = 0;
-    scrollable.scrollYPos = 0;
-    scrollable.updateXYScrollBarsInfo();
-
-    win_draw::updateTitlebarColors(windowHandle);
-
-    RECT o, w;
-    GetWindowRect(globals::hWnd, &o);
-    GetWindowRect(windowHandle, &w);
-    SetWindowPos(windowHandle, nullptr,
-        o.left + ((o.right - o.left) - (w.right - w.left)) / 2,
-        o.top  + ((o.bottom - o.top) - (w.bottom - w.top)) / 2,
-        0, 0, SWP_NOSIZE | SWP_NOZORDER);
-
-    EnableWindow(globals::hWnd, false);
-    ShowWindow(windowHandle, SW_SHOW);
-    SetForegroundWindow(windowHandle);
-}
-
-void config_ui::close() {
-    EnableWindow(globals::hWnd, true);
-    ShowWindow(windowHandle, SW_HIDE);
-    SetForegroundWindow(globals::hWnd);
-}
-
-void config_ui::save() {
-
 }
