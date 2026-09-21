@@ -41,6 +41,7 @@
 #define ID_TRAY_EXPOSE_INTERNALS      108
 #define ID_TRAY_EXPOSE_LANGUAGE_FILES 109
 #define ID_TRAY_OPEN_CONFIG_DIR       110
+#define ID_TRAY_OPEN_CONFIG_UI        111
 
 #define ID_BUTTON_UPDATE              201
 #define ID_BUTTON_ACTIONS             202
