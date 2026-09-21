@@ -11,6 +11,7 @@
 #define EVENT_OBJECT_UNCLOAKED 0x8018
 #define WMC_SCROLLBAR          L"SCROLLBAR"
 #define WMC_BUTTON             L"BUTTON"
+#define SHELL_EXEC_OP_OPEN     L"open"
 
 class globals {
 public:

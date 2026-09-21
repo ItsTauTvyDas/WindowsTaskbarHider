@@ -148,7 +148,7 @@ void utils::showExceptionMessageBox(const std::function<void(std::wstringstream&
             messageBox(MSG_UNCAUGHT_EXCEPTION_RETRY_FAILED, MB_ICONERROR | MB_OK, { NTStatusMessageToText(GetLastError()) });
             return;
         }
-        ShellExecute(nullptr, L"open", path, globals::args.c_str(), nullptr, SW_SHOWNORMAL);
+        ShellExecuteW(nullptr, SHELL_EXEC_OP_OPEN, path, globals::args.c_str(), nullptr, SW_SHOWNORMAL);
     }
 }
 

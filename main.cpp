@@ -856,7 +856,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
 #if IS_PORTABLE
                 case ID_BUTTON_INSTALL:
                 {
-                    ShellExecute(nullptr, L"open", GITHUB_RELEASES_LINK, nullptr, nullptr, SW_SHOWNORMAL);
+                    ShellExecuteW(nullptr, SHELL_EXEC_OP_OPEN, GITHUB_RELEASES_LINK, nullptr, nullptr, SW_SHOWNORMAL);
                     break;
                 }
 #endif
@@ -933,7 +933,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
 #endif
                 case ID_TRAY_GITHUB:
                 {
-                    ShellExecute(nullptr, L"open", PRODUCT_URL, nullptr, nullptr, SW_SHOWNORMAL);
+                    ShellExecuteW(nullptr, SHELL_EXEC_OP_OPEN, PRODUCT_URL, nullptr, nullptr, SW_SHOWNORMAL);
                     break;
                 }
                 default:
