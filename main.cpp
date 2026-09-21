@@ -43,10 +43,8 @@ HFONT g_hDefaultFont     = nullptr,
       g_hTableFontBold   = nullptr,
       g_hTableFont       = nullptr;
 HBRUSH g_lastCreatedBrush = nullptr;
-int g_windowWidth                                  = APP_WINDOW_MIN_WIDTH,
-    g_windowHeight                                 = APP_WINDOW_MIN_HEIGHT,
-    g_windowClientHeight                           = 0,
-    g_windowClientWidth                            = 0,
+int g_windowClientHeight                           = APP_WINDOW_MIN_HEIGHT,
+    g_windowClientWidth                            = APP_WINDOW_MIN_WIDTH,
     g_tableDefaultColumnWidths[W_GRID_MAX_COLUMNS] = {},
     g_tableColumnWidths[W_GRID_MAX_COLUMNS]        = {},
     g_tableColumnXMargin                           = 10,
@@ -61,8 +59,6 @@ win_draw::scrollable_content g_gridScroll(WTBH_getContentWidth,
     WTBH_getContentHeight,
     &g_windowClientWidth,
     &g_windowClientHeight,
-    &g_windowWidth,
-    &g_windowHeight,
     WSC_HEADER);
 
 std::vector<taskbar::WindowInfo> g_windowsCache;
@@ -91,7 +87,7 @@ inline void WTBH_updateLanguage(HWND hWnd) {
 }
 
 inline void WTBH_redrawLowerArea(HWND hWnd) {
-    RECT rect { 0, WSC_HEADER, g_windowWidth, g_windowClientHeight };
+    RECT rect { 0, WSC_HEADER, g_windowClientWidth, g_windowClientHeight };
     InvalidateRect(hWnd, &rect, true);
     rect = utils::rect(g_windowClientWidth - g_lastUpdatedTimeTextWidth - 10, 45, g_lastUpdatedTimeTextWidth, 30);
     InvalidateRect(hWnd, &rect, true);
@@ -351,7 +347,7 @@ inline void WTBH_resizeChildWindows(HWND hWnd) {
         g_childWindows.push_back(g_hSettingsButton);
     } else {
         SetWindowTextW(g_childWindows[i], text.c_str());
-        MoveWindow(g_childWindows[i], g_windowWidth - rect.right - 10, 10, rect.right, rect.bottom, true);
+        MoveWindow(g_childWindows[i], g_windowClientWidth - rect.right - 10, 10, rect.right, rect.bottom, true);
         i++;
     }
 
@@ -373,7 +369,7 @@ inline void WTBH_resizeChildWindows(HWND hWnd) {
         SetWindowTextW(g_childWindows[i], text.c_str());
         RECT sRect;
         GetWindowRect(g_hSettingsButton, &sRect);
-        MoveWindow(g_childWindows[i], g_windowWidth - rect.right - 20 - (sRect.right - sRect.left), 10, rect.right, rect.bottom, true);
+        MoveWindow(g_childWindows[i], g_windowClientWidth - rect.right - 20 - (sRect.right - sRect.left), 10, rect.right, rect.bottom, true);
         i++;
     }
 #endif
@@ -557,17 +553,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
                 } else
                     return DefWindowProc(hWnd, uMsg, wParam, lParam);
             } else {
-                g_windowWidth = LOWORD(lParam);
-                g_windowHeight = HIWORD(lParam);
+                g_windowClientWidth  = LOWORD(lParam);
+                g_windowClientHeight = HIWORD(lParam);
+
                 // Reposition scrollbar
                 g_gridScroll.onWindowMove();
                 RECT rect;
                 GetWindowRect(g_hSettingsButton, &rect);
                 int width = rect.right - rect.left;
-                MoveWindow(g_hSettingsButton, g_windowWidth - width - 10, 10, width, rect.bottom - rect.top, true);
+                MoveWindow(g_hSettingsButton, g_windowClientWidth - width - 10, 10, width, rect.bottom - rect.top, true);
 #if IS_PORTABLE
                 GetWindowRect(g_hInstallButton, &rect);
-                MoveWindow(g_hInstallButton, g_windowWidth - (rect.right - rect.left) - 20 - width, 10, rect.right - rect.left, rect.bottom - rect.top, true);
+                MoveWindow(g_hInstallButton, g_windowClientWidth - (rect.right - rect.left) - 20 - width, 10, rect.right - rect.left, rect.bottom - rect.top, true);
 #endif
                 GetClientRect(hWnd, &rect);
                 g_windowClientHeight = rect.bottom - rect.top;
@@ -1005,7 +1002,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const 
             return 727;
         }
         default:
-            return DefWindowProc(hWnd, uMsg, wParam, lParam);
+            return DefWindowProcW(hWnd, uMsg, wParam, lParam);
     }
     return 1;
 }
@@ -1299,9 +1296,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, const int nShowCmd) 
     globals::hWnd = CreateWindowExW(
         WS_EX_CLIENTEDGE, PROJECT_NAME, utils::message(MSG_APPLICATION_NAME).c_str(),
         WS_OVERLAPPEDWINDOW,
-        static_cast<short>((screenWidth - g_windowWidth) / 2),
-        static_cast<short>((screenHeight - g_windowHeight) / 2),
-        g_windowWidth, g_windowHeight,
+        static_cast<short>((screenWidth - g_windowClientWidth) / 2),
+        static_cast<short>((screenHeight - g_windowClientHeight) / 2),
+        g_windowClientWidth, g_windowClientHeight,
         nullptr, nullptr,
         hInstance, hIcon);
 

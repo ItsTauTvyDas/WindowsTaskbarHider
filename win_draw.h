@@ -69,8 +69,6 @@ public:
         HWND hYScrollBar;
         const int *winClientW;
         const int *winClientH;
-        const int *winW;
-        const int *winH;
         long scrollYPos;
         long scrollXPos;
         long topOffset;
@@ -79,14 +77,12 @@ public:
                            std::function<int()> getContentHeight,
                            const int *winClientW,
                            const int *winClientH,
-                           const int *winW,
-                           const int *winH,
                            long topOffset);
 
         void updateXScrollBarInfo();
         void updateYScrollBarInfo();
         void updateXYScrollBarsInfo();
-        void createScrollbars(HWND hWnd, HINSTANCE hInstance);
+        void createScrollbars(HWND hWnd, HINSTANCE hInstance, bool allowXScrollBar = true, bool allowYScrollBar = true);
         void onWindowMove() const;
         bool onScroll(LPARAM lParam, WPARAM wParam);
         bool onMouseWheel(WPARAM wParam, int rowHeight);

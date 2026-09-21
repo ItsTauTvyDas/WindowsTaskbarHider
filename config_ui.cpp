@@ -10,36 +10,31 @@
 bool config_ui::initOk = false;
 int config_ui::winClientW;
 int config_ui::winClientH;
-int config_ui::winW;
-int config_ui::winH;
 HWND config_ui::windowHandle;
-win_draw::scrollable_content config_ui::scrollable(getContentWidth,
-    getContentHeight,
-    &winClientW,
-    &winClientH,
-    &winW,
-    &winH,
-    WSC_HEADER);
+win_draw::scrollable_content config_ui::scrollable(getContentWidth, getContentHeight, &winClientW, &winClientH, WSC_CONFIG_HEADER);
 
 int config_ui::getContentHeight() {
-    return 500;
+    return 1000;
 }
 
 int config_ui::getContentWidth() {
     return 0;
 }
 
-
 LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wParam, const LPARAM lParam) {
     switch (uMsg) {
         case WM_CREATE: {
             const auto create = reinterpret_cast<LPCREATESTRUCT>(lParam);
-            scrollable.createScrollbars(hWnd, create->hInstance);
+            scrollable.createScrollbars(hWnd, create->hInstance, false, true);
             break;
         }
         case WM_SIZE: {
             if (wParam != SIZE_MINIMIZED) {
+                winClientW = LOWORD(lParam);
+                winClientH = HIWORD(lParam);
                 scrollable.onWindowMove();
+                scrollable.updateXYScrollBarsInfo();
+                InvalidateRect(hWnd, nullptr, TRUE);
             }
             break;
         }
@@ -104,7 +99,7 @@ LRESULT CALLBACK config_ui::WndProc(HWND hWnd, const UINT uMsg, const WPARAM wPa
             break;
         }
         default:
-            return DefWindowProc(hWnd, uMsg, wParam, lParam);
+            return DefWindowProcW(hWnd, uMsg, wParam, lParam);
     }
     return 1;
 }
@@ -116,7 +111,7 @@ void config_ui::redrawWindow() {
 }
 
 void config_ui::init(HICON hIcon) {
-    WNDCLASSEX wc = {};
+    WNDCLASSEX wc    = {};
     wc.cbSize        = sizeof(WNDCLASSEX);
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc   = WndProc;
@@ -143,16 +138,16 @@ void config_ui::init(HICON hIcon) {
     winClientH = rect.bottom - rect.top;
     winClientW = rect.right - rect.left;
 
-    GetWindowRect(windowHandle, &rect);
-    winH = rect.bottom - rect.top;
-    winW = rect.right - rect.left;
-
     initOk = windowHandle != nullptr;
 }
 
 void config_ui::open() {
     if (!initOk)
         return;
+
+    scrollable.scrollXPos = 0;
+    scrollable.scrollYPos = 0;
+    scrollable.updateXYScrollBarsInfo();
 
     win_draw::updateTitlebarColors(windowHandle);
 

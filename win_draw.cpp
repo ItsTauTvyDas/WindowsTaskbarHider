@@ -115,15 +115,12 @@ win_draw::scrollable_content::scrollable_content(std::function<int()> getContent
                                        std::function<int()> getContentHeight,
                                        const int *winClientW,
                                        const int *winClientH,
-                                       const int *winW,
-                                       const int *winH,
                                        const long topOffset)
     : hXScrollBar(nullptr),
       hYScrollBar(nullptr),
       winClientW(winClientW),
       winClientH(winClientH),
-      winW(winW),
-      winH(winH), scrollYPos(0), scrollXPos(0),
+      scrollYPos(0), scrollXPos(0),
       topOffset(topOffset),
       getContentWidth(std::move(getContentWidth)),
       getContentHeight(std::move(getContentHeight)) {}
@@ -137,6 +134,8 @@ int win_draw::scrollable_content::getMaxXScroll(const int contentWidth) const {
 }
 
 void win_draw::scrollable_content::updateYScrollBarInfo() {
+    if (!hYScrollBar)
+        return;
     const int contentHeight = getContentHeight() + WSC_SCROLLBAR_WIDTH;
     if (const int maxScroll = getMaxYScroll(contentHeight); scrollYPos > maxScroll)
         scrollYPos = maxScroll;
@@ -154,6 +153,8 @@ void win_draw::scrollable_content::updateYScrollBarInfo() {
 }
 
 void win_draw::scrollable_content::updateXScrollBarInfo() {
+    if (!hXScrollBar)
+        return;
     const int contentWidth = getContentWidth() + WSC_SCROLLBAR_WIDTH + 3;
     if (const int maxScroll = getMaxXScroll(contentWidth); scrollXPos > maxScroll)
         scrollXPos = maxScroll;
@@ -177,18 +178,22 @@ void win_draw::scrollable_content::updateXYScrollBarsInfo() {
 }
 
 bool win_draw::scrollable_content::getYScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) const {
+    if (!hYScrollBar)
+        return false;
     sbi.cbSize = sizeof(SCROLLBARINFO);
     GetScrollBarInfo(hYScrollBar, OBJID_CLIENT, &sbi);
-    rect = utils::rect(*winW - WSC_SCROLLBAR_WIDTH, topOffset + sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop);
+    rect = utils::rect(*winClientW - WSC_SCROLLBAR_WIDTH, topOffset + sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop);
     if (getMaxYScroll(getContentHeight()) <= -WSC_SCROLLBAR_WIDTH)
         return false;
     return true;
 }
 
 bool win_draw::scrollable_content::getXScrollBarMiddleThumb(RECT &rect, SCROLLBARINFO &sbi) const {
+    if (!hXScrollBar)
+        return false;
     sbi.cbSize = sizeof(SCROLLBARINFO);
     GetScrollBarInfo(hXScrollBar, OBJID_CLIENT, &sbi);
-    rect = utils::rect(sbi.xyThumbTop, *winH - WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH);
+    rect = utils::rect(sbi.xyThumbTop, *winClientH - WSC_SCROLLBAR_WIDTH, sbi.xyThumbBottom - sbi.xyThumbTop, WSC_SCROLLBAR_WIDTH);
     if (getMaxXScroll(getContentWidth()) <= -20)
         return false;
     return true;
@@ -205,56 +210,64 @@ void win_draw::scrollable_content::drawScrollBars(HDC hdc, HFONT hFontBold) cons
     SetTextColor(hdc, WCP_FOREGROUND);
 
     // Y scrollbar middle thumb
-    bool paintScrollBarMiddleThumb = getYScrollBarMiddleThumb(rect, sbi);
-    if (paintScrollBarMiddleThumb)
+    if (hYScrollBar) {
+        bool paintYScrollBarMiddleThumb = getYScrollBarMiddleThumb(rect, sbi);
+        if (paintYScrollBarMiddleThumb)
+            FillRect(hdc, &rect, selectBrush);
+
+        // Y scrollbar thumbs
+        rect.top = topOffset;
+        rect.bottom = rect.top + 16;
         FillRect(hdc, &rect, selectBrush);
+        DrawTextW(hdc, L"\u02C4", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
-    // Y scrollbar thumbs
-    rect.top = topOffset;
-    rect.bottom = rect.top + 16;
-    FillRect(hdc, &rect, selectBrush);
-    DrawTextW(hdc, L"\u02C4", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
-
-    rect.top = *winClientH - 17;
-    rect.bottom = *winClientH;
-    FillRect(hdc, &rect, selectBrush);
-    DrawTextW(hdc, L"\u02C5", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+        rect.top = *winClientH - 17;
+        rect.bottom = *winClientH;
+        FillRect(hdc, &rect, selectBrush);
+        DrawTextW(hdc, L"\u02C5", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+    }
 
     // X scrollbar middle thumb
-    paintScrollBarMiddleThumb = getXScrollBarMiddleThumb(rect, sbi);
-    if (paintScrollBarMiddleThumb)
+    if (hXScrollBar) {
+        bool paintXScrollBarMiddleThumb = getXScrollBarMiddleThumb(rect, sbi);
+        if (paintXScrollBarMiddleThumb)
+            FillRect(hdc, &rect, selectBrush);
+
+        // X scrollbar thumbs
+        rect.left = 0;
+        rect.right = 16;
         FillRect(hdc, &rect, selectBrush);
+        DrawTextW(hdc, L"\u02C2", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
-    // X scrollbar thumbs
-    rect.left = 0;
-    rect.right = 16;
-    FillRect(hdc, &rect, selectBrush);
-    DrawTextW(hdc, L"\u02C2", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
-
-    rect.left = *winClientW - WSC_SCROLLBAR_WIDTH - rect.right;
-    rect.right = rect.left + 16;
-    FillRect(hdc, &rect, selectBrush);
-    DrawTextW(hdc, L"\u02C3", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+        rect.left = *winClientW - WSC_SCROLLBAR_WIDTH - rect.right;
+        rect.right = rect.left + 16;
+        FillRect(hdc, &rect, selectBrush);
+        DrawTextW(hdc, L"\u02C3", -1, &rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+    }
 
     DeleteObject(selectBrush);
 }
 
-void win_draw::scrollable_content::createScrollbars(HWND hWnd, HINSTANCE hInstance) {
-    hYScrollBar = CreateWindowExW(
-    WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
-    WS_CHILD | WS_VISIBLE | SBS_VERT,
-    -WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, 0,
-    hWnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_Y), hInstance, nullptr);
-    SendMessageW(hYScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-    SetLayeredWindowAttributes(hYScrollBar, 0, 1, LWA_ALPHA);
-
-    hXScrollBar = CreateWindowExW(
+void win_draw::scrollable_content::createScrollbars(HWND hWnd, HINSTANCE hInstance, const bool allowXScrollBar, const bool allowYScrollBar) {
+    if (allowYScrollBar) {
+        hYScrollBar = CreateWindowExW(
         WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
-        WS_CHILD | WS_VISIBLE | SBS_HORZ,
-        0, 0, 0, 0,
-        hWnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_X), hInstance, nullptr);
-    SendMessageW(hXScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
-    SetLayeredWindowAttributes(hXScrollBar, 0, 1, LWA_ALPHA);
+        WS_CHILD | WS_VISIBLE | SBS_VERT,
+        -WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, 0,
+        hWnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_Y), hInstance, nullptr);
+        SendMessageW(hYScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+        SetLayeredWindowAttributes(hYScrollBar, 0, 1, LWA_ALPHA);
+    }
+
+    if (allowXScrollBar) {
+        hXScrollBar = CreateWindowExW(
+            WS_EX_LAYERED, WMC_SCROLLBAR, nullptr,
+            WS_CHILD | WS_VISIBLE | SBS_HORZ,
+            0, 0, 0, 0,
+            hWnd, reinterpret_cast<HMENU>(ID_SCROLLBAR_X), hInstance, nullptr);
+        SendMessageW(hXScrollBar, WM_UPDATEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+        SetLayeredWindowAttributes(hXScrollBar, 0, 1, LWA_ALPHA);
+    }
 }
 
 bool win_draw::scrollable_content::onScroll(LPARAM lParam, WPARAM wParam) {
@@ -301,11 +314,15 @@ bool win_draw::scrollable_content::onMouseWheel(WPARAM wParam, const int rowHeig
 }
 
 void win_draw::scrollable_content::onWindowMove() const {
-    MoveWindow(hYScrollBar, *winW - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, *winH - topOffset, true);
-    MoveWindow(hXScrollBar, 0, *winH - WSC_SCROLLBAR_WIDTH, *winW - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, true);
+    if (hYScrollBar)
+        MoveWindow(hYScrollBar, *winClientW - WSC_SCROLLBAR_WIDTH, WSC_HEADER, WSC_SCROLLBAR_WIDTH, *winClientH - topOffset, true);
+    if (hXScrollBar)
+        MoveWindow(hXScrollBar, 0, *winClientH - WSC_SCROLLBAR_WIDTH, *winClientW - WSC_SCROLLBAR_WIDTH, WSC_SCROLLBAR_WIDTH, true);
 }
 
 void win_draw::scrollable_content::destroy() const {
-    DeleteObject(hYScrollBar);
-    DeleteObject(hXScrollBar);
+    if (hYScrollBar)
+        DeleteObject(hYScrollBar);
+    if (hXScrollBar)
+        DeleteObject(hXScrollBar);
 }

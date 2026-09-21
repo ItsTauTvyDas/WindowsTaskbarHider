@@ -19,7 +19,7 @@ public:
 private:
     static win_draw::scrollable_content scrollable;
     static HWND windowHandle;
-    static int winClientW, winClientH, winW, winH;
+    static int winClientW, winClientH;
     static int getContentHeight();
     static int getContentWidth();
     static void redrawWindow();
