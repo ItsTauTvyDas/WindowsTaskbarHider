@@ -11,6 +11,12 @@ void win_draw::redrawWindow(HWND hWnd) {
 }
 
 int win_draw::calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font) {
+    SIZE size;
+    calculateTextSize(hdc, text, font, &size);
+    return size.cx;
+}
+
+void win_draw::calculateTextSize(HDC hdc, const std::wstring &text, HFONT font, SIZE *size) {
     HGDIOBJ oldFont = nullptr;
     if (font)
         oldFont = SelectObject(hdc, font);
@@ -18,21 +24,21 @@ int win_draw::calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font) 
     GetTextExtentPoint32W(hdc, text.c_str(), static_cast<int>(text.size()), &sz);
     if (font)
         SelectObject(hdc, oldFont);
-    return sz.cx;
+    *size = sz;
 }
 
 void win_draw::drawText(HDC hdc, const std::wstring &text, const int x, const int y) {
-    TextOut(hdc, x, y, text.c_str(), static_cast<int>(text.length()));
+    TextOutW(hdc, x, y, text.c_str(), static_cast<int>(text.length()));
 }
 
-void win_draw::drawCheckBox(HDC mHdc, bool pState, const RECT oRect, const LPCWSTR text, HBRUSH &bg, HBRUSH &fg) {
+void win_draw::drawCheckBox(HDC hdc, bool pState, const RECT oRect, const LPCWSTR text, HBRUSH &bg, HBRUSH &fg) {
     if (!bg)
         bg = CreateSolidBrush(WCP_BACKGROUND2);
     if (!fg)
         fg = CreateSolidBrush(WCP_FOREGROUND);
 
     // Background color
-    FillRect(mHdc, &oRect, bg);
+    FillRect(hdc, &oRect, bg);
 
     // Create checkbox rect
     RECT boxRect = oRect;
@@ -41,24 +47,24 @@ void win_draw::drawCheckBox(HDC mHdc, bool pState, const RECT oRect, const LPCWS
     boxRect.bottom = boxRect.top + 16;
 
     // Draw checkbox rect
-    FillRect(mHdc, &boxRect, bg);
-    FrameRect(mHdc, &boxRect, fg);
+    FillRect(hdc, &boxRect, bg);
+    FrameRect(hdc, &boxRect, fg);
     if (pState) {
         // Create a little rect inside checkbox rect
         boxRect.left += 3;
         boxRect.top += 3;
         boxRect.right -= 3;
         boxRect.bottom -= 3;
-        FillRect(mHdc, &boxRect, fg);
+        FillRect(hdc, &boxRect, fg);
     }
 
     RECT textRect = oRect;
     textRect.left += WSC_CHECKBOX_TEXT_OFFSET;
-    const auto oldBkColor = SetBkColor(mHdc, WCP_BACKGROUND2);
-    const auto oldTextColor = SetTextColor(mHdc, WCP_FOREGROUND);
-    DrawTextW(mHdc, text, -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
-    SetBkColor(mHdc, oldBkColor);
-    SetTextColor(mHdc, oldTextColor);
+    const auto oldBkColor = SetBkColor(hdc, WCP_BACKGROUND2);
+    const auto oldTextColor = SetTextColor(hdc, WCP_FOREGROUND);
+    DrawTextW(hdc, text, -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+    SetBkColor(hdc, oldBkColor);
+    SetTextColor(hdc, oldTextColor);
 }
 
 HDC win_draw::doubleBuffering(HWND hWnd, PAINTSTRUCT &ps, HDC oHdc, const bool start, const int *winClientW, const int *winClientH) {

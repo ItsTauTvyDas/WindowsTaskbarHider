@@ -29,26 +29,26 @@ constexpr COLORREF lightColorPalette[] = {
     RGB(150, 150, 150), // Scrollbar background color
 };
 
-#define WCP_BASE_COLOR            (config::darkMode ? darkColorPalette[0] : lightColorPalette[0])
-#define WCP_FOREGROUND            (config::darkMode ? darkColorPalette[1] : lightColorPalette[1])
-#define WCP_BACKGROUND            (config::darkMode ? darkColorPalette[2] : lightColorPalette[2])
-#define WCP_BACKGROUND2           (config::darkMode ? darkColorPalette[3] : lightColorPalette[3])
-#define WCP_BUTTON_BG             (config::darkMode ? darkColorPalette[4] : lightColorPalette[4])
-#define WCP_BUTTON_BORDER         (config::darkMode ? darkColorPalette[5] : lightColorPalette[5])
-#define WCP_BUTTON_CLICKED_BG     (config::darkMode ? darkColorPalette[6] : lightColorPalette[6])
-#define WCP_SCROLLBAR_COLOR       (config::darkMode ? darkColorPalette[7] : lightColorPalette[7])
+#define WCP_BASE_COLOR        (config::darkMode ? darkColorPalette[0] : lightColorPalette[0])
+#define WCP_FOREGROUND        (config::darkMode ? darkColorPalette[1] : lightColorPalette[1])
+#define WCP_BACKGROUND        (config::darkMode ? darkColorPalette[2] : lightColorPalette[2])
+#define WCP_BACKGROUND2       (config::darkMode ? darkColorPalette[3] : lightColorPalette[3])
+#define WCP_BUTTON_BG         (config::darkMode ? darkColorPalette[4] : lightColorPalette[4])
+#define WCP_BUTTON_BORDER     (config::darkMode ? darkColorPalette[5] : lightColorPalette[5])
+#define WCP_BUTTON_CLICKED_BG (config::darkMode ? darkColorPalette[6] : lightColorPalette[6])
+#define WCP_SCROLLBAR_COLOR   (config::darkMode ? darkColorPalette[7] : lightColorPalette[7])
 
-#define WSC_BUTTON_DEFAULT_W      120
-#define WSC_BUTTON_DEFAULT_H      30
-#define WSC_HEADER                70
-#define WSC_CONFIG_HEADER         50
-#define WSC_SCROLLBAR_WIDTH       17
-#define WSC_GRID_Y                100
-#define WSC_GRID_TOP_OFFSET       40
-#define WSC_SCROLL_ROWS           1
-#define WSC_CHECKBOX_TEXT_OFFSET  20
-#define WSC_BUTTON_X_MARGIN       15
-#define WSC_CHECKBOX_SPACING      10
+#define WSC_BUTTON_DEFAULT_W     120
+#define WSC_BUTTON_DEFAULT_H     30
+#define WSC_HEADER               70
+#define WSC_CONFIG_HEADER        50
+#define WSC_SCROLLBAR_WIDTH      17
+#define WSC_GRID_Y               100
+#define WSC_GRID_TOP_OFFSET      40
+#define WSC_SCROLL_ROWS          1
+#define WSC_CHECKBOX_TEXT_OFFSET 20
+#define WSC_BUTTON_X_MARGIN      15
+#define WSC_CHECKBOX_SPACING     10
 
 constexpr DWORD MY_DWMWA_CAPTION_COLOR = 35;
 
@@ -56,8 +56,9 @@ class win_draw {
 public:
     static void redrawWindow(HWND hWnd);
     static int calculateTextWidth(HDC hdc, const std::wstring &text, HFONT font);
+    static void calculateTextSize(HDC hdc, const std::wstring &text, HFONT font, SIZE *size);
     static void drawText(HDC hdc, const std::wstring &text, int x, int y);
-    static void drawCheckBox(HDC mHdc, bool pState, RECT oRect, LPCWSTR text, HBRUSH &bg, HBRUSH &fg);
+    static void drawCheckBox(HDC hdc, bool pState, RECT oRect, LPCWSTR text, HBRUSH &bg, HBRUSH &fg);
     static HDC doubleBuffering(HWND hWnd, PAINTSTRUCT &ps, HDC oHdc, bool start, const int *winClientW, const int *winClientH);
     static void updateTitlebarColors(HWND hWnd);
     static HBRUSH createBrush(COLORREF color);
