@@ -91,52 +91,52 @@ bool config::save(const bool exposeInternalKeys) {
     file << R"(;  \/  \/|_|_| |_|\__,_|\___/ \_/\_/ |___|_/\__,_|___/_|\_\_.__/ \__,_|_|  \_| |_/_|\__,_|\___|_|)" << std::endl;
     file << std::endl;
 
-    file << "[General]" << std::endl;
-    file << "Language = " << languageShortName << std::endl;
+    file << CONFIG_SECTION(CONFIG_CAT_GENERAL) << std::endl;
+    file << CONFIG_KEY_LANGUAGE L" = " << languageShortName << std::endl;
     file << std::endl;
 
-    file << "[Window]" << std::endl;
+    file << CONFIG_SECTION(CONFIG_CAT_WINDOW) << std::endl;
     file << "; These are the default checkbox settings for the window display." << std::endl;
-    file << "DarkMode = " << darkMode << std::endl;
-    file << "AutoUpdate = " << autoUpdate << std::endl;
-    file << "ShowAllWindows = " << showAllWindows << std::endl;
+    file << CONFIG_KEY_DARK_MODE L" = " << darkMode << std::endl;
+    file << CONFIG_KEY_AUTO_UPDATE L" = " << autoUpdate << std::endl;
+    file << CONFIG_KEY_SHOW_ALL_WINDOWS L" = " << showAllWindows << std::endl;
     file << std::endl;
 
-    file << "[Window Behaviour]" << std::endl;
-    file << "OpenOnStart = " << openOnStart << std::endl;
-    file << "CloseToTray = " << closeToTray << std::endl;
-    file << "MinimizeToTray = " << minimizeToTray << std::endl;
+    file << CONFIG_SECTION(CONFIG_CAT_WINDOW_BEHAVIOUR) << std::endl;
+    file << CONFIG_KEY_OPEN_ON_START L" = " << openOnStart << std::endl;
+    file << CONFIG_KEY_CLOSE_TO_TRAY L" = " << closeToTray << std::endl;
+    file << CONFIG_KEY_MINIMIZE_TO_TRAY L" = " << minimizeToTray << std::endl;
     file << "; This setting applies only when CloseToTray is disabled" << std::endl;
-    file << "CloseConfirmMessage = " << closeConfirmMessage << std::endl;
+    file << CONFIG_KEY_CLOSE_CONFIRM_MESSAGE L" = " << closeConfirmMessage << std::endl;
     file << "; Disable automatic debug table updates if enabled when the application loses focus." << std::endl;
-    file << "DisableAutoUpdateWhenUnfocused = " << disableAutoUpdateWhenUnfocused << std::endl;
+    file << CONFIG_KEY_DISABLE_AUTO_UPDATE_WHEN_UNFOCUSED L" = " << disableAutoUpdateWhenUnfocused << std::endl;
     file << "; Automatically update the debug table on window open (e.g. tray icon click)" << std::endl;
-    file << "AutoUpdateOnOpen = " << autoUpdateOnOpen << std::endl;
+    file << CONFIG_KEY_AUTO_UPDATE_ON_OPEN L" = " << autoUpdateOnOpen << std::endl;
     file << std::endl;
 
-    file << "[Taskbar]" << std::endl;
+    file << CONFIG_SECTION(CONFIG_CAT_TASKBAR) << std::endl;
     file << "; Interval for updating the taskbar, in milliseconds (maximum 1000)." << std::endl;
-    file << "UpdateInterval = " << taskbarUpdateInterval << std::endl;
+    file << CONFIG_KEY_UPDATE_INTERVAL L" = " << taskbarUpdateInterval << std::endl;
     file << "; When enabled, opacity values can range from 0 up to 255 (instead of 100)" << std::endl;
-    file << "UseRealOpacityValues = " << useRealOpacityValues << std::endl;
+    file << CONFIG_KEY_USE_REAL_OPACITY_VALUES L" = " << useRealOpacityValues << std::endl;
     file << "; Opacity levels: 0-100/255" << std::endl;
-    file << "OpacityWhenHidden = " << opacityWhenHidden << std::endl;
+    file << CONFIG_KEY_OPACITY_WHEN_HIDDEN L" = " << opacityWhenHidden << std::endl;
     file << "; Opacity levels 1 to 100/255, since 0 makes the taskbar non-interactive." << std::endl;
-    file << "OpacityWhenShown = " << opacityWhenShown << std::endl;
-    file << "OpacityWhenHoveredOver = " << opacityWhenHovered << std::endl;
+    file << CONFIG_KEY_OPACITY_WHEN_SHOWN L" = " << opacityWhenShown << std::endl;
+    file << CONFIG_KEY_OPACITY_WHEN_HOVERED_OVER L" = " << opacityWhenHovered << std::endl;
     file << std::endl;
 
-    file << "[Taskbar Hover Animation]" << std::endl;
+    file << CONFIG_SECTION(CONFIG_CAT_TASKBAR_HOVER_ANIMATION) << std::endl;
     file << "; Controls animation between shown/hidden opacity and hovered opacity levels" << std::endl;
     file << "; Changes here require restarting the application to take the effects." << std::endl;
-    file << "Enabled = " << animationsEnabled << std::endl;
-    file << "AnimationStepDelay = " << animationStepDelay << std::endl;
-    file << "AnimationOpacityStep = " << animationOpacityStep << std::endl;
+    file << CONFIG_KEY_ANIMATION_ENABLED L" = " << animationsEnabled << std::endl;
+    file << CONFIG_KEY_ANIMATION_STEP_DELAY L" = " << animationStepDelay << std::endl;
+    file << CONFIG_KEY_ANIMATION_OPACITY_STEP L" = " << animationOpacityStep << std::endl;
     file << std::endl;
 
-    file << "[Ignored Windows]" << std::endl;
+    file << CONFIG_SECTION(CONFIG_CAT_IGNORED_WINDOWS) << std::endl;
     file << "; Disabling this may slow the application when debug mode is active, but I believe very minimally." << std::endl;
-    file << "AlwaysIgnoreWhenNotMaximized = " << alwaysIgnoreWhenNotMaximized << std::endl;
+    file << CONFIG_KEY_ALWAYS_IGNORE_WHEN_NOT_MAXIMIZED L" = " << alwaysIgnoreWhenNotMaximized << std::endl;
     file << "; Available filter tags:" << std::endl;
     file << ";   - process (or p): process name (text), case-insensitive" << std::endl;
     file << ";   - title (or t): window title (text)" << std::endl;
@@ -150,23 +150,24 @@ bool config::save(const bool exposeInternalKeys) {
     file << ";   - monitor (or mon): monitor index (number >= 0)" << std::endl;
     file << ";" << std::endl;
     file << "; Separators: '|' acts as OR, '&' acts as AND, ':' acts as =, for example 'process:SomeApp.exe'." << std::endl;
-    file << "IgnoredWindows = " << utils::joinString(ignoredWindows, L"|") << std::endl;
-    file << "ExceptionalWindows = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
+    file << CONFIG_KEY_IGNORED_WINDOWS L" = " << utils::joinString(ignoredWindows, L"|") << std::endl;
+    file << CONFIG_KEY_EXCEPTIONAL_WINDOWS L" = " << utils::joinString(exceptionalWindows, L"|") << std::endl;
     file << "; Show taskbar when some its popups are opened (like start menu, language chooser and etc.)" << std::endl;
-    file << "ExceptTaskbarPopups = " << exceptTaskbarPopups << std::endl;
+    file << CONFIG_KEY_EXCEPT_TASKBAR_POPUPS L" = " << exceptTaskbarPopups << std::endl;
     file << std::endl;
 
-    file << "[Windows 10 Fixes]" << std::endl;
+    file << CONFIG_SECTION(CONFIG_CAT_WINDOWS_10_FIXES) << std::endl;
     file << "; Sometimes hover effect can get stuck so enable this to fix it" << std::endl;
-    file << "FixTaskbarHoverGlitch = " << fixTaskbarHoverGlitch << std::endl;
+    file << CONFIG_KEY_FIX_TASKBAR_HOVER_GLITCH L" = " << fixTaskbarHoverGlitch << std::endl;
 
     if (exposeInternalKeys) {
-        file << "[Internal]" << std::endl;
+        file << std::endl;
+        file << CONFIG_SECTION(CONFIG_CAT_INTERNAL) << std::endl;
         file << "; ONLY CHANGE VALUES BELOW IF YOU KNOW WHAT YOU'RE DOING" << std::endl;
-        file << "___TaskbarWindowClassNameStarts = " << I_TaskbarWindowClassNameStarts << std::endl;
-        file << "___TaskbarWindowClassNameEnds = " << I_TaskbarWindowClassNameEnds << std::endl;
+        file << CONFIG_KEY_TASKBAR_WINDOW_CLASS_NAME_STARTS L" = " << I_TaskbarWindowClassNameStarts << std::endl;
+        file << CONFIG_KEY_TASKBAR_WINDOW_CLASS_NAME_ENDS L" = " << I_TaskbarWindowClassNameEnds << std::endl;
         file << "; Executable names must be lowercase" << std::endl;
-        file << "___TaskbarExceptionalWindows = " << utils::joinString(I_ExceptionalWindows, L",") << std::endl;
+        file << CONFIG_KEY_TASKBAR_EXCEPTIONAL_WINDOWS L" = " << utils::joinString(I_ExceptionalWindows, L",") << std::endl;
     }
     return true;
 }
@@ -190,11 +191,11 @@ bool config::ensureConfigurationExists() {
 }
 
 void config::open() {
-    ShellExecuteW(nullptr, L"open", DATA(CONFIG_FILENAME, .c_str()), nullptr, nullptr, SW_SHOWNORMAL);
+    ShellExecuteW(nullptr, SHELL_EXEC_OP_OPEN, DATA(CONFIG_FILENAME, .c_str()), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 void config::openDirectory() {
-    ShellExecuteW(nullptr, L"open", DATA(L"", .c_str()), nullptr, nullptr, SW_SHOWNORMAL);
+    ShellExecuteW(nullptr, SHELL_EXEC_OP_OPEN, DATA(L"", .c_str()), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 int stringToInt(const std::wstring& str, const int defaultValue, const bool isBool) {
@@ -268,11 +269,10 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
     try {
         const size_t pos = key.find('.');
         formattedKey = key.substr(0, pos) + L" > " + key.substr(pos + 1);
-
-        if (key == L"Taskbar.UpdateInterval") {
+        if (key == CONFIG_KEY(CONFIG_CAT_TASKBAR, CONFIG_KEY_UPDATE_INTERVAL)) {
             if (checkForEmptyValueI(formattedKey, value, taskbarUpdateInterval, taskbarUpdateInterval, noErrors))
                 checkForInvalidIntegerValue(formattedKey, taskbarUpdateInterval, 1, 1000, noErrors);
-        } else if (key == L"General.Language") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_GENERAL, CONFIG_KEY_LANGUAGE)) {
             auto languages = std::unordered_map<std::wstring, int>(APP_DEFAULT_LANGUAGES);
 #ifndef IS_PORTABLE
             if (utils::fileExists(DATA(WSTRINGIFPORTABLE(L"languages/language." + value + L".ini")).c_str())) {
@@ -292,57 +292,61 @@ bool config::processSingle(const std::wstring &key, const std::wstring &value) {
             }
 #endif
             utils::loadIfNeededAndGetCachedLanguageString(0, nullptr); // Trigger language cache to update
-        } else if (key == L"Window.DarkMode") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW, CONFIG_KEY_DARK_MODE)) {
             checkBoolValidation(formattedKey, value, darkMode, darkMode, noErrors);
-        } else if (key == L"Window.AutoUpdate") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW, CONFIG_KEY_AUTO_UPDATE)) {
             checkBoolValidation(formattedKey, value, autoUpdate, autoUpdate, noErrors);
-        } else if (key == L"Window.ShowAllWindows") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW, CONFIG_KEY_SHOW_ALL_WINDOWS)) {
             checkBoolValidation(formattedKey, value, showAllWindows, showAllWindows, noErrors);
-        } else if (key == L"Window Behaviour.DisableAutoUpdateWhenUnfocused") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_DISABLE_AUTO_UPDATE_WHEN_UNFOCUSED)) {
             checkBoolValidation(formattedKey, value, disableAutoUpdateWhenUnfocused, disableAutoUpdateWhenUnfocused, noErrors);
-        } else if (key == L"Window Behaviour.AutoUpdateOnOpen") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_AUTO_UPDATE_ON_OPEN)) {
             checkBoolValidation(formattedKey, value, autoUpdateOnOpen, autoUpdateOnOpen, noErrors);
-        } else if (key == L"Window Behaviour.OpenOnStart") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_OPEN_ON_START)) {
             checkBoolValidation(formattedKey, value, openOnStart, openOnStart, noErrors);
-        } else if (key == L"Window Behaviour.CloseToTray") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_CLOSE_TO_TRAY)) {
             checkBoolValidation(formattedKey, value, closeToTray, closeToTray, noErrors);
-        } else if (key == L"Window Behaviour.CloseConfirmMessage") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_CLOSE_CONFIRM_MESSAGE)) {
             checkBoolValidation(formattedKey, value, closeConfirmMessage, closeConfirmMessage, noErrors);
-        } else if (key == L"Window Behaviour.MinimizeToTray") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOW_BEHAVIOUR, CONFIG_KEY_MINIMIZE_TO_TRAY)) {
             checkBoolValidation(formattedKey, value, minimizeToTray, minimizeToTray, noErrors);
-        } else if (key == L"Taskbar.UseRealOpacityValues") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_TASKBAR, CONFIG_KEY_USE_REAL_OPACITY_VALUES)) {
             checkBoolValidation(formattedKey, value, useRealOpacityValues, useRealOpacityValues, noErrors);
-        } else if (key == L"Taskbar.OpacityWhenHidden") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_TASKBAR, CONFIG_KEY_OPACITY_WHEN_HIDDEN)) {
             if (checkForEmptyValueI(formattedKey, value, opacityWhenHidden, opacityWhenHidden, noErrors))
                 checkForInvalidIntegerValue(formattedKey, opacityWhenHidden, 0, useRealOpacityValues ? 255 : 100, noErrors);
             opacityWhenHiddenInternal = useRealOpacityValues ? opacityWhenHidden.load() : opacityWhenHidden.load() > 0 ? 255 * opacityWhenHidden.load() / 100 : 0;
-        } else if (key == L"Taskbar.OpacityWhenShown") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_TASKBAR, CONFIG_KEY_OPACITY_WHEN_SHOWN)) {
             if (checkForEmptyValueI(formattedKey, value, opacityWhenShown, opacityWhenShown, noErrors))
                 checkForInvalidIntegerValue(formattedKey, opacityWhenShown, 1, useRealOpacityValues ? 255 : 100, noErrors);
             opacityWhenShownInternal = useRealOpacityValues ? opacityWhenShown.load() : 255 * opacityWhenShown.load() / 100;
-        } else if (key == L"Taskbar.OpacityWhenHoveredOver") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_TASKBAR, CONFIG_KEY_OPACITY_WHEN_HOVERED_OVER)) {
             if (checkForEmptyValueI(formattedKey, value, opacityWhenHovered, opacityWhenHovered, noErrors))
                 checkForInvalidIntegerValue(formattedKey, opacityWhenHovered, 1, useRealOpacityValues ? 255 : 100, noErrors);
             opacityWhenHoveredInternal = useRealOpacityValues ? opacityWhenHovered.load() : 255 * opacityWhenHovered.load() / 100;
-        } else if (key == L"Ignored Windows.IgnoredWindows") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_IGNORED_WINDOWS, CONFIG_KEY_IGNORED_WINDOWS)) {
             ignoredWindows = utils::splitString(value, '|');
-        } else if (key == L"Ignored Windows.ExceptionalWindows") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_IGNORED_WINDOWS, CONFIG_KEY_EXCEPTIONAL_WINDOWS)) {
             exceptionalWindows = utils::splitString(value, '|');
-        } else if (key == L"Ignored Windows.AlwaysIgnoreWhenNotMaximized") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_IGNORED_WINDOWS, CONFIG_KEY_ALWAYS_IGNORE_WHEN_NOT_MAXIMIZED)) {
             checkBoolValidation(formattedKey, value, alwaysIgnoreWhenNotMaximized, alwaysIgnoreWhenNotMaximized, noErrors);
-        } else if (key == L"Taskbar Hover Animation.Enabled") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_TASKBAR_HOVER_ANIMATION, CONFIG_KEY_ANIMATION_ENABLED)) {
             checkBoolValidation(formattedKey, value, animationsEnabled, animationsEnabled, noErrors);
-        } else if (key == L"Taskbar Hover Animation.AnimationStepDelay") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_TASKBAR_HOVER_ANIMATION, CONFIG_KEY_ANIMATION_STEP_DELAY)) {
             if (checkForEmptyValueI(formattedKey, value, animationStepDelay, animationStepDelay, noErrors))
                 checkForInvalidIntegerValue(formattedKey, animationStepDelay, 1, 1000, noErrors);
-        } else if (key == L"Taskbar Hover Animation.AnimationOpacityStep") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_TASKBAR_HOVER_ANIMATION, CONFIG_KEY_ANIMATION_OPACITY_STEP)) {
             if (checkForEmptyValueI(formattedKey, value, animationOpacityStep, animationOpacityStep, noErrors))
                 checkForInvalidIntegerValue(formattedKey, animationOpacityStep, 1, 255, noErrors);
-        } else if (key == L"Internal.___TaskbarWindowClassNameStarts") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_IGNORED_WINDOWS, CONFIG_KEY_EXCEPT_TASKBAR_POPUPS)) {
+            checkBoolValidation(formattedKey, value, exceptTaskbarPopups, exceptTaskbarPopups, noErrors);
+        } else if (key == CONFIG_KEY(CONFIG_CAT_WINDOWS_10_FIXES, CONFIG_KEY_FIX_TASKBAR_HOVER_GLITCH)) {
+            checkBoolValidation(formattedKey, value, fixTaskbarHoverGlitch, fixTaskbarHoverGlitch, noErrors);
+        } else if (key == CONFIG_KEY(CONFIG_CAT_INTERNAL, CONFIG_KEY_TASKBAR_WINDOW_CLASS_NAME_STARTS)) {
             checkForEmptyValueS(formattedKey, value, I_TaskbarWindowClassNameStarts, noErrors);
-        } else if (key == L"Internal.___TaskbarWindowClassNameEnds") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_INTERNAL, CONFIG_KEY_TASKBAR_WINDOW_CLASS_NAME_ENDS)) {
             checkForEmptyValueS(formattedKey, value, I_TaskbarWindowClassNameEnds, noErrors);
-        } else if (key == L"Internal.___TaskbarExceptionalWindows") {
+        } else if (key == CONFIG_KEY(CONFIG_CAT_INTERNAL, CONFIG_KEY_TASKBAR_EXCEPTIONAL_WINDOWS)) {
             I_ExceptionalWindows = utils::splitString(value, L',');
         } else {
             utils::messageBox(MSG_CONFIG_INVALID_KEY, MB_ICONWARNING | MB_OK, {key});
